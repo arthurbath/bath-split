@@ -221,6 +221,13 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
     handleUpdate(exp.id, 'benefit_x', String(clamped));
   };
 
+  const handleBenefitYChange = (v: string) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+    const newX = 100 - clamped;
+    setLocalBenefitX(newX);
+    handleUpdate(exp.id, 'benefit_x', String(newX));
+  };
+
   const nav = { onCellKeyDown, onCellMouseDown };
 
   return (
@@ -283,7 +290,9 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
       <TableCell>
         <Select value={exp.linked_account_id ?? '_none'} onValueChange={v => handleUpdate(exp.id, 'linked_account_id', v)}>
           <SelectTrigger className="h-7 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2" data-row={rowIndex} data-col={8} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}>
-            <SelectValue />
+            <SelectValue>
+              {exp.linked_account_id ? linkedAccounts.find(la => la.id === exp.linked_account_id)?.name ?? '—' : '—'}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="_none">—</SelectItem>
@@ -316,7 +325,7 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
         <PercentCell value={localBenefitX} onChange={handleBenefitXChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={10} {...nav} />
       </TableCell>
       <TableCell className="text-right tabular-nums text-xs">
-        {100 - localBenefitX}%
+        <PercentCell value={100 - localBenefitX} onChange={handleBenefitYChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={11} {...nav} />
       </TableCell>
       <TableCell className="text-right tabular-nums text-xs">${Math.round(fairX)}</TableCell>
       <TableCell className="text-right tabular-nums text-xs">${Math.round(fairY)}</TableCell>
