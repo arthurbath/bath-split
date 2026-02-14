@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 interface HouseholdSetupProps {
   onComplete: (displayName: string) => Promise<void>;
@@ -16,8 +17,17 @@ export function HouseholdSetup({ onComplete }: HouseholdSetupProps) {
     e.preventDefault();
     if (!displayName.trim()) return;
     setLoading(true);
-    await onComplete(displayName.trim());
-    setLoading(false);
+    try {
+      await onComplete(displayName.trim());
+    } catch (err: any) {
+      toast({
+        title: 'Failed to create household',
+        description: err?.message || 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
