@@ -109,34 +109,38 @@ function CurrencyCell({ value, onChange, className = '', 'data-row': dataRow, 'd
   const ref = useRef<HTMLInputElement>(null);
   const commit = () => { if (local !== String(value)) onChange(local); };
 
-  return focused ? (
-    <Input
-      ref={ref}
-      type="number"
-      value={local}
-      data-row={dataRow}
-      data-col={dataCol}
-      onChange={e => setLocal(e.target.value)}
-      onBlur={() => { commit(); setFocused(false); }}
-      onKeyDown={e => {
-        if (onCellKeyDown) onCellKeyDown(e);
-        else if (e.key === 'Enter') ref.current?.blur();
-      }}
-      onMouseDown={onCellMouseDown}
-      autoFocus
-      className={`h-7 border-transparent bg-transparent px-1 hover:border-border focus:border-primary !text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
-    />
-  ) : (
-    <button
-      type="button"
-      data-row={dataRow}
-      data-col={dataCol}
-      onClick={() => setFocused(true)}
-      onMouseDown={onCellMouseDown}
-      className={`h-7 w-full bg-transparent px-1 !text-xs text-right cursor-text border border-transparent hover:border-border rounded-md underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${className}`}
-    >
-      ${Math.round(Number(local) || 0)}
-    </button>
+  return (
+    <div className="min-w-[5rem]">
+      {focused ? (
+        <Input
+          ref={ref}
+          type="number"
+          value={local}
+          data-row={dataRow}
+          data-col={dataCol}
+          onChange={e => setLocal(e.target.value)}
+          onBlur={() => { commit(); setFocused(false); }}
+          onKeyDown={e => {
+            if (onCellKeyDown) onCellKeyDown(e);
+            else if (e.key === 'Enter') ref.current?.blur();
+          }}
+          onMouseDown={onCellMouseDown}
+          autoFocus
+          className={`h-7 w-full border-transparent bg-transparent px-1 hover:border-border focus:border-primary !text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
+        />
+      ) : (
+        <button
+          type="button"
+          data-row={dataRow}
+          data-col={dataCol}
+          onClick={() => setFocused(true)}
+          onMouseDown={onCellMouseDown}
+          className={`h-7 w-full bg-transparent px-1 !text-xs text-right cursor-text border border-transparent hover:border-border rounded-md underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${className}`}
+        >
+          ${Math.round(Number(local) || 0)}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -161,36 +165,40 @@ function PercentCell({ value, onChange, className = '', 'data-row': dataRow, 'da
 
   const commit = () => { if (local !== String(value)) onChange(local); };
 
-  return focused ? (
-    <Input
-      ref={ref}
-      type="number"
-      value={local}
-      min={min}
-      max={max}
-      data-row={dataRow}
-      data-col={dataCol}
-      onChange={e => setLocal(e.target.value)}
-      onBlur={() => { commit(); setFocused(false); }}
-      onKeyDown={e => {
-        if (onCellKeyDown) onCellKeyDown(e);
-        else if (e.key === 'Enter') ref.current?.blur();
-      }}
-      onMouseDown={onCellMouseDown}
-      autoFocus
-      className={`h-7 border-transparent bg-transparent px-1 hover:border-border focus:border-primary !text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
-    />
-  ) : (
-    <button
-      type="button"
-      data-row={dataRow}
-      data-col={dataCol}
-      onClick={() => setFocused(true)}
-      onMouseDown={onCellMouseDown}
-      className={`h-7 w-full bg-transparent px-1 !text-xs text-right cursor-text border border-transparent hover:border-border rounded-md underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${className}`}
-    >
-      {Math.round(Number(local) || 0)}%
-    </button>
+  return (
+    <div className="min-w-[4rem]">
+      {focused ? (
+        <Input
+          ref={ref}
+          type="number"
+          value={local}
+          min={min}
+          max={max}
+          data-row={dataRow}
+          data-col={dataCol}
+          onChange={e => setLocal(e.target.value)}
+          onBlur={() => { commit(); setFocused(false); }}
+          onKeyDown={e => {
+            if (onCellKeyDown) onCellKeyDown(e);
+            else if (e.key === 'Enter') ref.current?.blur();
+          }}
+          onMouseDown={onCellMouseDown}
+          autoFocus
+          className={`h-7 w-full border-transparent bg-transparent px-1 hover:border-border focus:border-primary !text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
+        />
+      ) : (
+        <button
+          type="button"
+          data-row={dataRow}
+          data-col={dataCol}
+          onClick={() => setFocused(true)}
+          onMouseDown={onCellMouseDown}
+          className={`h-7 w-full bg-transparent px-1 !text-xs text-right cursor-text border border-transparent hover:border-border rounded-md underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${className}`}
+        >
+          {Math.round(Number(local) || 0)}%
+        </button>
+      )}
+    </div>
   );
 }
 
