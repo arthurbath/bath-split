@@ -159,7 +159,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
           <Table className="text-xs">
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[200px]">Name</TableHead>
+                <TableHead className="min-w-[200px] sticky left-0 z-20 bg-background">Name</TableHead>
                 <TableHead className="min-w-[140px]">Category</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead className="text-center">Est.</TableHead>
@@ -185,7 +185,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                 </TableRow>
               ) : rows.map(({ exp, fairX, fairY, monthly }) => (
                 <TableRow key={exp.id}>
-                  <TableCell>
+                  <TableCell className="sticky left-0 z-10 bg-background">
                     <EditableCell value={exp.name} onChange={v => handleUpdate(exp.id, 'name', v)} />
                   </TableCell>
                   <TableCell>
@@ -299,7 +299,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
             {rows.length > 0 && (
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={6} className="font-semibold">Totals</TableCell>
+                  <TableCell colSpan={6} className="font-semibold sticky left-0 z-10 bg-muted/50">Totals</TableCell>
                   <TableCell className="text-right font-bold tabular-nums">${Math.round(totalMonthly)}</TableCell>
                   <TableCell colSpan={5} />
                   <TableCell className="text-right font-bold tabular-nums">${Math.round(totalFairX)}</TableCell>
