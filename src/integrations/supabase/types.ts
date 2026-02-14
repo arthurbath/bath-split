@@ -255,18 +255,21 @@ export type Database = {
           household_id: string
           id: string
           name: string
+          owner_partner: string
         }
         Insert: {
           created_at?: string
           household_id: string
           id?: string
           name: string
+          owner_partner?: string
         }
         Update: {
           created_at?: string
           household_id?: string
           id?: string
           name?: string
+          owner_partner?: string
         }
         Relationships: [
           {

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface LinkedAccount {
   id: string;
   name: string;
+  owner_partner: string;
   household_id: string;
 }
 
@@ -23,15 +24,15 @@ export function useLinkedAccounts(householdId: string) {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const add = async (name: string) => {
+  const add = async (name: string, ownerPartner: string = 'X') => {
     const id = crypto.randomUUID();
-    const { error } = await supabase.from('linked_accounts').insert({ id, household_id: householdId, name });
+    const { error } = await supabase.from('linked_accounts').insert({ id, household_id: householdId, name, owner_partner: ownerPartner });
     if (error) throw error;
     await fetch();
   };
 
-  const update = async (id: string, name: string) => {
-    const { error } = await supabase.from('linked_accounts').update({ name }).eq('id', id);
+  const update = async (id: string, updates: Partial<Pick<LinkedAccount, 'name' | 'owner_partner'>>) => {
+    const { error } = await supabase.from('linked_accounts').update(updates).eq('id', id);
     if (error) throw error;
     await fetch();
   };

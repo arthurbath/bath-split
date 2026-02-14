@@ -3,7 +3,12 @@ import { ManagedListSection } from '@/components/ManagedListSection';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Users, Copy, Check } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Users, Copy, Check, Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import type { Category } from '@/hooks/useCategories';
 import type { Budget } from '@/hooks/useBudgets';
@@ -27,10 +32,11 @@ interface ConfigurationTabProps {
   onUpdateBudget: (id: string, name: string) => Promise<void>;
   onRemoveBudget: (id: string) => Promise<void>;
   onReassignBudget: (oldId: string, newId: string | null) => Promise<void>;
-  onAddLinkedAccount: (name: string) => Promise<void>;
-  onUpdateLinkedAccount: (id: string, name: string) => Promise<void>;
+  onAddLinkedAccount: (name: string, ownerPartner?: string) => Promise<void>;
+  onUpdateLinkedAccount: (id: string, updates: Partial<Pick<LinkedAccount, 'name' | 'owner_partner'>>) => Promise<void>;
   onRemoveLinkedAccount: (id: string) => Promise<void>;
   onReassignLinkedAccount: (oldId: string, newId: string | null) => Promise<void>;
+  onSyncPayerForAccount: (accountId: string, ownerPartner: string) => Promise<void>;
 }
 
 function PartnerNamesCard({ partnerX, partnerY, onSave }: {
@@ -118,6 +124,223 @@ function InviteCard({ inviteCode }: { inviteCode: string | null }) {
   );
 }
 
+function PaymentMethodsSection({ linkedAccounts, expenses, partnerX, partnerY, onAdd, onUpdate, onRemove, onReassign, onSyncPayer }: {
+  linkedAccounts: LinkedAccount[];
+  expenses: Expense[];
+  partnerX: string;
+  partnerY: string;
+  onAdd: (name: string, ownerPartner?: string) => Promise<void>;
+  onUpdate: (id: string, updates: Partial<Pick<LinkedAccount, 'name' | 'owner_partner'>>) => Promise<void>;
+  onRemove: (id: string) => Promise<void>;
+  onReassign: (oldId: string, newId: string | null) => Promise<void>;
+  onSyncPayer: (accountId: string, ownerPartner: string) => Promise<void>;
+}) {
+  const [name, setName] = useState('');
+  const [ownerPartner, setOwnerPartner] = useState('X');
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<LinkedAccount | null>(null);
+  const [reassignTo, setReassignTo] = useState('_none');
+
+  const getUsageCount = (id: string) => expenses.filter(e => e.linked_account_id === id).length;
+
+  const handleAdd = async () => {
+    if (!name.trim()) return;
+    setAdding(true);
+    try {
+      await onAdd(name.trim(), ownerPartner);
+      setName('');
+    } catch (e: any) {
+      toast({ title: 'Error adding payment method', description: e.message, variant: 'destructive' });
+    }
+    setAdding(false);
+  };
+
+  const commitEdit = async () => {
+    if (editingId && editValue.trim()) {
+      const current = linkedAccounts.find(i => i.id === editingId);
+      if (current && editValue.trim() !== current.name) {
+        try { await onUpdate(editingId, { name: editValue.trim() }); } catch (e: any) {
+          toast({ title: 'Error renaming', description: e.message, variant: 'destructive' });
+        }
+      }
+    }
+    setEditingId(null);
+  };
+
+  const handleOwnerChange = async (id: string, newOwner: string) => {
+    try {
+      await onUpdate(id, { owner_partner: newOwner });
+      await onSyncPayer(id, newOwner);
+    } catch (e: any) {
+      toast({ title: 'Error updating owner', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteClick = (item: LinkedAccount) => {
+    const count = getUsageCount(item.id);
+    if (count > 0) {
+      setDeleteTarget(item);
+      setReassignTo('_none');
+    } else {
+      onRemove(item.id).catch((e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }));
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await onReassign(deleteTarget.id, reassignTo === '_none' ? null : reassignTo);
+      await onRemove(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const affectedCount = deleteTarget ? getUsageCount(deleteTarget.id) : 0;
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment Methods</CardTitle>
+          <CardDescription>Track which payment method or account is used. Each method is owned by a partner, which automatically determines the payer on expenses.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add new payment method…"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+              className="flex-1"
+            />
+            <Select value={ownerPartner} onValueChange={setOwnerPartner}>
+              <SelectTrigger className="w-32 shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="X">{partnerX}</SelectItem>
+                <SelectItem value="Y">{partnerY}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleAdd} disabled={!name.trim() || adding} className="gap-1.5 shrink-0" size="sm">
+              <Plus className="h-4 w-4" /> Add
+            </Button>
+          </div>
+
+          {linkedAccounts.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">No payment methods yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead className="text-right">Expenses</TableHead>
+                  <TableHead className="w-20" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {linkedAccounts.map(item => {
+                  const count = getUsageCount(item.id);
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        {editingId === item.id ? (
+                          <Input
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingId(null); }}
+                            className="h-8"
+                            autoFocus
+                          />
+                        ) : (
+                          <span className="font-medium">{item.name}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Select value={item.owner_partner} onValueChange={v => handleOwnerChange(item.id, v)}>
+                          <SelectTrigger className="h-8 w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="X">{partnerX}</SelectItem>
+                            <SelectItem value="Y">{partnerY}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">{count}</TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingId(item.id); setEditValue(item.name); }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        {count > 0 ? (
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteClick(item)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        ) : (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete "{item.name}"?</AlertDialogTitle>
+                                <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => onRemove(item.id)}>Delete</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete "{deleteTarget?.name}"?</DialogTitle>
+            <DialogDescription>
+              {affectedCount} expense{affectedCount !== 1 ? 's' : ''} use this. Choose where to reassign:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Reassign to</Label>
+            <Select value={reassignTo} onValueChange={setReassignTo}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">None</SelectItem>
+                {linkedAccounts.filter(i => i.id !== deleteTarget?.id).map(i => (
+                  <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>Delete & Reassign</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function ConfigurationTab({
   categories, budgets, linkedAccounts, expenses,
   partnerX, partnerY, inviteCode,
@@ -125,6 +348,7 @@ export function ConfigurationTab({
   onAddCategory, onUpdateCategory, onRemoveCategory, onReassignCategory,
   onAddBudget, onUpdateBudget, onRemoveBudget, onReassignBudget,
   onAddLinkedAccount, onUpdateLinkedAccount, onRemoveLinkedAccount, onReassignLinkedAccount,
+  onSyncPayerForAccount,
 }: ConfigurationTabProps) {
   return (
     <div className="space-y-6">
@@ -150,15 +374,16 @@ export function ConfigurationTab({
         onRemove={onRemoveBudget}
         onReassign={onReassignBudget}
       />
-      <ManagedListSection
-        title="Payment Methods"
-        description="Track which payment method or account is used."
-        items={linkedAccounts}
-        getUsageCount={(id) => expenses.filter(e => e.linked_account_id === id).length}
+      <PaymentMethodsSection
+        linkedAccounts={linkedAccounts}
+        expenses={expenses}
+        partnerX={partnerX}
+        partnerY={partnerY}
         onAdd={onAddLinkedAccount}
         onUpdate={onUpdateLinkedAccount}
         onRemove={onRemoveLinkedAccount}
         onReassign={onReassignLinkedAccount}
+        onSyncPayer={onSyncPayerForAccount}
       />
     </div>
   );
