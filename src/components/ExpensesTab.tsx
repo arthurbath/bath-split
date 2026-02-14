@@ -63,6 +63,38 @@ function EditableCell({ value, onChange, type = 'text', className = '', min, max
   );
 }
 
+function CurrencyCell({ value, onChange, className = '' }: {
+  value: number;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const [local, setLocal] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  const commit = () => { if (local !== String(value)) onChange(local); };
+
+  return focused ? (
+    <Input
+      ref={ref}
+      type="number"
+      value={local}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => { commit(); setFocused(false); }}
+      onKeyDown={e => e.key === 'Enter' && ref.current?.blur()}
+      autoFocus
+      className={`h-7 border-transparent bg-transparent px-1 hover:border-border focus:border-primary !text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
+    />
+  ) : (
+    <button
+      type="button"
+      onClick={() => setFocused(true)}
+      className={`h-7 w-full bg-transparent px-1 !text-xs text-right cursor-text hover:border hover:border-border rounded-md ${className}`}
+    >
+      ${Math.round(Number(local) || 0)}
+    </button>
+  );
+}
+
 interface ComputedRow {
   exp: Expense;
   fairX: number;
@@ -99,7 +131,7 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
         </Select>
       </TableCell>
       <TableCell>
-        <EditableCell value={Number(exp.amount)} onChange={v => handleUpdate(exp.id, 'amount', v)} type="number" className="text-right" />
+        <CurrencyCell value={Number(exp.amount)} onChange={v => handleUpdate(exp.id, 'amount', v)} className="text-right" />
       </TableCell>
       <TableCell className="text-center">
         <Checkbox checked={exp.is_estimate} onCheckedChange={(checked) => handleToggleEstimate(exp.id, !!checked)} />
