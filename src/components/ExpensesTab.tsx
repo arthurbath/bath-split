@@ -154,6 +154,11 @@ function PercentCell({ value, onChange, className = '', 'data-row': dataRow, 'da
   const [local, setLocal] = useState(String(value));
   const [focused, setFocused] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!focused) setLocal(String(value));
+  }, [value, focused]);
+
   const commit = () => { if (local !== String(value)) onChange(local); };
 
   return focused ? (
