@@ -16,7 +16,8 @@ export function useHouseholdData(user: User | null) {
   const [loading, setLoading] = useState(true);
 
   const fetchHousehold = useCallback(async () => {
-    if (!user) { setLoading(false); return; }
+    if (!user) { setHousehold(null); setLoading(false); return; }
+    setLoading(true);
 
     const { data: membership } = await supabase
       .from('household_members')
