@@ -381,7 +381,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                 <TableHead>Frequency</TableHead>
                 <TableHead className="text-right">Param</TableHead>
                 <TableHead className="text-right">Monthly</TableHead>
-                <TableHead className="min-w-[140px]">Budget</TableHead>
+                <TableHead className="min-w-[190px]">Budget</TableHead>
                 <TableHead className="min-w-[140px]">Payment Method</TableHead>
                 <TableHead>Payer</TableHead>
                 <TableHead className="text-right">{partnerX} %</TableHead>
