@@ -8,8 +8,7 @@ export interface HouseholdData {
   inviteCode: string | null;
   partnerX: string;
   partnerY: string;
-  myLabel: 'X' | 'Y';
-  hasBothPartners: boolean;
+  displayName: string;
 }
 
 export function useHouseholdData(user: User | null) {
@@ -29,41 +28,26 @@ export function useHouseholdData(user: User | null) {
 
     const { data: hh } = await supabase
       .from('households')
-      .select('id, name, invite_code')
+      .select('id, name, invite_code, partner_x_name, partner_y_name')
       .eq('id', membership.household_id)
       .single();
 
     if (!hh) { setLoading(false); return; }
 
-    const { data: members } = await supabase
-      .from('household_members')
-      .select('partner_label, user_id')
-      .eq('household_id', hh.id);
-
-    let partnerX = 'Partner X';
-    let partnerY = 'Partner Y';
-
-    if (members) {
-      for (const m of members) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('id', m.user_id)
-          .single();
-        const name = profile?.display_name ?? 'Partner';
-        if (m.partner_label === 'X') partnerX = name;
-        else partnerY = name;
-      }
-    }
+    // Get current user's display name
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', user.id)
+      .single();
 
     setHousehold({
       householdId: hh.id,
       householdName: hh.name,
       inviteCode: (hh as any).invite_code ?? null,
-      partnerX,
-      partnerY,
-      myLabel: membership.partner_label as 'X' | 'Y',
-      hasBothPartners: (members?.length ?? 0) >= 2,
+      partnerX: (hh as any).partner_x_name ?? 'Partner X',
+      partnerY: (hh as any).partner_y_name ?? 'Partner Y',
+      displayName: profile?.display_name ?? 'You',
     });
     setLoading(false);
   }, [user]);
@@ -82,7 +66,7 @@ export function useHouseholdData(user: User | null) {
     const householdId = crypto.randomUUID();
     const { error: hhErr } = await supabase
       .from('households')
-      .insert({ id: householdId, name: 'My Household' });
+      .insert({ id: householdId, name: 'My Household', partner_x_name: displayName, partner_y_name: 'Partner Y' });
     if (hhErr) throw new Error(`Household creation failed: ${hhErr.message}`);
 
     const { error: memberErr } = await supabase.from('household_members').insert({
@@ -115,16 +99,6 @@ export function useHouseholdData(user: User | null) {
     if (findErr) throw new Error(`Lookup failed: ${findErr.message}`);
     if (!hh) throw new Error('Invalid invite code. Please check and try again.');
 
-    // Check if household already has 2 members
-    const { data: members } = await supabase
-      .from('household_members')
-      .select('id')
-      .eq('household_id', hh.id);
-
-    if (members && members.length >= 2) {
-      throw new Error('This household already has two partners.');
-    }
-
     // Check if already a member
     const { data: existing } = await supabase
       .from('household_members')
@@ -135,7 +109,7 @@ export function useHouseholdData(user: User | null) {
 
     if (existing) throw new Error('You are already a member of this household.');
 
-    // Join as partner Y
+    // Join as a member
     const { error: memberErr } = await supabase.from('household_members').insert({
       household_id: hh.id,
       user_id: user.id,
@@ -146,5 +120,15 @@ export function useHouseholdData(user: User | null) {
     await fetchHousehold();
   };
 
-  return { household, loading, createHousehold, joinHousehold, refetch: fetchHousehold };
+  const updatePartnerNames = async (partnerXName: string, partnerYName: string) => {
+    if (!household) throw new Error('No household');
+    const { error } = await supabase
+      .from('households')
+      .update({ partner_x_name: partnerXName, partner_y_name: partnerYName })
+      .eq('id', household.householdId);
+    if (error) throw new Error(error.message);
+    await fetchHousehold();
+  };
+
+  return { household, loading, createHousehold, joinHousehold, updatePartnerNames, refetch: fetchHousehold };
 }
