@@ -106,7 +106,7 @@ export function ManagedListSection({ title, description, items, getUsageCount, o
         <CardContent className="space-y-4">
           <div className="flex gap-2">
             <Input
-              placeholder={`Add new ${title.toLowerCase().replace(/s$/, '')}…`}
+              placeholder={`Add new ${title.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '')}…`}
               value={name}
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAdd()}
