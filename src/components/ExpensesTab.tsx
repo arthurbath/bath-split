@@ -294,15 +294,21 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
         </Select>
       </TableCell>
       <TableCell>
-        <Select value={exp.payer} onValueChange={v => handleUpdate(exp.id, 'payer', v)}>
-          <SelectTrigger className="h-7 w-24 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2" data-row={rowIndex} data-col={9} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="X">{partnerX}</SelectItem>
-            <SelectItem value="Y">{partnerY}</SelectItem>
-          </SelectContent>
-        </Select>
+        {exp.linked_account_id ? (
+          <span className="text-xs px-1">
+            {linkedAccounts.find(la => la.id === exp.linked_account_id)?.owner_partner === 'X' ? partnerX : partnerY}
+          </span>
+        ) : (
+          <Select value={exp.payer} onValueChange={v => handleUpdate(exp.id, 'payer', v)}>
+            <SelectTrigger className="h-7 w-24 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2" data-row={rowIndex} data-col={9} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="X">{partnerX}</SelectItem>
+              <SelectItem value="Y">{partnerY}</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </TableCell>
       <TableCell>
         <PercentCell value={localBenefitX} onChange={handleBenefitXChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={10} {...nav} />
@@ -419,7 +425,14 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
       else if (field === 'frequency_param') updates.frequency_param = value ? Number(value) : null;
       else if (field === 'category_id') updates.category_id = value === '_none' ? null : value;
       else if (field === 'budget_id') updates.budget_id = value === '_none' ? null : value;
-      else if (field === 'linked_account_id') updates.linked_account_id = value === '_none' ? null : value;
+      else if (field === 'linked_account_id') {
+        const accountId = value === '_none' ? null : value;
+        updates.linked_account_id = accountId;
+        if (accountId) {
+          const account = linkedAccounts.find(la => la.id === accountId);
+          if (account) updates.payer = account.owner_partner;
+        }
+      }
       else updates[field] = value;
       await onUpdate(id, updates);
     } catch (e: any) {
