@@ -1,60 +1,34 @@
+# FairShare – Implementation Status
 
+All 5 phases from the original spec are now implemented.
 
-# Fix: Household Creation Blocked by Missing Table Permissions
+## ✅ Phase 1: Authentication, Household Setup & Database
+- Sign-up/Login with Supabase Auth (email + password)
+- Household creation with display name (partner X)
+- **Partner invite:** Invite code system — creator shares code, partner joins via "Join Existing" tab
+- Database with RLS policies, `is_household_member` security definer function
+- Top navigation with 5 tabs
 
-## Problem
+## ✅ Phase 2: Categories & Income Streams
+- Categories: Add, rename (inline edit), delete with reassign prompt
+- Incomes: Spreadsheet-style inline-editable table with autosave on blur
+- Footer totals with income ratio (e.g. "Alice 60% / Bob 40%")
+- Frequency normalization via `toMonthly()` with 4.33 weeks/month
 
-The `households` INSERT returns `403` ("new row violates row-level security policy") because **the `authenticated` and `anon` database roles have no table-level GRANT permissions** on any public tables. RLS policies are correct, but without GRANTs, PostgreSQL denies all access before RLS is even evaluated.
+## ✅ Phase 3: Expenses & Fair Share Calculation
+- Spreadsheet-style inline-editable expense table
+- Columns: Name, Category, Amount, Frequency, Param, Monthly, Payer, Benefit X%, Benefit Y% (auto), Fair share per partner
+- Multiply-then-normalize formula for fair share
+- Defaults: 50/50 benefit, monthly, first partner as payer
+- Benefit % validated 0–100
 
-The previous migration attempted to fix this but the GRANTs were not applied.
+## ✅ Phase 4: Summary Screen
+- Large settlement callout ("Bob pays Alice $342" or "All square!")
+- Totals: monthly expenses, paid vs fair share per partner
+- Per-expense breakdown table with over/under columns
+- Whole dollar display throughout
 
-## Root Cause
-
-PostgreSQL requires two layers of permission:
-1. **Table-level GRANTs** (role can access the table at all)
-2. **RLS policies** (row-level filtering)
-
-Layer 1 is completely missing for all tables.
-
-## Plan
-
-### Step 1: Database Migration - Grant Table Permissions
-
-Run a new migration that explicitly grants permissions on each table individually (rather than using `ALL TABLES` which may not work in all contexts):
-
-```sql
--- Grant permissions on each table explicitly
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.households TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.household_members TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.categories TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.income_streams TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.expenses TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.restore_points TO authenticated;
-
--- Anon read access
-GRANT SELECT ON public.profiles TO anon;
-GRANT SELECT ON public.households TO anon;
-
--- Default privileges for future tables
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT ON TABLES TO anon;
-```
-
-### Step 2: Add Error Handling to createHousehold
-
-Update `src/hooks/useHouseholdData.ts` so that if the household insert fails, the error is caught and surfaced via a toast notification instead of silently freezing the UI.
-
-### Step 3: Add Error Handling to HouseholdSetup
-
-Update `src/components/HouseholdSetup.tsx` to catch errors from `onComplete` and show an error message, and reset the loading state so the button becomes clickable again.
-
-## Technical Details
-
-- **Files modified:**
-  - New SQL migration file
-  - `src/hooks/useHouseholdData.ts` (error handling in `createHousehold`)
-  - `src/components/HouseholdSetup.tsx` (error display)
-
+## ✅ Phase 5: Manual Restore Points
+- Save snapshots of categories, incomes, and expenses
+- Restore with confirmation dialog
+- Delete snapshots

@@ -6,7 +6,7 @@ import Auth from '@/pages/Auth';
 
 const Index = () => {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { household, loading: hhLoading, createHousehold } = useHouseholdData(user);
+  const { household, loading: hhLoading, createHousehold, joinHousehold } = useHouseholdData(user);
 
   if (authLoading || hhLoading) {
     return (
@@ -19,7 +19,7 @@ const Index = () => {
   if (!user) return <Auth />;
 
   if (!household) {
-    return <HouseholdSetup onComplete={createHousehold} />;
+    return <HouseholdSetup onComplete={createHousehold} onJoin={joinHousehold} />;
   }
 
   return <AppShell household={household} onSignOut={signOut} />;
