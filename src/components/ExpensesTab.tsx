@@ -55,7 +55,7 @@ function EditableCell({ value, onChange, type = 'text', className = '', min, max
       onChange={e => setLocal(e.target.value)}
       onBlur={commit}
       onKeyDown={e => e.key === 'Enter' && ref.current?.blur()}
-      className={`h-8 border-transparent bg-transparent px-1 hover:border-border focus:border-primary ${className}`}
+      className={`h-7 border-transparent bg-transparent px-1 hover:border-border focus:border-primary text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
     />
   );
 }
@@ -141,7 +141,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
   });
 
   return (
-    <Card>
+    <Card className="max-w-none w-[100vw] relative left-1/2 -translate-x-1/2">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -153,20 +153,20 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-2">
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="text-xs">
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
+                <TableHead className="min-w-[200px]">Name</TableHead>
+                <TableHead className="min-w-[140px]">Category</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead className="text-center">Est.</TableHead>
                 <TableHead>Frequency</TableHead>
                 <TableHead className="text-right">Param</TableHead>
                 <TableHead className="text-right">Monthly</TableHead>
-                <TableHead>Budget</TableHead>
-                <TableHead>Linked</TableHead>
+                <TableHead className="min-w-[140px]">Budget</TableHead>
+                <TableHead className="min-w-[140px]">Linked</TableHead>
                 <TableHead>Payer</TableHead>
                 <TableHead className="text-right">{partnerX} %</TableHead>
                 <TableHead className="text-right">{partnerY} %</TableHead>
@@ -189,7 +189,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                   </TableCell>
                   <TableCell>
                     <Select value={exp.category_id ?? '_none'} onValueChange={v => handleUpdate(exp.id, 'category_id', v)}>
-                      <SelectTrigger className="h-8 border-transparent bg-transparent hover:border-border text-xs">
+                      <SelectTrigger className="h-7 border-transparent bg-transparent hover:border-border text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -208,7 +208,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                   </TableCell>
                   <TableCell>
                     <Select value={exp.frequency_type} onValueChange={v => handleUpdate(exp.id, 'frequency_type', v)}>
-                      <SelectTrigger className="h-8 border-transparent bg-transparent hover:border-border text-xs">
+                      <SelectTrigger className="h-7 border-transparent bg-transparent hover:border-border text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -225,10 +225,10 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                       <span className="text-muted-foreground text-xs px-1">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">${Math.round(monthly)}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums text-xs">${Math.round(monthly)}</TableCell>
                   <TableCell>
                     <Select value={exp.budget_id ?? '_none'} onValueChange={v => handleUpdate(exp.id, 'budget_id', v)}>
-                      <SelectTrigger className="h-8 border-transparent bg-transparent hover:border-border text-xs">
+                      <SelectTrigger className="h-7 border-transparent bg-transparent hover:border-border text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -241,7 +241,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                   </TableCell>
                   <TableCell>
                     <Select value={exp.linked_account_id ?? '_none'} onValueChange={v => handleUpdate(exp.id, 'linked_account_id', v)}>
-                      <SelectTrigger className="h-8 border-transparent bg-transparent hover:border-border text-xs">
+                      <SelectTrigger className="h-7 border-transparent bg-transparent hover:border-border text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -254,7 +254,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                   </TableCell>
                   <TableCell>
                     <Select value={exp.payer} onValueChange={v => handleUpdate(exp.id, 'payer', v)}>
-                      <SelectTrigger className="h-8 w-24 border-transparent bg-transparent hover:border-border">
+                      <SelectTrigger className="h-7 w-24 border-transparent bg-transparent hover:border-border text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -266,11 +266,11 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                   <TableCell>
                     <EditableCell value={exp.benefit_x} onChange={v => handleUpdate(exp.id, 'benefit_x', v)} type="number" className="text-right w-16" min={0} max={100} />
                   </TableCell>
-                  <TableCell className="text-right text-muted-foreground tabular-nums">
+                  <TableCell className="text-right text-muted-foreground tabular-nums text-xs">
                     {100 - exp.benefit_x}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">${Math.round(fairX)}</TableCell>
-                  <TableCell className="text-right tabular-nums">${Math.round(fairY)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">${Math.round(fairX)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">${Math.round(fairY)}</TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemove(exp.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
