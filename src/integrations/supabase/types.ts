@@ -133,16 +133,19 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          invite_code: string | null
           name: string
         }
         Insert: {
           created_at?: string
           id?: string
+          invite_code?: string | null
           name?: string
         }
         Update: {
           created_at?: string
           id?: string
+          invite_code?: string | null
           name?: string
         }
         Relationships: []

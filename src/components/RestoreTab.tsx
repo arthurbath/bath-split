@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Save, Trash2, RotateCcw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import type { RestorePoint } from '@/hooks/useRestorePoints';
@@ -24,6 +25,7 @@ interface RestoreTabProps {
 export function RestoreTab({ points, incomes, expenses, categories, onSave, onRemove, onRestore }: RestoreTabProps) {
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<RestorePoint | null>(null);
 
   const handleSave = async () => {
     setSaving(true);
@@ -41,88 +43,101 @@ export function RestoreTab({ points, incomes, expenses, categories, onSave, onRe
       setName('');
       toast({ title: 'Snapshot saved' });
     } catch (e: any) {
-      toast({ title: 'Error saving snapshot', description: e.message, variant: 'destructive' });
+      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
     }
     setSaving(false);
   };
 
-  const handleRestore = async (point: RestorePoint) => {
+  const handleConfirmRestore = async () => {
+    if (!restoreTarget) return;
     try {
-      await onRestore(point.data);
-      toast({ title: 'Restored', description: `Restored from "${point.name}"` });
+      await onRestore(restoreTarget.data);
+      toast({ title: 'Restored', description: `Restored from "${restoreTarget.name}"` });
     } catch (e: any) {
       toast({ title: 'Error restoring', description: e.message, variant: 'destructive' });
     }
+    setRestoreTarget(null);
   };
 
   const handleRemove = async (id: string) => {
-    try {
-      await onRemove(id);
-    } catch (e: any) {
-      toast({ title: 'Error deleting snapshot', description: e.message, variant: 'destructive' });
+    try { await onRemove(id); } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
     }
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Save Snapshot</CardTitle>
-          <CardDescription>Save the current state of all incomes, expenses, and categories.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Snapshot name (optional)"
-              value={name}
-              onChange={e => setName(e.target.value)}
-            />
-            <Button onClick={handleSave} disabled={saving} className="gap-1.5 shrink-0">
-              <Save className="h-4 w-4" /> Save
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Save Snapshot</CardTitle>
+            <CardDescription>Snapshot current categories, incomes, and expenses.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input placeholder="Snapshot name (optional)" value={name} onChange={e => setName(e.target.value)} />
+              <Button onClick={handleSave} disabled={saving} className="gap-1.5 shrink-0">
+                <Save className="h-4 w-4" /> Save
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Restore Points</CardTitle>
-          <CardDescription>{points.length} snapshots</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {points.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No snapshots yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {points.map(pt => (
-                  <TableRow key={pt.id}>
-                    <TableCell className="font-medium">{pt.name ?? 'Unnamed'}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(pt.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right space-x-1">
-                      <Button variant="outline" size="sm" className="gap-1" onClick={() => handleRestore(pt)}>
-                        <RotateCcw className="h-3.5 w-3.5" /> Restore
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleRemove(pt.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
+        <Card>
+          <CardHeader>
+            <CardTitle>Restore Points</CardTitle>
+            <CardDescription>{points.length} snapshots</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {points.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">No snapshots yet.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                </TableHeader>
+                <TableBody>
+                  {points.map(pt => (
+                    <TableRow key={pt.id}>
+                      <TableCell className="font-medium">{pt.name ?? 'Unnamed'}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(pt.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button variant="outline" size="sm" className="gap-1" onClick={() => setRestoreTarget(pt)}>
+                          <RotateCcw className="h-3.5 w-3.5" /> Restore
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleRemove(pt.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <AlertDialog open={!!restoreTarget} onOpenChange={open => !open && setRestoreTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore "{restoreTarget?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will replace all your current categories, incomes, and expenses with the data from this snapshot. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRestore}>Restore</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
