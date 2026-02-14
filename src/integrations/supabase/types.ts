@@ -187,18 +187,24 @@ export type Database = {
           id: string
           invite_code: string | null
           name: string
+          partner_x_name: string
+          partner_y_name: string
         }
         Insert: {
           created_at?: string
           id?: string
           invite_code?: string | null
           name?: string
+          partner_x_name?: string
+          partner_y_name?: string
         }
         Update: {
           created_at?: string
           id?: string
           invite_code?: string | null
           name?: string
+          partner_x_name?: string
+          partner_y_name?: string
         }
         Relationships: []
       }
