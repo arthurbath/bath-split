@@ -1,63 +1,60 @@
 
 
-# FairShare – Budget Splitting App
+# Fix: Household Creation Blocked by Missing Table Permissions
 
-A two-partner budgeting app that fairly splits recurring expenses using benefit split × income ratio, showing per-expense breakdowns and a single monthly settlement amount.
+## Problem
 
----
+The `households` INSERT returns `403` ("new row violates row-level security policy") because **the `authenticated` and `anon` database roles have no table-level GRANT permissions** on any public tables. RLS policies are correct, but without GRANTs, PostgreSQL denies all access before RLS is even evaluated.
 
-## Phase 1: Authentication, Household Setup & Database
+The previous migration attempted to fix this but the GRANTs were not applied.
 
-**Goal:** Two users can sign up, create/join a household, and see their shared workspace.
+## Root Cause
 
-- **Sign-up / Login** using Supabase Auth (email + password)
-- **Household creation flow:** First user creates a household and enters their display name (e.g. "Alice"). They're assigned partner label X internally.
-- **Partner invite:** First user sends an email invite. The invited partner signs up, enters their display name (e.g. "Bob"), and is assigned label Y.
-- **Database setup:** `households`, `household_members`, `categories`, `income_streams`, `expenses`, `restore_points` tables with RLS policies so users only access their own household's data.
-- **Top navigation** with tabs: Incomes, Expenses, Summary, Categories, Restore Points (content placeholder for now).
+PostgreSQL requires two layers of permission:
+1. **Table-level GRANTs** (role can access the table at all)
+2. **RLS policies** (row-level filtering)
 
----
+Layer 1 is completely missing for all tables.
 
-## Phase 2: Categories & Income Streams
+## Plan
 
-**Goal:** Partners can manage categories and enter their income streams.
+### Step 1: Database Migration - Grant Table Permissions
 
-- **Categories screen:** Add, rename, and delete categories. Deleting a category used by expenses prompts to reassign or set to "No category."
-- **Incomes screen:** Spreadsheet-style inline-editable table with columns: Partner name, Income name, Amount per occurrence, Frequency type (dropdown), Frequency param (conditional), Monthly amount (calculated, read-only).
-- **Footer totals:** Each partner's monthly income total and the income ratio (e.g. "Alice 60% / Bob 40%").
-- **Frequency normalization:** `toMonthly()` utility using the 4.33 weeks/month constant for all supported frequency types (monthly, twice_monthly, weekly, every_n_weeks, annual, k_times_annually).
-- **Autosave** on each cell edit.
+Run a new migration that explicitly grants permissions on each table individually (rather than using `ALL TABLES` which may not work in all contexts):
 
----
+```sql
+-- Grant permissions on each table explicitly
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.households TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.household_members TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.categories TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.income_streams TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.expenses TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.restore_points TO authenticated;
 
-## Phase 3: Expenses & Fair Share Calculation
+-- Anon read access
+GRANT SELECT ON public.profiles TO anon;
+GRANT SELECT ON public.households TO anon;
 
-**Goal:** Partners can enter expenses and see how each is fairly split.
+-- Default privileges for future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES TO anon;
+```
 
-- **Expenses screen:** Spreadsheet-style table with columns: Name, Category (dropdown), Amount, Frequency, Frequency param, Monthly amount (calculated), Payer (dropdown showing partner names), Benefit X% (editable, default 50), Benefit Y% (auto = 100 − X%), Fair share for each partner (calculated).
-- **Core math:** Implements the "multiply-then-normalize" formula — combines benefit split with income ratio to determine each partner's fair share per expense.
-- **Defaults:** New expenses default to 50/50 benefit split, monthly frequency, first partner as payer.
-- **Validation:** Benefit % must be 0–100 integer; frequency params required when applicable.
+### Step 2: Add Error Handling to createHousehold
 
----
+Update `src/hooks/useHouseholdData.ts` so that if the household insert fails, the error is caught and surfaced via a toast notification instead of silently freezing the UI.
 
-## Phase 4: Summary Screen
+### Step 3: Add Error Handling to HouseholdSetup
 
-**Goal:** A clear overview of the monthly settlement.
+Update `src/components/HouseholdSetup.tsx` to catch errors from `onComplete` and show an error message, and reset the loading state so the button becomes clickable again.
 
-- **Totals section:** Total monthly expenses, each partner's fair total, each partner's actual paid total.
-- **Settlement callout:** Large, prominent display — e.g. "Bob pays Alice $342" or "All square!"
-- **Per-expense breakdown table** (read-only): Name, Monthly amount, Payer, Benefit split, Fair share per partner, Over/under column.
-- All currency values displayed as whole dollars (internal precision preserved).
+## Technical Details
 
----
-
-## Phase 5: Manual Restore Points
-
-**Goal:** Users can save and restore snapshots of their budget data.
-
-- **Restore Points screen:** List of saved restore points showing name (optional) and timestamp.
-- **Create restore point:** Button to snapshot current categories, incomes, and expenses into a JSON payload.
-- **Restore:** Clicking restore replaces all current household data with the snapshot contents, with a confirmation dialog.
-- Automated/scheduled snapshots deferred to a future phase.
+- **Files modified:**
+  - New SQL migration file
+  - `src/hooks/useHouseholdData.ts` (error handling in `createHousehold`)
+  - `src/components/HouseholdSetup.tsx` (error display)
 
