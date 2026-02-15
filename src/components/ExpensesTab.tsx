@@ -36,7 +36,7 @@ const FREQ_OPTIONS: FrequencyType[] = ['monthly', 'twice_monthly', 'weekly', 'ev
 const NEEDS_PARAM: Set<FrequencyType> = new Set(['every_n_weeks', 'k_times_annually']);
 
 type GroupByOption = 'none' | 'category' | 'budget' | 'payer' | 'payment_method';
-type SortColumn = 'name' | 'category' | 'amount' | 'estimate' | 'frequency' | 'param' | 'monthly' | 'budget' | 'payment_method' | 'payer' | 'benefit_x' | 'benefit_y' | 'fair_x' | 'fair_y';
+type SortColumn = 'name' | 'category' | 'amount' | 'estimate' | 'frequency' | 'monthly' | 'budget' | 'payment_method' | 'payer' | 'benefit_x' | 'benefit_y' | 'fair_x' | 'fair_y';
 type SortDir = 'asc' | 'desc';
 
 function SortableHead({ column, label, current, dir, onSort, className = '' }: {
@@ -276,23 +276,21 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
         <Checkbox checked={exp.is_estimate} onCheckedChange={(checked) => handleToggleEstimate(exp.id, !!checked)} data-row={rowIndex} data-col={3} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown} />
       </TableCell>
       <TableCell>
-        <Select value={exp.frequency_type} onValueChange={v => handleUpdate(exp.id, 'frequency_type', v)}>
-          <SelectTrigger className="h-7 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2" data-row={rowIndex} data-col={4} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {FREQ_OPTIONS.map(f => (
-              <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
-      <TableCell>
-        {NEEDS_PARAM.has(exp.frequency_type) ? (
-          <EditableCell value={exp.frequency_param ?? ''} onChange={v => handleUpdate(exp.id, 'frequency_param', v)} type="number" className="text-right w-16" data-row={rowIndex} data-col={5} {...nav} />
-        ) : (
-          <span className="text-muted-foreground text-xs px-1">—</span>
-        )}
+        <div className="flex items-center gap-1">
+          <Select value={exp.frequency_type} onValueChange={v => handleUpdate(exp.id, 'frequency_type', v)}>
+            <SelectTrigger className="h-7 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2" data-row={rowIndex} data-col={4} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FREQ_OPTIONS.map(f => (
+                <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {NEEDS_PARAM.has(exp.frequency_type) && (
+            <EditableCell value={exp.frequency_param ?? ''} onChange={v => handleUpdate(exp.id, 'frequency_param', v)} type="number" className="text-right w-14" data-row={rowIndex} data-col={5} {...nav} />
+          )}
+        </div>
       </TableCell>
       <TableCell className="text-right font-medium tabular-nums text-xs">${Math.round(monthly)}</TableCell>
       <TableCell>
@@ -300,7 +298,7 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
           <SelectTrigger
             className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
             style={{ backgroundColor: budgets.find(b => b.id === exp.budget_id)?.color || 'transparent' }}
-            data-row={rowIndex} data-col={7} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
+            data-row={rowIndex} data-col={6} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
           >
             <SelectValue />
           </SelectTrigger>
@@ -317,7 +315,7 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
           <SelectTrigger
             className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
             style={{ backgroundColor: linkedAccounts.find(la => la.id === exp.linked_account_id)?.color || 'transparent' }}
-            data-row={rowIndex} data-col={8} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
+            data-row={rowIndex} data-col={7} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
           >
             <SelectValue>
               {exp.linked_account_id ? linkedAccounts.find(la => la.id === exp.linked_account_id)?.name ?? '—' : '—'}
@@ -346,10 +344,10 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
         )}
       </TableCell>
       <TableCell>
-        <PercentCell value={localBenefitX} onChange={handleBenefitXChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={10} {...nav} />
+        <PercentCell value={localBenefitX} onChange={handleBenefitXChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={9} {...nav} />
       </TableCell>
       <TableCell className="text-right tabular-nums text-xs">
-        <PercentCell value={100 - localBenefitX} onChange={handleBenefitYChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={11} {...nav} />
+        <PercentCell value={100 - localBenefitX} onChange={handleBenefitYChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={10} {...nav} />
       </TableCell>
       <TableCell className="text-right tabular-nums text-xs">${Math.round(fairX)}</TableCell>
       <TableCell className="text-right tabular-nums text-xs">${Math.round(fairY)}</TableCell>
@@ -386,9 +384,9 @@ function GroupSubtotalRow({ label, rows }: { label: string; rows: ComputedRow[] 
       <TableCell className="sticky left-0 z-10 bg-muted font-semibold text-xs">
         {label}
       </TableCell>
-      <TableCell colSpan={5} className="bg-muted" />
+      <TableCell colSpan={4} className="bg-muted" />
       <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupMonthly)}</TableCell>
-      <TableCell colSpan={5} className="bg-muted" />
+      <TableCell colSpan={4} className="bg-muted" />
       <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupFairX)}</TableCell>
       <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupFairY)}</TableCell>
       <TableCell className="bg-muted" />
@@ -526,7 +524,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
         case 'amount': cmp = a.exp.amount - b.exp.amount; break;
         case 'estimate': cmp = Number(a.exp.is_estimate) - Number(b.exp.is_estimate); break;
         case 'frequency': cmp = a.exp.frequency_type.localeCompare(b.exp.frequency_type); break;
-        case 'param': cmp = (a.exp.frequency_param ?? 0) - (b.exp.frequency_param ?? 0); break;
+        
         case 'monthly': cmp = a.monthly - b.monthly; break;
         case 'budget': cmp = resolveName(a.exp.budget_id, budgets).localeCompare(resolveName(b.exp.budget_id, budgets)); break;
         case 'payment_method': cmp = resolveName(a.exp.linked_account_id, linkedAccounts).localeCompare(resolveName(b.exp.linked_account_id, linkedAccounts)); break;
@@ -637,7 +635,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                 <SortableHead column="amount" label="Amount" current={sortCol} dir={sortDir} onSort={toggleSort} className="text-right" />
                 <SortableHead column="estimate" label="Est." current={sortCol} dir={sortDir} onSort={toggleSort} className="text-center" />
                 <SortableHead column="frequency" label="Frequency" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[150px]" />
-                <SortableHead column="param" label="Param" current={sortCol} dir={sortDir} onSort={toggleSort} className="text-right" />
+                
                 <SortableHead column="monthly" label="Monthly" current={sortCol} dir={sortDir} onSort={toggleSort} className="text-right" />
                 <SortableHead column="budget" label="Budget" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[190px]" />
                 <SortableHead column="payment_method" label="Payment Method" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[190px]" />
@@ -652,7 +650,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={15} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
                     No expenses yet. Click "Add row" to start.
                   </TableCell>
                 </TableRow>
@@ -679,9 +677,9 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
               <TableFooter>
                 <TableRow className="bg-muted">
                   <TableCell className="font-semibold text-xs sticky left-0 z-10 bg-muted">Totals</TableCell>
-                  <TableCell colSpan={5} className="bg-muted" />
+                  <TableCell colSpan={4} className="bg-muted" />
                   <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totalMonthly)}</TableCell>
-                  <TableCell colSpan={5} className="bg-muted" />
+                  <TableCell colSpan={4} className="bg-muted" />
                   <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totalFairX)}</TableCell>
                   <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totalFairY)}</TableCell>
                   <TableCell className="bg-muted" />
