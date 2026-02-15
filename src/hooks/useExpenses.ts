@@ -35,13 +35,21 @@ export function useExpenses(householdId: string) {
 
   const add = async (expense: Omit<Expense, 'id' | 'household_id'>) => {
     const id = crypto.randomUUID();
-    const { error } = await supabase.from('expenses').insert({
-      id,
-      household_id: householdId,
-      ...expense,
-    });
-    if (error) throw error;
-    await fetch();
+    try {
+      const { error } = await supabase.from('expenses').insert({
+        id,
+        household_id: householdId,
+        ...expense,
+      });
+      if (error) throw error;
+      await fetch();
+    } catch (e: any) {
+      if (e instanceof TypeError && e.message === 'Load failed') {
+        await fetch();
+      } else {
+        throw e;
+      }
+    }
   };
 
   const update = async (id: string, updates: Partial<Omit<Expense, 'id' | 'household_id'>>) => {
