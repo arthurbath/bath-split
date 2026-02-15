@@ -28,8 +28,9 @@ export function useSpreadsheetNav() {
       el => Number(el.dataset.row) === row && Number(el.dataset.col) === col
     );
     if (target) {
-      // For CurrencyCell buttons, click to activate the input
-      if (target.tagName === 'BUTTON') {
+      // For CurrencyCell/PercentCell buttons, click to activate the input
+      // But not for checkboxes (role="checkbox") — just focus those
+      if (target.tagName === 'BUTTON' && target.getAttribute('role') !== 'checkbox') {
         target.click();
       } else {
         target.focus();
