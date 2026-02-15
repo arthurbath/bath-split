@@ -278,7 +278,7 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
         <Checkbox checked={exp.is_estimate} onCheckedChange={(checked) => handleToggleEstimate(exp.id, !!checked)} data-row={rowIndex} data-col={3} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown} />
       </TableCell>
       <TableCell>
-        <div className="flex items-center gap-1 overflow-hidden">
+        <div className="flex items-center gap-1">
           <Select value={exp.frequency_type} onValueChange={v => handleUpdate(exp.id, 'frequency_type', v)}>
             <SelectTrigger className="h-7 shrink-0 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2" data-row={rowIndex} data-col={4} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}>
               <SelectValue />
@@ -290,7 +290,7 @@ function ExpenseRow({ exp, fairX, fairY, monthly, categories, budgets, linkedAcc
             </SelectContent>
           </Select>
           {NEEDS_PARAM.has(exp.frequency_type) && (
-            <EditableCell value={exp.frequency_param ?? ''} onChange={v => handleUpdate(exp.id, 'frequency_param', v)} type="number" placeholder="X" className="text-right w-8" data-row={rowIndex} data-col={5} {...nav} />
+            <EditableCell value={exp.frequency_param ?? ''} onChange={v => handleUpdate(exp.id, 'frequency_param', v)} type="number" placeholder="X" className="text-left w-8" data-row={rowIndex} data-col={5} {...nav} />
           )}
         </div>
       </TableCell>
@@ -636,7 +636,7 @@ export function ExpensesTab({ expenses, categories, budgets, linkedAccounts, inc
                 <SortableHead column="category" label="Category" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[190px]" />
                 <SortableHead column="amount" label="Amount" current={sortCol} dir={sortDir} onSort={toggleSort} className="text-right" />
                 <SortableHead column="estimate" label="Est." current={sortCol} dir={sortDir} onSort={toggleSort} className="text-center" />
-                <SortableHead column="frequency" label="Frequency" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[150px]" />
+                <SortableHead column="frequency" label="Frequency" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[200px]" />
                 
                 <SortableHead column="monthly" label="Monthly" current={sortCol} dir={sortDir} onSort={toggleSort} className="text-right" />
                 <SortableHead column="budget" label="Budget" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[190px]" />
