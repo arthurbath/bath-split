@@ -122,17 +122,13 @@ export function useSpreadsheetNav() {
       });
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      const maxRow = getMaxRow();
+      if (row >= maxRow) return;
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
       }
-      const targetCol = lastClickedCol.current;
-      const maxRow = getMaxRow();
-      const nextRow = row < maxRow ? row + 1 : 0;
       requestAnimationFrame(() => {
-        // Try the last-clicked column, fall back to same column
-        if (!focusCell(nextRow, targetCol)) {
-          focusCell(nextRow, col);
-        }
+        focusCell(row + 1, col);
       });
     }
   }, [findNextCol, findPrevCol, focusCell, getMaxRow]);
