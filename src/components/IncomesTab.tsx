@@ -21,8 +21,8 @@ interface IncomesTabProps {
   onRemove: (id: string) => Promise<void>;
 }
 
-const FREQ_OPTIONS: FrequencyType[] = ['monthly', 'twice_monthly', 'weekly', 'every_n_weeks', 'annual', 'k_times_annually'];
-const NEEDS_PARAM: Set<FrequencyType> = new Set(['every_n_weeks', 'k_times_annually']);
+const FREQ_OPTIONS: FrequencyType[] = ['monthly', 'twice_monthly', 'weekly', 'every_n_weeks', 'every_n_months', 'every_n_days', 'annual', 'k_times_annually', 'k_times_monthly', 'k_times_weekly'];
+const NEEDS_PARAM: Set<FrequencyType> = new Set(['every_n_weeks', 'every_n_months', 'every_n_days', 'k_times_annually', 'k_times_monthly', 'k_times_weekly']);
 
 type SortColumn = 'partner' | 'name' | 'amount' | 'frequency' | 'monthly';
 type SortDir = 'asc' | 'desc';

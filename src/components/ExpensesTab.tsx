@@ -35,8 +35,8 @@ interface ExpensesTabProps {
   onAddLinkedAccount: (name: string, ownerPartner?: string) => Promise<void>;
 }
 
-const FREQ_OPTIONS: FrequencyType[] = ['monthly', 'twice_monthly', 'weekly', 'every_n_weeks', 'annual', 'k_times_annually'];
-const NEEDS_PARAM: Set<FrequencyType> = new Set(['every_n_weeks', 'k_times_annually']);
+const FREQ_OPTIONS: FrequencyType[] = ['monthly', 'twice_monthly', 'weekly', 'every_n_weeks', 'every_n_months', 'every_n_days', 'annual', 'k_times_annually', 'k_times_monthly', 'k_times_weekly'];
+const NEEDS_PARAM: Set<FrequencyType> = new Set(['every_n_weeks', 'every_n_months', 'every_n_days', 'k_times_annually', 'k_times_monthly', 'k_times_weekly']);
 
 type GroupByOption = 'none' | 'category' | 'estimated' | 'payer' | 'payment_method';
 type SortColumn = 'name' | 'category' | 'amount' | 'estimate' | 'frequency' | 'monthly' | 'payment_method' | 'payer' | 'benefit_x' | 'benefit_y' | 'fair_x' | 'fair_y';
