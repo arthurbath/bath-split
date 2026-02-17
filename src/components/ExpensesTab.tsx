@@ -1,39 +1,23 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  createColumnHelper,
-  type SortingState,
-  type CellContext,
-  type Row,
-} from '@tanstack/react-table';
-import { DataGrid, useGridNav, useGridRowIndex } from '@/components/ui/data-grid';
-import { GridEditableCell, GridCurrencyCell, GridPercentCell } from '@/components/ui/data-grid-cells';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useSpreadsheetNav } from '@/hooks/useSpreadsheetNav';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { TableRow, TableCell } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Plus, Trash2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Plus, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
+import { toMonthly, frequencyLabels } from '@/lib/frequency';
 import type { FrequencyType } from '@/types/fairshare';
 import type { Expense } from '@/hooks/useExpenses';
 import type { Category } from '@/hooks/useCategories';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
 import type { Income } from '@/hooks/useIncomes';
-
-// ── Types ─────────────────────────────────────────────────
 
 interface ExpensesTabProps {
   expenses: Expense[];
@@ -51,259 +35,236 @@ interface ExpensesTabProps {
   onAddLinkedAccount: (name: string, ownerPartner?: string) => Promise<void>;
 }
 
+const FREQ_OPTIONS: FrequencyType[] = ['weekly', 'twice_monthly', 'monthly', 'annual', 'every_n_days', 'every_n_weeks', 'every_n_months', 'k_times_weekly', 'k_times_monthly', 'k_times_annually'];
+const NEEDS_PARAM: Set<FrequencyType> = new Set(['every_n_weeks', 'every_n_months', 'every_n_days', 'k_times_annually', 'k_times_monthly', 'k_times_weekly']);
+
 type GroupByOption = 'none' | 'category' | 'estimated' | 'payer' | 'payment_method';
+type SortColumn = 'name' | 'category' | 'amount' | 'estimate' | 'frequency' | 'monthly' | 'payment_method' | 'payer' | 'benefit_x' | 'benefit_y' | 'fair_x' | 'fair_y';
+type SortDir = 'asc' | 'desc';
 
-const FREQ_OPTIONS: FrequencyType[] = [
-  'weekly', 'twice_monthly', 'monthly', 'annual',
-  'every_n_days', 'every_n_weeks', 'every_n_months',
-  'k_times_weekly', 'k_times_monthly', 'k_times_annually',
-];
-
-const columnHelper = createColumnHelper<Expense>();
-
-const resolveName = (id: string | null, list: { id: string; name: string }[]) =>
-  id ? (list.find(x => x.id === id)?.name ?? '') : '';
-
-// ── Cell Components ───────────────────────────────────────
-
-function CategoryCell({ row, column, table }: CellContext<Expense, string | null>) {
-  const meta = table.options.meta as any;
-  const rowIndex = useGridRowIndex();
-  const { onCellKeyDown, onCellMouseDown } = useGridNav();
-  const exp = row.original;
-  const cat = meta.categories.find((c: Category) => c.id === exp.category_id);
+function SortableHead({ column, label, current, dir, onSort, className = '' }: {
+  column: SortColumn;
+  label: React.ReactNode;
+  current: SortColumn;
+  dir: SortDir;
+  onSort: (col: SortColumn) => void;
+  className?: string;
+}) {
+  const active = current === column;
   return (
-    <Select
-      value={exp.category_id ?? '_none'}
-      onValueChange={v => v === '_add_new' ? meta.openAddDialog('category') : meta.handleUpdate(exp.id, 'category_id', v)}
-    >
-      <SelectTrigger
-        className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
-        style={{ backgroundColor: cat?.color || 'transparent' }}
-        data-row={rowIndex} data-col={column.getIndex()} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="_none">—</SelectItem>
-        {meta.categories.map((c: Category) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-        <SelectItem value="_add_new" className="text-primary font-medium"><Plus className="inline h-3 w-3 mr-1" />Add New</SelectItem>
-      </SelectContent>
-    </Select>
+    <TableHead className={`${className} cursor-pointer select-none hover:bg-muted/50`} onClick={() => onSort(column)}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+      </span>
+    </TableHead>
   );
 }
 
-function EstimateCell({ row, column, table }: CellContext<Expense, boolean>) {
-  const meta = table.options.meta as any;
-  const rowIndex = useGridRowIndex();
-  const { onCellKeyDown, onCellMouseDown } = useGridNav();
+function EditableCell({ value, onChange, type = 'text', className = '', min, max, step, placeholder, 'data-row': dataRow, 'data-col': dataCol, onCellKeyDown, onCellMouseDown }: {
+  value: string | number;
+  onChange: (v: string) => void;
+  type?: string;
+  className?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  placeholder?: string;
+  'data-row'?: number;
+  'data-col'?: number;
+  onCellKeyDown?: (e: React.KeyboardEvent<HTMLElement>) => void;
+  onCellMouseDown?: (e: React.MouseEvent<HTMLElement>) => void;
+}) {
+  const [local, setLocal] = useState(String(value));
+  const ref = useRef<HTMLInputElement>(null);
+  const commit = () => { if (local !== String(value)) onChange(local); };
+
   return (
-    <Checkbox
-      checked={row.original.is_estimate}
-      onCheckedChange={checked => meta.handleToggleEstimate(row.original.id, !!checked)}
-      data-row={rowIndex} data-col={column.getIndex()}
-      onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
+    <Input
+      ref={ref}
+      type={type}
+      value={local}
+      placeholder={placeholder}
+      min={min}
+      max={max}
+      step={step}
+      data-row={dataRow}
+      data-col={dataCol}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (onCellKeyDown) onCellKeyDown(e);
+        else if (e.key === 'Enter') ref.current?.blur();
+      }}
+      onMouseDown={onCellMouseDown}
+      className={`h-7 border-transparent bg-transparent px-1 hover:border-border focus:border-transparent focus:ring-2 focus:ring-ring !text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
     />
   );
 }
 
-function ExpenseFrequencyCell({ row, column, table }: CellContext<Expense, string>) {
-  const meta = table.options.meta as any;
-  const exp = row.original;
-  const rowIndex = useGridRowIndex();
-  const { onCellKeyDown, onCellMouseDown } = useGridNav();
+function CurrencyCell({ value, onChange, className = '', 'data-row': dataRow, 'data-col': dataCol, onCellKeyDown, onCellMouseDown }: {
+  value: number;
+  onChange: (v: string) => void;
+  className?: string;
+  'data-row'?: number;
+  'data-col'?: number;
+  onCellKeyDown?: (e: React.KeyboardEvent<HTMLElement>) => void;
+  onCellMouseDown?: (e: React.MouseEvent<HTMLElement>) => void;
+}) {
+  const [local, setLocal] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  const commit = () => { if (local !== String(value)) onChange(local); };
+
   return (
-    <div className="flex items-center gap-1">
-      <Select value={exp.frequency_type} onValueChange={v => meta.handleUpdate(exp.id, 'frequency_type', v)}>
-        <SelectTrigger
-          className="h-7 min-w-0 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2"
-          data-row={rowIndex} data-col={column.getIndex()} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      {needsParam(exp.frequency_type) && (
-        <GridEditableCell
-          value={exp.frequency_param ?? ''} onChange={v => meta.handleUpdate(exp.id, 'frequency_param', v)}
-          type="number" className="text-left w-8 shrink-0" placeholder="X" colIndex={column.getIndex() + 1}
+    <div className="min-w-[5rem]">
+      {focused ? (
+        <Input
+          ref={ref}
+          type="number"
+          value={local}
+          data-row={dataRow}
+          data-col={dataCol}
+          onChange={e => setLocal(e.target.value)}
+          onBlur={() => { commit(); setFocused(false); }}
+          onKeyDown={e => {
+            if (onCellKeyDown) onCellKeyDown(e);
+            else if (e.key === 'Enter') ref.current?.blur();
+          }}
+          onMouseDown={onCellMouseDown}
+          autoFocus
+          className={`h-7 w-full border-transparent bg-transparent px-1 hover:border-border focus:border-transparent focus:ring-2 focus:ring-ring !text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
         />
+      ) : (
+        <button
+          type="button"
+          data-row={dataRow}
+          data-col={dataCol}
+          onClick={() => setFocused(true)}
+          onMouseDown={onCellMouseDown}
+          className={`h-7 w-full bg-transparent px-1 !text-xs text-right cursor-text border border-transparent hover:border-border rounded-md underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${className}`}
+        >
+          ${Math.round(Number(local) || 0)}
+        </button>
       )}
     </div>
   );
 }
 
-function PaymentMethodCell({ row, column, table }: CellContext<Expense, string | null>) {
-  const meta = table.options.meta as any;
-  const rowIndex = useGridRowIndex();
-  const { onCellKeyDown, onCellMouseDown } = useGridNav();
-  const exp = row.original;
-  const account = meta.linkedAccounts.find((la: LinkedAccount) => la.id === exp.linked_account_id);
+function PercentCell({ value, onChange, className = '', 'data-row': dataRow, 'data-col': dataCol, onCellKeyDown, onCellMouseDown, min = 0, max = 100 }: {
+  value: number;
+  onChange: (v: string) => void;
+  className?: string;
+  'data-row'?: number;
+  'data-col'?: number;
+  onCellKeyDown?: (e: React.KeyboardEvent<HTMLElement>) => void;
+  onCellMouseDown?: (e: React.MouseEvent<HTMLElement>) => void;
+  min?: number;
+  max?: number;
+}) {
+  const [local, setLocal] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!focused) setLocal(String(value));
+  }, [value, focused]);
+
+  const commit = () => { if (local !== String(value)) onChange(local); };
+
   return (
-    <Select
-      value={exp.linked_account_id ?? '_none'}
-      onValueChange={v => v === '_add_new' ? meta.openAddDialog('payment_method') : meta.handleUpdate(exp.id, 'linked_account_id', v)}
-    >
-      <SelectTrigger
-        className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
-        style={{ backgroundColor: account?.color || 'transparent' }}
-        data-row={rowIndex} data-col={column.getIndex()} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
-      >
-        <SelectValue>{account?.name ?? '—'}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="_none">—</SelectItem>
-        {meta.linkedAccounts.map((la: LinkedAccount) => (
-          <SelectItem key={la.id} value={la.id}>
-            {la.name} <span className="text-muted-foreground group-focus:text-accent-foreground">({la.owner_partner === 'X' ? meta.partnerX : meta.partnerY})</span>
-          </SelectItem>
-        ))}
-        <SelectItem value="_add_new" className="text-primary font-medium"><Plus className="inline h-3 w-3 mr-1" />Add New</SelectItem>
-      </SelectContent>
-    </Select>
+    <div className="min-w-[4rem]">
+      {focused ? (
+        <Input
+          ref={ref}
+          type="number"
+          value={local}
+          min={min}
+          max={max}
+          data-row={dataRow}
+          data-col={dataCol}
+          onChange={e => setLocal(e.target.value)}
+          onBlur={() => { commit(); setFocused(false); }}
+          onKeyDown={e => {
+            if (onCellKeyDown) onCellKeyDown(e);
+            else if (e.key === 'Enter') ref.current?.blur();
+          }}
+          onMouseDown={onCellMouseDown}
+          autoFocus
+          className={`h-7 w-full border-transparent bg-transparent px-1 hover:border-border focus:border-transparent focus:ring-2 focus:ring-ring !text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className}`}
+        />
+      ) : (
+        <button
+          type="button"
+          data-row={dataRow}
+          data-col={dataCol}
+          onClick={() => setFocused(true)}
+          onMouseDown={onCellMouseDown}
+          className={`h-7 w-full bg-transparent px-1 !text-xs text-right cursor-text border border-transparent hover:border-border rounded-md underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${className}`}
+        >
+          {Math.round(Number(local) || 0)}%
+        </button>
+      )}
+    </div>
   );
 }
 
-// ── Group Subtotal ────────────────────────────────────────
-
-function GroupSubtotalRow({ label, rows }: { label: string; rows: Row<Expense>[] }) {
-  const groupMonthly = rows.reduce((s, r) => s + (r.getValue('monthly') as number), 0);
-  const groupFairX = rows.reduce((s, r) => s + (r.getValue('fair_x') as number), 0);
-  const groupFairY = rows.reduce((s, r) => s + (r.getValue('fair_y') as number), 0);
-  return (
-    <TableRow className="bg-muted sticky top-[36px] z-20 border-b-0 shadow-[0_1px_0_0_hsl(var(--border))]">
-      <TableCell className="sticky left-0 z-10 bg-muted font-semibold text-xs">{label}</TableCell>
-      <TableCell colSpan={4} className="bg-muted" />
-      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupMonthly)}</TableCell>
-      <TableCell colSpan={4} className="bg-muted" />
-      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupFairX)}</TableCell>
-      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupFairY)}</TableCell>
-      <TableCell className="bg-muted" />
-    </TableRow>
-  );
+interface ComputedRow {
+  exp: Expense;
+  fairX: number;
+  fairY: number;
+  monthly: number;
 }
 
-// ── Main Component ────────────────────────────────────────
-
-export function ExpensesTab({
-  expenses, categories, linkedAccounts, incomes,
-  partnerX, partnerY, partnerXColor, partnerYColor,
-  onAdd, onUpdate, onRemove, onAddCategory, onAddLinkedAccount,
-}: ExpensesTabProps) {
-  const [adding, setAdding] = useState(false);
-  const [focusId, setFocusId] = useState<string | null>(null);
-  const prevCountRef = useRef(expenses.length);
-
-  const [filterPayer, setFilterPayer] = useState<'all' | 'X' | 'Y'>(() => (localStorage.getItem('expenses_filterPayer') as 'all' | 'X' | 'Y') || 'all');
-  const [groupBy, setGroupBy] = useState<GroupByOption>(() => (localStorage.getItem('expenses_groupBy') as GroupByOption) || 'none');
-  const [sorting, setSorting] = useState<SortingState>(() => {
-    const col = localStorage.getItem('expenses_sortCol') || 'name';
-    const dir = localStorage.getItem('expenses_sortDir') || 'asc';
-    return [{ id: col, desc: dir === 'desc' }];
-  });
-
-  // Add-new dialog state
+function ExpenseRow({ exp, fairX, fairY, monthly, categories, linkedAccounts, partnerX, partnerY, partnerXColor, partnerYColor, handleUpdate, handleToggleEstimate, handleRemove, rowIndex, onCellKeyDown, onCellMouseDown, onAddCategory, onAddLinkedAccount }: ComputedRow & {
+  categories: Category[];
+  linkedAccounts: LinkedAccount[];
+  partnerX: string;
+  partnerY: string;
+  partnerXColor: string | null;
+  partnerYColor: string | null;
+  handleUpdate: (id: string, field: string, value: string) => void;
+  handleToggleEstimate: (id: string, checked: boolean) => void;
+  handleRemove: (id: string) => void;
+  rowIndex: number;
+  onCellKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
+  onCellMouseDown: (e: React.MouseEvent<HTMLElement>) => void;
+  onAddCategory: (name: string) => Promise<void>;
+  onAddLinkedAccount: (name: string, ownerPartner?: string) => Promise<void>;
+}) {
   const [addDialog, setAddDialog] = useState<'category' | 'payment_method' | null>(null);
   const [newItemName, setNewItemName] = useState('');
   const [newItemOwner, setNewItemOwner] = useState<'X' | 'Y'>('X');
   const [saving, setSaving] = useState(false);
+  const [localBenefitX, setLocalBenefitX] = useState(exp.benefit_x);
 
-  // Persist preferences
-  useEffect(() => { localStorage.setItem('expenses_filterPayer', filterPayer); }, [filterPayer]);
-  useEffect(() => { localStorage.setItem('expenses_groupBy', groupBy); }, [groupBy]);
   useEffect(() => {
-    if (sorting.length > 0) {
-      localStorage.setItem('expenses_sortCol', sorting[0].id);
-      localStorage.setItem('expenses_sortDir', sorting[0].desc ? 'desc' : 'asc');
-    }
-  }, [sorting]);
+    setLocalBenefitX(exp.benefit_x);
+  }, [exp.benefit_x]);
 
-  // Focus new rows
-  useEffect(() => {
-    if (expenses.length > prevCountRef.current) {
-      const newest = expenses[expenses.length - 1];
-      if (newest) setFocusId(newest.id);
-    }
-    prevCountRef.current = expenses.length;
-  }, [expenses]);
-
-  // Income ratio
-  const incomeRatioX = useMemo(() => {
-    const ix = incomes.filter(i => i.partner_label === 'X').reduce((s, i) => s + toMonthly(i.amount, i.frequency_type, i.frequency_param ?? undefined), 0);
-    const iy = incomes.filter(i => i.partner_label === 'Y').reduce((s, i) => s + toMonthly(i.amount, i.frequency_type, i.frequency_param ?? undefined), 0);
-    const t = ix + iy;
-    return t > 0 ? ix / t : 0.5;
-  }, [incomes]);
-
-  const getMonthly = useCallback((exp: Expense) =>
-    toMonthly(exp.amount, exp.frequency_type, exp.frequency_param ?? undefined), []);
-
-  const getFairX = useCallback((exp: Expense) => {
-    const monthly = getMonthly(exp);
-    const bx = exp.benefit_x / 100;
-    const by = 1 - bx;
-    const wx = bx * incomeRatioX;
-    const wy = by * (1 - incomeRatioX);
-    const tw = wx + wy || 1;
-    return monthly * (wx / tw);
-  }, [incomeRatioX, getMonthly]);
-
-  // Handlers
-  const handleAdd = async () => {
-    setAdding(true);
-    try {
-      await onAdd({
-        name: '', amount: 0, payer: null, benefit_x: 50,
-        category_id: null, budget_id: null, linked_account_id: null,
-        frequency_type: 'monthly', frequency_param: null, is_estimate: false,
-      });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
-    setAdding(false);
+  const handleBenefitXChange = (v: string) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+    setLocalBenefitX(clamped);
+    handleUpdate(exp.id, 'benefit_x', String(clamped));
   };
 
-  const handleUpdate = (id: string, field: string, value: string) => {
-    const updates: any = {};
-    if (field === 'name') updates.name = value;
-    else if (field === 'amount') updates.amount = Number(value) || 0;
-    else if (field === 'benefit_x') updates.benefit_x = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
-    else if (field === 'frequency_param') updates.frequency_param = value ? Number(value) : null;
-    else if (field === 'category_id') updates.category_id = value === '_none' ? null : value;
-    else if (field === 'linked_account_id') {
-      const accountId = value === '_none' ? null : value;
-      updates.linked_account_id = accountId;
-      if (accountId) {
-        const account = linkedAccounts.find(la => la.id === accountId);
-        if (account) updates.payer = account.owner_partner;
-      } else {
-        updates.payer = null;
-      }
+  const handleBenefitYChange = (v: string) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+    const newX = 100 - clamped;
+    setLocalBenefitX(newX);
+    handleUpdate(exp.id, 'benefit_x', String(newX));
+  };
+
+  const nav = { onCellKeyDown, onCellMouseDown };
+
+  const handleSelectWithAddNew = (field: string, dialogType: 'category' | 'payment_method') => (v: string) => {
+    if (v === '_add_new') {
+      setNewItemName('');
+      setNewItemOwner('X');
+      setAddDialog(dialogType);
+    } else {
+      handleUpdate(exp.id, field, v);
     }
-    else updates[field] = value;
-    onUpdate(id, updates).catch((e: any) => {
-      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
-    });
-  };
-
-  const handleToggleEstimate = (id: string, checked: boolean) => {
-    onUpdate(id, { is_estimate: checked }).catch((e: any) => {
-      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
-    });
-  };
-
-  const handleRemove = async (id: string) => {
-    try { await onRemove(id); } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
-  };
-
-  const openAddDialog = (type: 'category' | 'payment_method') => {
-    setNewItemName('');
-    setNewItemOwner('X');
-    setAddDialog(type);
   };
 
   const handleSaveNewItem = async () => {
@@ -319,145 +280,99 @@ export function ExpensesTab({
     setSaving(false);
   };
 
-  // Filtered data
-  const filteredExpenses = filterPayer === 'all' ? expenses : expenses.filter(e => e.payer === filterPayer);
+  const dialogTitle = addDialog === 'category' ? 'New Category' : 'New Payment Method';
 
-  // Columns
-  const columns = [
-    columnHelper.accessor('name', {
-      header: 'Name',
-      meta: { sticky: true, headerClassName: 'min-w-[120px] sm:min-w-[200px]' },
-      cell: info => (
-        <GridEditableCell
-          value={info.getValue()} onChange={v => handleUpdate(info.row.original.id, 'name', v)}
-          placeholder="Expense" colIndex={info.column.getIndex()} autoFocus={focusId === info.row.original.id}
-        />
-      ),
-    }),
-    columnHelper.accessor('category_id', {
-      id: 'category',
-      header: 'Category',
-      meta: { headerClassName: 'min-w-[190px]' },
-      sortingFn: (a, b) => resolveName(a.original.category_id, categories).localeCompare(resolveName(b.original.category_id, categories)),
-      cell: CategoryCell,
-    }),
-    columnHelper.accessor('amount', {
-      header: 'Amount',
-      meta: { headerClassName: 'text-right' },
-      cell: info => (
-        <GridCurrencyCell
-          value={info.getValue()} onChange={v => handleUpdate(info.row.original.id, 'amount', v)}
-          className="text-right" colIndex={info.column.getIndex()}
-        />
-      ),
-    }),
-    columnHelper.accessor('is_estimate', {
-      id: 'estimate',
-      header: () => (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="underline decoration-dotted underline-offset-2">Est</span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Expense is estimated</TooltipContent>
-        </Tooltip>
-      ),
-      meta: { headerClassName: 'text-center', cellClassName: 'text-center' },
-      cell: EstimateCell,
-    }),
-    columnHelper.accessor('frequency_type', {
-      id: 'frequency',
-      header: 'Frequency',
-      meta: { headerClassName: 'min-w-[185px]' },
-      cell: ExpenseFrequencyCell,
-    }),
-    columnHelper.accessor(row => getMonthly(row), {
-      id: 'monthly',
-      header: () => (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="underline decoration-dotted underline-offset-2">Monthly</span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Expense normalized to how much it costs you monthly</TooltipContent>
-        </Tooltip>
-      ),
-      meta: { headerClassName: 'text-right' },
-      cell: info => <span className="text-right font-medium tabular-nums text-xs block">${Math.round(info.getValue())}</span>,
-    }),
-    columnHelper.accessor('linked_account_id', {
-      id: 'payment_method',
-      header: 'Payment Method',
-      meta: { headerClassName: 'min-w-[190px]' },
-      sortingFn: (a, b) => resolveName(a.original.linked_account_id, linkedAccounts).localeCompare(resolveName(b.original.linked_account_id, linkedAccounts)),
-      cell: PaymentMethodCell,
-    }),
-    columnHelper.accessor('payer', {
-      header: 'Payer',
-      sortingFn: (a, b) => (a.original.payer ?? '').localeCompare(b.original.payer ?? ''),
-      cell: info => {
-        const payer = info.getValue();
-        const m = info.table.options.meta as any;
-        if (!payer) return <span className="text-muted-foreground text-xs px-1">—</span>;
-        return (
-          <span className="text-xs px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: (payer === 'X' ? m.partnerXColor : m.partnerYColor) || 'transparent' }}>
-            {payer === 'X' ? m.partnerX : m.partnerY}
+  return (
+    <>
+    <TableRow>
+      <TableCell className="sticky left-0 z-10 bg-background">
+        <EditableCell value={exp.name} onChange={v => handleUpdate(exp.id, 'name', v)} placeholder="Expense" data-row={rowIndex} data-col={0} {...nav} />
+      </TableCell>
+      <TableCell>
+        <Select value={exp.category_id ?? '_none'} onValueChange={handleSelectWithAddNew('category_id', 'category')}>
+          <SelectTrigger
+            className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
+            style={{ backgroundColor: categories.find(c => c.id === exp.category_id)?.color || 'transparent' }}
+            data-row={rowIndex} data-col={1} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_none">—</SelectItem>
+            {categories.map(c => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+            ))}
+            <SelectItem value="_add_new" className="text-primary font-medium"><Plus className="inline h-3 w-3 mr-1" />Add New</SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell>
+        <CurrencyCell value={Number(exp.amount)} onChange={v => handleUpdate(exp.id, 'amount', v)} className="text-right" data-row={rowIndex} data-col={2} {...nav} />
+      </TableCell>
+      <TableCell className="text-center">
+        <Checkbox checked={exp.is_estimate} onCheckedChange={(checked) => handleToggleEstimate(exp.id, !!checked)} data-row={rowIndex} data-col={3} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown} />
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Select value={exp.frequency_type} onValueChange={v => handleUpdate(exp.id, 'frequency_type', v)}>
+            <SelectTrigger className="h-7 min-w-0 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2" data-row={rowIndex} data-col={4} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FREQ_OPTIONS.map(f => (
+                <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {NEEDS_PARAM.has(exp.frequency_type) && (
+            <EditableCell value={exp.frequency_param ?? ''} onChange={v => handleUpdate(exp.id, 'frequency_param', v)} type="number" placeholder="X" className="text-left w-8 shrink-0" data-row={rowIndex} data-col={5} {...nav} />
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-right font-medium tabular-nums text-xs">${Math.round(monthly)}</TableCell>
+      <TableCell>
+        <Select value={exp.linked_account_id ?? '_none'} onValueChange={handleSelectWithAddNew('linked_account_id', 'payment_method')}>
+          <SelectTrigger
+            className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
+            style={{ backgroundColor: linkedAccounts.find(la => la.id === exp.linked_account_id)?.color || 'transparent' }}
+            data-row={rowIndex} data-col={6} onKeyDown={onCellKeyDown} onMouseDown={onCellMouseDown}
+          >
+            <SelectValue>
+              {exp.linked_account_id ? linkedAccounts.find(la => la.id === exp.linked_account_id)?.name ?? '—' : '—'}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_none">—</SelectItem>
+            {linkedAccounts.map(la => (
+              <SelectItem key={la.id} value={la.id}>
+                {la.name} <span className="text-muted-foreground group-focus:text-accent-foreground">({la.owner_partner === 'X' ? partnerX : partnerY})</span>
+              </SelectItem>
+            ))}
+            <SelectItem value="_add_new" className="text-primary font-medium"><Plus className="inline h-3 w-3 mr-1" />Add New</SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell>
+        {exp.payer ? (
+          <span
+            className="text-xs px-1.5 py-0.5 rounded-sm"
+            style={{ backgroundColor: (exp.payer === 'X' ? partnerXColor : partnerYColor) || 'transparent' }}
+          >
+            {exp.payer === 'X' ? partnerX : partnerY}
           </span>
-        );
-      },
-    }),
-    columnHelper.accessor('benefit_x', {
-      header: () => (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="underline decoration-dotted underline-offset-2">{partnerX} %</span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">The percentage that {partnerX} benefits from the expense</TooltipContent>
-        </Tooltip>
-      ),
-      meta: { headerClassName: 'text-right whitespace-nowrap' },
-      cell: info => (
-        <GridPercentCell
-          value={info.getValue()}
-          onChange={v => { const c = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); handleUpdate(info.row.original.id, 'benefit_x', String(c)); }}
-          className="text-right w-16" colIndex={info.column.getIndex()}
-        />
-      ),
-    }),
-    columnHelper.accessor(row => 100 - row.benefit_x, {
-      id: 'benefit_y',
-      header: () => (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="underline decoration-dotted underline-offset-2">{partnerY} %</span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">The percentage that {partnerY} benefits from the expense</TooltipContent>
-        </Tooltip>
-      ),
-      meta: { headerClassName: 'text-right whitespace-nowrap' },
-      cell: info => (
-        <GridPercentCell
-          value={info.getValue()}
-          onChange={v => { const c = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); handleUpdate(info.row.original.id, 'benefit_x', String(100 - c)); }}
-          className="text-right w-16" colIndex={info.column.getIndex()}
-        />
-      ),
-    }),
-    columnHelper.accessor(row => getFairX(row), {
-      id: 'fair_x',
-      header: `Fair ${partnerX}`,
-      meta: { headerClassName: 'text-right' },
-      cell: info => <span className="text-right tabular-nums text-xs block">${Math.round(info.getValue())}</span>,
-    }),
-    columnHelper.accessor(row => getMonthly(row) - getFairX(row), {
-      id: 'fair_y',
-      header: `Fair ${partnerY}`,
-      meta: { headerClassName: 'text-right' },
-      cell: info => <span className="text-right tabular-nums text-xs block">${Math.round(info.getValue())}</span>,
-    }),
-    columnHelper.display({
-      id: 'actions',
-      enableSorting: false,
-      meta: { headerClassName: 'w-10' },
-      cell: info => (
+        ) : (
+          <span className="text-muted-foreground text-xs px-1">—</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <PercentCell value={localBenefitX} onChange={handleBenefitXChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={9} {...nav} />
+      </TableCell>
+      <TableCell className="text-right tabular-nums text-xs">
+        <PercentCell value={100 - localBenefitX} onChange={handleBenefitYChange} className="text-right w-16" min={0} max={100} data-row={rowIndex} data-col={10} {...nav} />
+      </TableCell>
+      <TableCell className="text-right tabular-nums text-xs">${Math.round(fairX)}</TableCell>
+      <TableCell className="text-right tabular-nums text-xs">${Math.round(fairY)}</TableCell>
+      <TableCell>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost-destructive" size="icon" className="h-7 w-7">
@@ -468,143 +383,21 @@ export function ExpensesTab({
             <AlertDialogHeader>
               <AlertDialogTitle>Delete expense</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete &ldquo;{info.row.original.name}&rdquo;? This action cannot be undone.
+                Are you sure you want to delete "{exp.name}"? This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleRemove(info.row.original.id)}>Delete</AlertDialogAction>
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleRemove(exp.id)}>Delete</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      ),
-    }),
-  ];
-
-  const table = useReactTable({
-    data: filteredExpenses,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getRowId: row => row.id,
-    meta: {
-      handleUpdate, handleRemove, handleToggleEstimate, openAddDialog,
-      categories, linkedAccounts,
-      partnerX, partnerY, partnerXColor, partnerYColor,
-    },
-  });
-
-  // Grouping
-  const sortedRows = table.getRowModel().rows;
-
-  const getGroupKey = (exp: Expense): string => {
-    switch (groupBy) {
-      case 'category': return exp.category_id ?? '_ungrouped';
-      case 'estimated': return exp.is_estimate ? 'Estimated' : 'Actual';
-      case 'payer': return exp.payer ?? '_ungrouped';
-      case 'payment_method': return exp.linked_account_id ?? '_ungrouped';
-      default: return '_all';
-    }
-  };
-
-  const getGroupLabel = (key: string): string => {
-    if (key === '_ungrouped') return 'Uncategorized';
-    switch (groupBy) {
-      case 'category': return categories.find(c => c.id === key)?.name ?? 'Uncategorized';
-      case 'estimated': return key;
-      case 'payer': return key === 'X' ? partnerX : partnerY;
-      case 'payment_method': return linkedAccounts.find(la => la.id === key)?.name ?? 'Uncategorized';
-      default: return '';
-    }
-  };
-
-  const groups = useMemo(() => {
-    if (groupBy === 'none') return null;
-    const map = new Map<string, Row<Expense>[]>();
-    for (const row of sortedRows) {
-      const key = getGroupKey(row.original);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(row);
-    }
-    return [...map.entries()]
-      .sort((a, b) => {
-        if (a[0] === '_ungrouped') return 1;
-        if (b[0] === '_ungrouped') return -1;
-        return getGroupLabel(a[0]).localeCompare(getGroupLabel(b[0]));
-      })
-      .map(([key, rows]) => ({ key, label: getGroupLabel(key), rows }));
-  }, [groupBy, sortedRows, categories, linkedAccounts, partnerX, partnerY]);
-
-  // Totals
-  const totals = useMemo(() => {
-    let monthly = 0, fairX = 0;
-    for (const exp of filteredExpenses) {
-      monthly += getMonthly(exp);
-      fairX += getFairX(exp);
-    }
-    return { monthly, fairX, fairY: monthly - fairX };
-  }, [filteredExpenses, getMonthly, getFairX]);
-
-  const footer = sortedRows.length > 0 ? (
-    <TableRow className="bg-muted shadow-[0_-1px_0_0_hsl(var(--border))]">
-      <TableCell className="font-semibold text-xs sticky left-0 z-10 bg-muted">Totals</TableCell>
-      <TableCell colSpan={4} className="bg-muted" />
-      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totals.monthly)}</TableCell>
-      <TableCell colSpan={4} className="bg-muted" />
-      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totals.fairX)}</TableCell>
-      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totals.fairY)}</TableCell>
-      <TableCell className="bg-muted" />
+      </TableCell>
     </TableRow>
-  ) : null;
-
-  return (
-    <>
-      <Card className="max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0">
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <CardTitle>Expenses</CardTitle>
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={filterPayer} onValueChange={v => setFilterPayer(v as 'all' | 'X' | 'Y')}>
-                <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All partners</SelectItem>
-                  <SelectItem value="X">{partnerX} only</SelectItem>
-                  <SelectItem value="Y">{partnerY} only</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={groupBy} onValueChange={v => setGroupBy(v as GroupByOption)}>
-                <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Group by…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No grouping</SelectItem>
-                  <SelectItem value="category">Group by Category</SelectItem>
-                  <SelectItem value="estimated">Group by Estimated</SelectItem>
-                  <SelectItem value="payer">Group by Payer</SelectItem>
-                  <SelectItem value="payment_method">Group by Payment Method</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={handleAdd} disabled={adding} variant="outline" size="sm" className="h-8 gap-1.5">
-                <Plus className="h-4 w-4" /> Add
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="px-0 pb-0">
-          <DataGrid
-            table={table}
-            footer={footer}
-            emptyMessage='No expenses yet. Click "Add" to start.'
-            groups={groups}
-            renderGroupHeader={(label, rows) => <GroupSubtotalRow label={label} rows={rows} />}
-          />
-        </CardContent>
-      </Card>
-
       <Dialog open={addDialog !== null} onOpenChange={open => { if (!open) setAddDialog(null); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{addDialog === 'category' ? 'New Category' : 'New Payment Method'}</DialogTitle>
+            <DialogTitle>{dialogTitle}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
@@ -615,7 +408,9 @@ export function ExpensesTab({
               <div className="space-y-1.5">
                 <Label>Owner</Label>
                 <Select value={newItemOwner} onValueChange={v => setNewItemOwner(v as 'X' | 'Y')}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="X">{partnerX}</SelectItem>
                     <SelectItem value="Y">{partnerY}</SelectItem>
@@ -631,5 +426,361 @@ export function ExpensesTab({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+function GroupSubtotalRow({ label, rows }: { label: string; rows: ComputedRow[] }) {
+  const groupMonthly = rows.reduce((s, r) => s + r.monthly, 0);
+  const groupFairX = rows.reduce((s, r) => s + r.fairX, 0);
+  const groupFairY = rows.reduce((s, r) => s + r.fairY, 0);
+  return (
+    <TableRow className="bg-muted sticky top-[36px] z-20 border-b-0 shadow-[0_1px_0_0_hsl(var(--border))]">
+      <TableCell className="sticky left-0 z-10 bg-muted font-semibold text-xs">
+        {label}
+      </TableCell>
+      <TableCell colSpan={4} className="bg-muted" />
+      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupMonthly)}</TableCell>
+      <TableCell colSpan={3} className="bg-muted" />
+      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupFairX)}</TableCell>
+      <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(groupFairY)}</TableCell>
+      <TableCell className="bg-muted" />
+    </TableRow>
+  );
+}
+
+export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, partnerX, partnerY, partnerXColor, partnerYColor, onAdd, onUpdate, onRemove, onAddCategory, onAddLinkedAccount }: ExpensesTabProps) {
+  const [adding, setAdding] = useState(false);
+  const [filterPayer, setFilterPayer] = useState<'all' | 'X' | 'Y'>(() => (localStorage.getItem('expenses_filterPayer') as 'all' | 'X' | 'Y') || 'all');
+  const [groupBy, setGroupBy] = useState<GroupByOption>(() => (localStorage.getItem('expenses_groupBy') as GroupByOption) || 'none');
+  const [sortCol, setSortCol] = useState<SortColumn>(() => (localStorage.getItem('expenses_sortCol') as SortColumn) || 'name');
+  const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('expenses_sortDir') as SortDir) || 'asc');
+
+  useEffect(() => { localStorage.setItem('expenses_filterPayer', filterPayer); }, [filterPayer]);
+  useEffect(() => { localStorage.setItem('expenses_groupBy', groupBy); }, [groupBy]);
+  useEffect(() => { localStorage.setItem('expenses_sortCol', sortCol); }, [sortCol]);
+  useEffect(() => { localStorage.setItem('expenses_sortDir', sortDir); }, [sortDir]);
+
+  const toggleSort = (col: SortColumn) => {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCol(col);
+      setSortDir('asc');
+    }
+  };
+
+  // Compute income ratio
+  const incomeX = incomes.filter(i => i.partner_label === 'X').reduce((s, i) => s + toMonthly(i.amount, i.frequency_type, i.frequency_param ?? undefined), 0);
+  const incomeY = incomes.filter(i => i.partner_label === 'Y').reduce((s, i) => s + toMonthly(i.amount, i.frequency_type, i.frequency_param ?? undefined), 0);
+  const totalIncome = incomeX + incomeY;
+  const incomeRatioX = totalIncome > 0 ? incomeX / totalIncome : 0.5;
+
+  const computeFairShare = (exp: Expense) => {
+    const monthly = toMonthly(exp.amount, exp.frequency_type, exp.frequency_param ?? undefined);
+    const bx = exp.benefit_x / 100;
+    const by = 1 - bx;
+    const wx = bx * incomeRatioX;
+    const wy = by * (1 - incomeRatioX);
+    const tw = wx + wy || 1;
+    return { fairX: monthly * (wx / tw), fairY: monthly * (wy / tw), monthly };
+  };
+
+  const handleAdd = async () => {
+    setAdding(true);
+    try {
+      await onAdd({
+        name: '',
+        amount: 0,
+        payer: null,
+        benefit_x: 50,
+        category_id: null,
+        budget_id: null,
+        linked_account_id: null,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        is_estimate: false,
+      });
+      // Focus the name cell of the newly added row after render
+      requestAnimationFrame(() => {
+        const table = tableRef.current;
+        if (!table) return;
+        const allNameCells = table.querySelectorAll<HTMLElement>('[data-col="0"]');
+        const last = allNameCells[allNameCells.length - 1];
+        if (last) last.focus();
+      });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+    setAdding(false);
+  };
+
+  const handleUpdate = async (id: string, field: string, value: string) => {
+    try {
+      const updates: any = {};
+      if (field === 'name') updates.name = value;
+      else if (field === 'amount') updates.amount = Number(value) || 0;
+      else if (field === 'benefit_x') updates.benefit_x = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+      else if (field === 'frequency_param') updates.frequency_param = value ? Number(value) : null;
+      else if (field === 'category_id') updates.category_id = value === '_none' ? null : value;
+      
+      else if (field === 'linked_account_id') {
+        const accountId = value === '_none' ? null : value;
+        updates.linked_account_id = accountId;
+        if (accountId) {
+          const account = linkedAccounts.find(la => la.id === accountId);
+          if (account) updates.payer = account.owner_partner;
+        } else {
+          updates.payer = null;
+        }
+      }
+      else updates[field] = value;
+      await onUpdate(id, updates);
+    } catch (e: any) {
+      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleToggleEstimate = async (id: string, checked: boolean) => {
+    try {
+      await onUpdate(id, { is_estimate: checked });
+    } catch (e: any) {
+      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleRemove = async (id: string) => {
+    try { await onRemove(id); } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const filteredExpenses = filterPayer === 'all' ? expenses : expenses.filter(e => e.payer === filterPayer);
+
+  let totalFairX = 0, totalFairY = 0, totalMonthly = 0;
+  const unsortedRows: ComputedRow[] = filteredExpenses.map(exp => {
+    const { fairX, fairY, monthly } = computeFairShare(exp);
+    totalFairX += fairX;
+    totalFairY += fairY;
+    totalMonthly += monthly;
+    return { exp, fairX, fairY, monthly };
+  });
+
+  const resolveName = (id: string | null, list: { id: string; name: string }[]) =>
+    id ? (list.find(x => x.id === id)?.name ?? '') : '';
+
+  const sortRows = (arr: ComputedRow[]): ComputedRow[] => {
+    const m = sortDir === 'asc' ? 1 : -1;
+    return [...arr].sort((a, b) => {
+      let cmp = 0;
+      switch (sortCol) {
+        case 'name': cmp = a.exp.name.localeCompare(b.exp.name); break;
+        case 'category': cmp = resolveName(a.exp.category_id, categories).localeCompare(resolveName(b.exp.category_id, categories)); break;
+        case 'amount': cmp = a.exp.amount - b.exp.amount; break;
+        case 'estimate': cmp = Number(a.exp.is_estimate) - Number(b.exp.is_estimate); break;
+        case 'frequency': cmp = a.exp.frequency_type.localeCompare(b.exp.frequency_type); break;
+        
+        case 'monthly': cmp = a.monthly - b.monthly; break;
+        
+        case 'payment_method': cmp = resolveName(a.exp.linked_account_id, linkedAccounts).localeCompare(resolveName(b.exp.linked_account_id, linkedAccounts)); break;
+        case 'payer': cmp = a.exp.payer.localeCompare(b.exp.payer); break;
+        case 'benefit_x': cmp = a.exp.benefit_x - b.exp.benefit_x; break;
+        case 'benefit_y': cmp = (100 - a.exp.benefit_x) - (100 - b.exp.benefit_x); break;
+        case 'fair_x': cmp = a.fairX - b.fairX; break;
+        case 'fair_y': cmp = a.fairY - b.fairY; break;
+      }
+      return cmp * m;
+    });
+  };
+
+  const rows = useMemo(() => sortRows(unsortedRows), [unsortedRows, sortCol, sortDir]);
+
+  const getGroupKey = (row: ComputedRow): string => {
+    switch (groupBy) {
+      case 'category':
+        return row.exp.category_id ?? '_ungrouped';
+      case 'estimated':
+        return row.exp.is_estimate ? 'Estimated' : 'Actual';
+      case 'payer':
+        return row.exp.payer;
+      case 'payment_method':
+        return row.exp.linked_account_id ?? '_ungrouped';
+      default:
+        return '_all';
+    }
+  };
+
+  const getGroupLabel = (key: string): string => {
+    if (key === '_ungrouped') return 'Uncategorized';
+    switch (groupBy) {
+      case 'category':
+        return categories.find(c => c.id === key)?.name ?? 'Uncategorized';
+      case 'estimated':
+        return key;
+      case 'payer':
+        return key === 'X' ? partnerX : partnerY;
+      case 'payment_method':
+        return linkedAccounts.find(la => la.id === key)?.name ?? 'Uncategorized';
+      default:
+        return '';
+    }
+  };
+
+  const grouped = useMemo(() => {
+    if (groupBy === 'none') return null;
+    const map = new Map<string, ComputedRow[]>();
+    for (const row of rows) {
+      const key = getGroupKey(row);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    }
+    return [...map.entries()].sort((a, b) => {
+      if (a[0] === '_ungrouped') return 1;
+      if (b[0] === '_ungrouped') return -1;
+      return getGroupLabel(a[0]).localeCompare(getGroupLabel(b[0]));
+    });
+  }, [groupBy, rows, categories, linkedAccounts, partnerX, partnerY]);
+
+  const { tableRef, onCellKeyDown, onCellMouseDown } = useSpreadsheetNav();
+  const sharedRowProps = { categories, linkedAccounts, partnerX, partnerY, partnerXColor, partnerYColor, handleUpdate, handleToggleEstimate, handleRemove, onCellKeyDown, onCellMouseDown, onAddCategory, onAddLinkedAccount };
+
+  return (
+    <Card className="max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0">
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <CardTitle>Expenses</CardTitle>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={filterPayer} onValueChange={v => setFilterPayer(v as 'all' | 'X' | 'Y')}>
+              <SelectTrigger className="h-8 w-36 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All partners</SelectItem>
+                <SelectItem value="X">{partnerX} only</SelectItem>
+                <SelectItem value="Y">{partnerY} only</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={groupBy} onValueChange={v => setGroupBy(v as GroupByOption)}>
+              <SelectTrigger className="h-8 w-44 text-xs">
+                <SelectValue placeholder="Group by…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No grouping</SelectItem>
+                <SelectItem value="category">Group by Category</SelectItem>
+                <SelectItem value="estimated">Group by Estimated</SelectItem>
+                <SelectItem value="payer">Group by Payer</SelectItem>
+                <SelectItem value="payment_method">Group by Payment Method</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleAdd} disabled={adding} variant="outline" size="sm" className="h-8 gap-1.5">
+              <Plus className="h-4 w-4" /> Add
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="px-0 pb-0">
+        <div className="overflow-auto max-h-[calc(100dvh-15.5rem)]" ref={tableRef}>
+          <Table className="text-xs">
+            <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_0_hsl(var(--border))] [&_tr]:border-b-0">
+              <TableRow>
+                <SortableHead column="name" label="Name" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[120px] sm:min-w-[200px] sticky left-0 z-40 bg-card" />
+                <SortableHead column="category" label="Category" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[190px]" />
+                <SortableHead column="amount" label="Amount" current={sortCol} dir={sortDir} onSort={toggleSort} className="text-right" />
+                <TableHead className="text-center cursor-pointer select-none hover:bg-muted/50" onClick={() => toggleSort('estimate')}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2">
+                        Est
+                        {sortCol === 'estimate' ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Expense is estimated</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <SortableHead column="frequency" label="Frequency" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[185px]" />
+                
+                <TableHead className="text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => toggleSort('monthly')}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2">
+                        Monthly
+                        {sortCol === 'monthly' ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Expense normalized to how much it costs you monthly</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <SortableHead column="payment_method" label="Payment Method" current={sortCol} dir={sortDir} onSort={toggleSort} className="min-w-[190px]" />
+                <SortableHead column="payer" label="Payer" current={sortCol} dir={sortDir} onSort={toggleSort} />
+                <TableHead className="text-right whitespace-nowrap cursor-pointer select-none hover:bg-muted/50" onClick={() => toggleSort('benefit_x')}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2">
+                        {partnerX} %
+                        {sortCol === 'benefit_x' ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">The percentage that {partnerX} benefits from the expense</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="text-right whitespace-nowrap cursor-pointer select-none hover:bg-muted/50" onClick={() => toggleSort('benefit_y')}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2">
+                        {partnerY} %
+                        {sortCol === 'benefit_y' ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">The percentage that {partnerY} benefits from the expense</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <SortableHead column="fair_x" label={`Fair ${partnerX}`} current={sortCol} dir={sortDir} onSort={toggleSort} className="text-right" />
+                <SortableHead column="fair_y" label={`Fair ${partnerY}`} current={sortCol} dir={sortDir} onSort={toggleSort} className="text-right" />
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
+                    No expenses yet. Click "Add row" to start.
+                  </TableCell>
+                </TableRow>
+              ) : grouped ? (
+                (() => {
+                  let visualIdx = 0;
+                  return grouped.map(([key, groupRows]) => (
+                    <React.Fragment key={`group-${key}`}>
+                      <GroupSubtotalRow label={getGroupLabel(key)} rows={groupRows} />
+                      {groupRows.map(row => {
+                        const ri = visualIdx++;
+                        return <ExpenseRow key={row.exp.id} {...row} {...sharedRowProps} rowIndex={ri} />;
+                      })}
+                    </React.Fragment>
+                  ));
+                })()
+              ) : (
+                rows.map((row, i) => (
+                  <ExpenseRow key={row.exp.id} {...row} {...sharedRowProps} rowIndex={i} />
+                ))
+              )}
+            </TableBody>
+            {rows.length > 0 && (
+              <TableFooter className="sticky bottom-0 z-30">
+                <TableRow className="bg-muted shadow-[0_-1px_0_0_hsl(var(--border))]">
+                  <TableCell className="font-semibold text-xs sticky left-0 z-10 bg-muted">Totals</TableCell>
+                  <TableCell colSpan={4} className="bg-muted" />
+                  <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totalMonthly)}</TableCell>
+                  <TableCell colSpan={4} className="bg-muted" />
+                  <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totalFairX)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums text-xs bg-muted">${Math.round(totalFairY)}</TableCell>
+                  <TableCell className="bg-muted" />
+                </TableRow>
+              </TableFooter>
+            )}
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
