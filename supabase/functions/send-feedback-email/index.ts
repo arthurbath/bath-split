@@ -49,6 +49,27 @@ Deno.serve(async (req) => {
   try {
     const { message, context, file_url } = await req.json();
 
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      return new Response(JSON.stringify({ error: "Message is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (message.length > 2000) {
+      return new Response(JSON.stringify({ error: "Message exceeds 2000 characters" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Pretty-format the context for display
+    const contextLabels: Record<string, string> = {
+      terms_update: "Terms Update",
+      in_app_feedback_bug: "In-app Feedback/Bug",
+    };
+    const prettyContext = contextLabels[context] || context || "General";
+
     // Build email body
     let body = `From: ${userEmail} (${userId})\nContext: ${prettyContext}\n\n${message.trim()}`;
     if (file_url) {
