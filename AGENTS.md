@@ -35,6 +35,7 @@ Split shared expenses fairly between two partners. Combines per-expense benefit 
 
 - **Evaluations**: Security, performance, and technology evaluations go in dated files (`docs/evaluations/YYYY-MM-DD_topic.md`). Never delete old evaluations — they serve as a decision log.
 - **README.md**: Keep updated whenever modules are added, changed, or removed. Only document modules visible to general users (not behind admin-only feature flags).
+- **Public `.env` policy**: This repository is public, and `.env` is intentionally committed for Lovable workflows. Treat `.env` as public and only store client-safe values there. Never commit secrets (for example: service role keys, SMTP passwords, API secrets, private tokens). Store real secrets in managed secret stores (Supabase/hosting environment secrets), not in the repo.
 - **Adding a module**: See `docs/MODULE_GUIDE.md` for the full checklist (namespace, tables, files, routes, launcher registration, subdomain).
 - **Testing**: Run existing tests before submitting changes. Write tests for new logic when practical.
 
