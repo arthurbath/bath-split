@@ -16,16 +16,36 @@ export interface HouseholdData {
 export function useHouseholdData(user: User | null) {
   const [household, setHousehold] = useState<HouseholdData | null>(null);
   const [loading, setLoading] = useState(true);
+  const userId = user?.id ?? null;
+
+  const getProfileDisplayName = useCallback(async () => {
+    if (!userId) throw new Error('Not authenticated');
+
+    const { data: profile, error } = await supabase
+      .from('bathos_profiles')
+      .select('display_name')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw new Error(`Profile lookup failed: ${error.message}`);
+
+    const displayName = profile?.display_name?.trim();
+    if (!displayName) {
+      throw new Error('Please set your display name in Account before creating or joining a household.');
+    }
+
+    return displayName;
+  }, [userId]);
 
   const fetchHousehold = useCallback(async () => {
-    if (!user) { setHousehold(null); setLoading(false); return; }
+    if (!userId) { setHousehold(null); setLoading(false); return; }
     setLoading(true);
 
     try {
       const { data: membership } = await supabase
         .from('budget_household_members')
         .select('household_id, partner_label')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle();
 
       if (!membership) { setLoading(false); return; }
@@ -41,7 +61,7 @@ export function useHouseholdData(user: User | null) {
       const { data: profile } = await supabase
         .from('bathos_profiles')
         .select('display_name')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
 
       setHousehold({
@@ -59,18 +79,13 @@ export function useHouseholdData(user: User | null) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => { fetchHousehold(); }, [fetchHousehold]);
 
-  const createHousehold = async (displayName: string) => {
-    if (!user) throw new Error('Not authenticated');
-
-    const { error: profileErr } = await supabase
-      .from('bathos_profiles')
-      .update({ display_name: displayName })
-      .eq('id', user.id);
-    if (profileErr) throw new Error(`Profile update failed: ${profileErr.message}`);
+  const createHousehold = async () => {
+    if (!userId) throw new Error('Not authenticated');
+    const displayName = await getProfileDisplayName();
 
     const householdId = crypto.randomUUID();
     const { error: hhErr } = await supabase
@@ -80,7 +95,7 @@ export function useHouseholdData(user: User | null) {
 
     const { error: memberErr } = await supabase.from('budget_household_members').insert({
       household_id: householdId,
-      user_id: user.id,
+      user_id: userId,
       partner_label: 'X',
     });
     if (memberErr) throw new Error(`Member insert failed: ${memberErr.message}`);
@@ -88,14 +103,9 @@ export function useHouseholdData(user: User | null) {
     await fetchHousehold();
   };
 
-  const joinHousehold = async (displayName: string, inviteCode: string) => {
-    if (!user) throw new Error('Not authenticated');
-
-    const { error: profileErr } = await supabase
-      .from('bathos_profiles')
-      .update({ display_name: displayName })
-      .eq('id', user.id);
-    if (profileErr) throw new Error(`Profile update failed: ${profileErr.message}`);
+  const joinHousehold = async (inviteCode: string) => {
+    if (!userId) throw new Error('Not authenticated');
+    await getProfileDisplayName();
 
     const { data: householdId, error: findErr } = await supabase
       .rpc('lookup_household_by_invite_code', { _code: inviteCode });
@@ -107,14 +117,14 @@ export function useHouseholdData(user: User | null) {
       .from('budget_household_members')
       .select('id')
       .eq('household_id', householdId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle();
 
     if (existing) throw new Error('You are already a member of this household.');
 
     const { error: memberErr } = await supabase.from('budget_household_members').insert({
       household_id: householdId,
-      user_id: user.id,
+      user_id: userId,
       partner_label: 'Y',
     });
     if (memberErr) throw new Error(`Join failed: ${memberErr.message}`);

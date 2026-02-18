@@ -7,21 +7,19 @@ import { Users, UserPlus } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface HouseholdSetupProps {
-  onComplete: (displayName: string) => Promise<void>;
-  onJoin: (displayName: string, inviteCode: string) => Promise<void>;
+  onComplete: () => Promise<void>;
+  onJoin: (inviteCode: string) => Promise<void>;
 }
 
 export function HouseholdSetup({ onComplete, onJoin }: HouseholdSetupProps) {
-  const [displayName, setDisplayName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!displayName.trim()) return;
     setLoading(true);
     try {
-      await onComplete(displayName.trim());
+      await onComplete();
     } catch (err: any) {
       toast({
         title: 'Failed to create household',
@@ -35,10 +33,10 @@ export function HouseholdSetup({ onComplete, onJoin }: HouseholdSetupProps) {
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!displayName.trim() || !inviteCode.trim()) return;
+    if (!inviteCode.trim()) return;
     setLoading(true);
     try {
-      await onJoin(displayName.trim(), inviteCode.trim());
+      await onJoin(inviteCode.trim());
     } catch (err: any) {
       toast({
         title: 'Failed to join household',
@@ -59,7 +57,7 @@ export function HouseholdSetup({ onComplete, onJoin }: HouseholdSetupProps) {
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">Get Started</CardTitle>
           <CardDescription className="text-base">
-            Create a new household or join an existing one with an invite code.
+            Create a new household or join an existing one with an invite code. We will use your profile display name.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -71,19 +69,7 @@ export function HouseholdSetup({ onComplete, onJoin }: HouseholdSetupProps) {
 
             <TabsContent value="create">
               <form onSubmit={handleCreate} className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <label htmlFor="createName" className="text-sm font-medium text-foreground">
-                    Your display name
-                  </label>
-                  <Input
-                    id="createName"
-                    placeholder='e.g. "Alice"'
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <Button type="submit" className="w-full gap-1.5" disabled={!displayName.trim() || loading}>
+                <Button type="submit" className="w-full gap-1.5" disabled={loading}>
                   <Users className="h-4 w-4" />
                   {loading ? 'Creating…' : 'Create household'}
                 </Button>
@@ -92,17 +78,6 @@ export function HouseholdSetup({ onComplete, onJoin }: HouseholdSetupProps) {
 
             <TabsContent value="join">
               <form onSubmit={handleJoin} className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <label htmlFor="joinName" className="text-sm font-medium text-foreground">
-                    Your display name
-                  </label>
-                  <Input
-                    id="joinName"
-                    placeholder='e.g. "Bob"'
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                  />
-                </div>
                 <div className="space-y-2">
                   <label htmlFor="inviteCode" className="text-sm font-medium text-foreground">
                     Invite code
@@ -113,9 +88,10 @@ export function HouseholdSetup({ onComplete, onJoin }: HouseholdSetupProps) {
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value)}
                     className="font-mono tracking-widest"
+                    autoFocus
                   />
                 </div>
-                <Button type="submit" className="w-full gap-1.5" disabled={!displayName.trim() || !inviteCode.trim() || loading}>
+                <Button type="submit" className="w-full gap-1.5" disabled={!inviteCode.trim() || loading}>
                   <UserPlus className="h-4 w-4" />
                   {loading ? 'Joining…' : 'Join household'}
                 </Button>

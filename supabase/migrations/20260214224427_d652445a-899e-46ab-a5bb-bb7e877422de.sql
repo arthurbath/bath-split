@@ -1,4 +1,12 @@
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.households
+    WHERE id = '2c928a6e-8484-4e5c-8a5a-5f29c8942eca'
+  ) THEN
+
 -- Create Debt category
 INSERT INTO public.categories (id, household_id, name) 
 VALUES ('a0000001-0000-0000-0000-000000000006', '2c928a6e-8484-4e5c-8a5a-5f29c8942eca', 'Debt');
@@ -19,3 +27,7 @@ INSERT INTO public.expenses (household_id, name, amount, is_estimate, frequency_
 ('2c928a6e-8484-4e5c-8a5a-5f29c8942eca', 'Spotify', 12, false, 'monthly', null, 'Y', 50, 'a0000001-0000-0000-0000-000000000003'),
 ('2c928a6e-8484-4e5c-8a5a-5f29c8942eca', 'T-mobile', 45, false, 'monthly', null, 'Y', 50, 'a0000001-0000-0000-0000-000000000002'),
 ('2c928a6e-8484-4e5c-8a5a-5f29c8942eca', 'Vision Service Plan', 17, false, 'monthly', null, 'Y', 50, 'a0000001-0000-0000-0000-000000000004');
+
+  END IF;
+END
+$$;

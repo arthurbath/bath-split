@@ -1,4 +1,12 @@
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.households
+    WHERE id = '2c928a6e-8484-4e5c-8a5a-5f29c8942eca'
+  ) THEN
+
 -- Create categories
 INSERT INTO public.categories (id, household_id, name) VALUES
   ('a0000001-0000-0000-0000-000000000001', '2c928a6e-8484-4e5c-8a5a-5f29c8942eca', 'Entertainment'),
@@ -93,3 +101,7 @@ INSERT INTO public.expenses (household_id, name, category_id, amount, is_estimat
   ('2c928a6e-8484-4e5c-8a5a-5f29c8942eca', 'Lemonade: Miles', 'a0000001-0000-0000-0000-000000000004', 100, true, 'monthly', null, 'b0000001-0000-0000-0000-000000000002', 'c0000001-0000-0000-0000-000000000003', 'X', 50),
   -- Tolls (estimate)
   ('2c928a6e-8484-4e5c-8a5a-5f29c8942eca', 'Tolls', 'a0000001-0000-0000-0000-000000000003', 5, true, 'monthly', null, 'b0000001-0000-0000-0000-000000000002', 'c0000001-0000-0000-0000-000000000003', 'X', 50);
+
+  END IF;
+END
+$$;
