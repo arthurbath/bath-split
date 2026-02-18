@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      bathos_feedback: {
+        Row: {
+          context: string
+          created_at: string
+          id: string
+          message: string
+          user_id: string
+        }
+        Insert: {
+          context?: string
+          created_at?: string
+          id?: string
+          message: string
+          user_id: string
+        }
+        Update: {
+          context?: string
+          created_at?: string
+          id?: string
+          message?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       bathos_profiles: {
         Row: {
           created_at: string
