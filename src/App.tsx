@@ -16,26 +16,38 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false } },
 });
 
+function BudgetRoutes() {
+  return (
+    <>
+      <Route path="/incomes" element={<Index />} />
+      <Route path="/expenses" element={<Index />} />
+      <Route path="/summary" element={<Index />} />
+      <Route path="/config" element={<Index />} />
+      <Route path="/restore" element={<Index />} />
+    </>
+  );
+}
+
 function AppRoutes() {
   const module = useHostModule();
 
-  // Budget module (subdomain or /budget/* path)
+  // Budget module via subdomain (budget.bath.garden)
   if (module === 'budget') {
-    return (
-      <Routes>
-        <Route path="/" element={<Navigate to="/summary" replace />} />
-        <Route path="/incomes" element={<Index />} />
-        <Route path="/expenses" element={<Index />} />
-        <Route path="/summary" element={<Index />} />
-        <Route path="/config" element={<Index />} />
-        <Route path="/restore" element={<Index />} />
-        <Route path="/account" element={<AccountPage />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    );
+    const isSubdomain = window.location.hostname.endsWith('.bath.garden');
+
+    if (isSubdomain) {
+      return (
+        <Routes>
+          <Route path="/" element={<Navigate to="/summary" replace />} />
+          {BudgetRoutes()}
+          <Route path="/account" element={<AccountPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      );
+    }
   }
 
-  // Platform root (bath.garden or dev fallback)
+  // Platform root + path-based budget fallback for dev/preview
   return (
     <Routes>
       <Route path="/" element={<LauncherPage />} />
