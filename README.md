@@ -1,73 +1,29 @@
-# Welcome to your Lovable project
+# BathOS
 
-## Project info
+BathOS is a shared household platform — a collection of small, focused tools for people who live together. Each tool (called a **module**) lives on its own subdomain and handles one aspect of running a home.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+The platform is live at [bath.garden](https://bath.garden).
 
-## How can I edit this code?
+## Modules
 
-There are several ways of editing your application.
+### Budget
 
-**Use Lovable**
+Split shared expenses fairly between two partners. The Budget module calculates each person's fair share by combining per-expense benefit splits with relative monthly income. Features include:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- Spreadsheet-style data entry with keyboard navigation
+- Grouping by category, payer, payment method, or estimation status
+- Automatic payer inheritance from assigned payment methods
+- Income tracking with flexible frequency options (weekly, fortnightly, monthly, yearly, custom)
+- Settlement summary showing who owes whom
+- Backup and restore points for household data
+- Partner invite codes for joining an existing household
 
-Changes made via Lovable will be committed automatically to this repo.
+Accessible at [budget.bath.garden](https://budget.bath.garden).
 
-**Use your preferred IDE**
+## Development notes
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Built with React, TypeScript, Vite, Tailwind CSS, and Supabase
+- Modules are isolated under `src/modules/[name]/` — removing one should not break another
+- Database tables use namespace prefixes (`budget_`, `bathos_`) for clarity
+- Subdomain routing is handled client-side; path-based fallback (`/budget/...`) is used in development
+- See `docs/ARCHITECTURE.md` for structure, `docs/MODULE_GUIDE.md` for adding modules, and `docs/STYLE_GUIDE.md` for design conventions
