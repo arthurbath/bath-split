@@ -32,8 +32,8 @@ export function useExpenses(householdId: string) {
 
   const fetch = useCallback(async () => {
     try {
-      const { data, error } = await retryOnLikelyNetworkError(() =>
-        supabase
+      const { data, error } = await retryOnLikelyNetworkError(async () =>
+        await supabase
           .from('budget_expenses')
           .select('*')
           .eq('household_id', householdId)
@@ -55,8 +55,8 @@ export function useExpenses(householdId: string) {
     setExpenses(prev => sortByCreatedAt([...prev, optimistic]));
 
     try {
-      const { data, error } = await retryOnLikelyNetworkError(() =>
-        supabase.from('budget_expenses').insert({
+      const { data, error } = await retryOnLikelyNetworkError(async () =>
+        await supabase.from('budget_expenses').insert({
           id,
           household_id: householdId,
           ...expense,
@@ -79,8 +79,8 @@ export function useExpenses(householdId: string) {
     const prevExpenses = expensesRef.current;
     setExpenses(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
     try {
-      const { data, error } = await retryOnLikelyNetworkError(() =>
-        supabase.from('budget_expenses').update(updates).eq('id', id).select('*').single(),
+      const { data, error } = await retryOnLikelyNetworkError(async () =>
+        await supabase.from('budget_expenses').update(updates).eq('id', id).select('*').single(),
       );
       if (error) throw error;
       if (data) {
@@ -99,8 +99,8 @@ export function useExpenses(householdId: string) {
     const prevExpenses = expensesRef.current;
     setExpenses(prev => prev.filter(e => e.id !== id));
     try {
-      const { error } = await retryOnLikelyNetworkError(() =>
-        supabase.from('budget_expenses').delete().eq('id', id),
+      const { error } = await retryOnLikelyNetworkError(async () =>
+        await supabase.from('budget_expenses').delete().eq('id', id),
       );
       if (error) throw error;
     } catch (e: any) {
