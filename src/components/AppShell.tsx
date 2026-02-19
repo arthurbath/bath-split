@@ -32,6 +32,12 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
   const location = useLocation();
   const navigate = useNavigate();
   const basePath = useModuleBasePath();
+  const isIncomesRoute = location.pathname.endsWith('/incomes');
+  const isExpensesRoute = location.pathname.endsWith('/expenses');
+  const isSummaryRoute = location.pathname.endsWith('/summary');
+  const isConfigRoute = location.pathname.endsWith('/config');
+  const isRestoreRoute = location.pathname.endsWith('/restore');
+  const isFullViewGridRoute = isExpensesRoute || isIncomesRoute;
   const { incomes, add: addIncome, update: updateIncome, remove: removeIncome, refetch: refetchIncomes } = useIncomes(household.householdId);
   const { expenses, add: addExpense, update: updateExpense, remove: removeExpense, refetch: refetchExpenses } = useExpenses(household.householdId);
   const { categories, add: addCategory, update: updateCategory, updateColor: updateCategoryColor, remove: removeCategory, refetch: refetchCategories } = useCategories(household.householdId);
@@ -130,10 +136,13 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`bg-background ${isFullViewGridRoute ? 'h-dvh overflow-hidden flex flex-col' : 'min-h-screen'}`}>
       <ToplineHeader title="Budget" userId={userId} displayName={household.displayName} onSignOut={onSignOut} />
 
-      <main className={`mx-auto max-w-5xl px-4 pt-6 space-y-6 ${location.pathname.endsWith('/expenses') || location.pathname.endsWith('/incomes') ? 'pb-0' : 'pb-6'}`}>
+      <main className={isFullViewGridRoute
+        ? 'mx-auto flex w-full max-w-5xl flex-1 min-h-0 flex-col gap-6 overflow-hidden px-4 pt-6 pb-0'
+        : 'mx-auto max-w-5xl px-4 pt-6 pb-6 space-y-6'}
+      >
         <nav className="grid w-full grid-cols-5 rounded-lg bg-muted p-1 text-muted-foreground">
           {([
             { path: '/summary', icon: PieChart, label: 'Summary' },
@@ -157,34 +166,40 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
           })}
         </nav>
 
-        {location.pathname.endsWith('/incomes') && (
-          <IncomesTab
-            incomes={incomes}
-            partnerX={household.partnerX}
-            partnerY={household.partnerY}
-            onAdd={addIncome}
-            onUpdate={updateIncome}
-            onRemove={removeIncome}
-          />
+        {isIncomesRoute && (
+          <div className="flex-1 min-h-0">
+            <IncomesTab
+              incomes={incomes}
+              partnerX={household.partnerX}
+              partnerY={household.partnerY}
+              onAdd={addIncome}
+              onUpdate={updateIncome}
+              onRemove={removeIncome}
+              fullView
+            />
+          </div>
         )}
-        {location.pathname.endsWith('/expenses') && (
-          <ExpensesTab
-            expenses={expenses}
-            categories={categories}
-            linkedAccounts={linkedAccounts}
-            incomes={incomes}
-            partnerX={household.partnerX}
-            partnerY={household.partnerY}
-            partnerXColor={household.partnerXColor}
-            partnerYColor={household.partnerYColor}
-            onAdd={addExpense}
-            onUpdate={updateExpense}
-            onRemove={removeExpense}
-            onAddCategory={addCategory}
-            onAddLinkedAccount={addLinkedAccount}
-          />
+        {isExpensesRoute && (
+          <div className="flex-1 min-h-0">
+            <ExpensesTab
+              expenses={expenses}
+              categories={categories}
+              linkedAccounts={linkedAccounts}
+              incomes={incomes}
+              partnerX={household.partnerX}
+              partnerY={household.partnerY}
+              partnerXColor={household.partnerXColor}
+              partnerYColor={household.partnerYColor}
+              onAdd={addExpense}
+              onUpdate={updateExpense}
+              onRemove={removeExpense}
+              onAddCategory={addCategory}
+              onAddLinkedAccount={addLinkedAccount}
+              fullView
+            />
+          </div>
         )}
-        {location.pathname.endsWith('/summary') && (
+        {isSummaryRoute && (
           <SummaryTab
             incomes={incomes}
             expenses={expenses}
@@ -193,7 +208,7 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
             partnerY={household.partnerY}
           />
         )}
-        {location.pathname.endsWith('/config') && (
+        {isConfigRoute && (
           <ConfigurationTab
             categories={categories}
             linkedAccounts={linkedAccounts}
@@ -217,7 +232,7 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
             onUpdateLinkedAccountColor={updateLinkedAccountColor}
           />
         )}
-        {location.pathname.endsWith('/restore') && (
+        {isRestoreRoute && (
           <RestoreTab
             points={points}
             incomes={incomes}
