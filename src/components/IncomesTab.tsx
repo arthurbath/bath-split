@@ -39,6 +39,7 @@ interface IncomesTabProps {
   onAdd: (income: Omit<Income, 'id' | 'household_id'>) => Promise<void>;
   onUpdate: (id: string, updates: Partial<Omit<Income, 'id' | 'household_id'>>) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  fullView?: boolean;
 }
 
 const columnHelper = createColumnHelper<Income>();
@@ -48,10 +49,14 @@ const columnHelper = createColumnHelper<Income>();
 function PartnerCell({ value, partnerX, partnerY, onChange }: { value: string; partnerX: string; partnerY: string; onChange: (v: string) => void }) {
   const ctx = useDataGrid();
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={v => {
+      ctx?.onCellCommit(1);
+      onChange(v);
+    }}>
       <SelectTrigger
         className="h-7 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2"
         data-row={ctx?.rowIndex}
+        data-row-id={ctx?.rowId}
         data-col={1}
         onMouseDown={ctx?.onCellMouseDown}
         onKeyDown={(e) => {
@@ -77,10 +82,14 @@ function FrequencyCell({ income, onChange }: { income: Income; onChange: (field:
   const ctx = useDataGrid();
   return (
     <div className="flex items-center gap-1">
-      <Select value={income.frequency_type} onValueChange={v => onChange('frequency_type', v)}>
+      <Select value={income.frequency_type} onValueChange={v => {
+        ctx?.onCellCommit(3);
+        onChange('frequency_type', v);
+      }}>
         <SelectTrigger
           className="h-7 min-w-0 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2"
           data-row={ctx?.rowIndex}
+          data-row-id={ctx?.rowId}
           data-col={3}
           onMouseDown={ctx?.onCellMouseDown}
           onKeyDown={(e) => {
@@ -129,7 +138,7 @@ function DeleteCell({ income, onRemove }: { income: Income; onRemove: (id: strin
 
 // ─── Main Component ───
 
-export function IncomesTab({ incomes, partnerX, partnerY, onAdd, onUpdate, onRemove }: IncomesTabProps) {
+export function IncomesTab({ incomes, partnerX, partnerY, onAdd, onUpdate, onRemove, fullView = false }: IncomesTabProps) {
   const [addIncomeOpen, setAddIncomeOpen] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [newIncome, setNewIncome] = useState<NewIncomeDraft>(createDefaultIncomeDraft);
@@ -233,7 +242,7 @@ export function IncomesTab({ incomes, partnerX, partnerY, onAdd, onUpdate, onRem
   const ratioX = total > 0 ? (xTotal / total * 100) : 50;
 
   return (
-    <Card className="max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0">
+    <Card className={`max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 ${fullView ? 'h-full min-h-0 flex flex-col' : ''}`}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Income Streams</CardTitle>
@@ -242,20 +251,23 @@ export function IncomesTab({ incomes, partnerX, partnerY, onAdd, onUpdate, onRem
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="px-0 pb-0">
+      <CardContent className={`px-0 pb-0 ${fullView ? 'flex-1 min-h-0' : ''}`}>
         <DataGrid
           table={table}
+          fullView={fullView}
+          maxHeight={fullView ? 'none' : undefined}
+          className={fullView ? 'h-full min-h-0' : undefined}
           emptyMessage='No income streams yet. Click "Add" to start.'
           footer={incomes.length > 0 ? (
             <>
               <tr className="bg-muted shadow-[0_-1px_0_0_hsl(var(--border))]">
-                <td className="font-semibold text-xs sticky left-0 z-10 bg-muted px-2 py-1">Totals</td>
+                <td className={`font-semibold text-xs bg-muted px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Totals</td>
                 <td colSpan={3} className="text-xs bg-muted px-2 py-1">{partnerX}: ${Math.round(xTotal)} · {partnerY}: ${Math.round(yTotal)}</td>
                 <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(total)}</td>
                 <td className="bg-muted" />
               </tr>
               <tr>
-                <td className="text-xs text-muted-foreground sticky left-0 z-10 bg-muted px-2 py-1">Income ratio: {partnerX} {ratioX.toFixed(0)}% / {partnerY} {(100 - ratioX).toFixed(0)}%</td>
+                <td className={`text-xs text-muted-foreground bg-muted px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Income ratio: {partnerX} {ratioX.toFixed(0)}% / {partnerY} {(100 - ratioX).toFixed(0)}%</td>
                 <td colSpan={5} className="bg-muted" />
               </tr>
             </>

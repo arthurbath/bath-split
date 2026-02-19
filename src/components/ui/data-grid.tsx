@@ -21,8 +21,10 @@ declare module '@tanstack/react-table' {
 // ─── Context ───
 interface DataGridContextValue {
   rowIndex: number;
+  rowId: string;
   onCellKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
   onCellMouseDown: (e: React.MouseEvent<HTMLElement>) => void;
+  onCellCommit: (col: number) => void;
 }
 
 const DataGridCtx = createContext<DataGridContextValue | null>(null);
@@ -32,6 +34,7 @@ export function useDataGrid() { return useContext(DataGridCtx); }
 export function gridNavProps(ctx: DataGridContextValue | null, navCol: number): Record<string, unknown> {
   return {
     'data-row': ctx?.rowIndex,
+    'data-row-id': ctx?.rowId,
     'data-col': navCol,
     onKeyDown: ctx?.onCellKeyDown,
     onMouseDown: ctx?.onCellMouseDown,
@@ -45,6 +48,32 @@ function useGridNav(containerRef: React.RefObject<HTMLDivElement | null>) {
     return Array.from(containerRef.current.querySelectorAll<HTMLElement>('[data-row][data-col]'));
   }, [containerRef]);
 
+  const scrollCellIntoView = useCallback((cell: HTMLElement) => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+    const stickyHeader = container.querySelector<HTMLElement>('thead.sticky');
+    const stickyFooter = container.querySelector<HTMLElement>('tfoot.sticky');
+    const headerHeight = stickyHeader?.getBoundingClientRect().height ?? 0;
+    const footerHeight = stickyFooter?.getBoundingClientRect().height ?? 0;
+    const viewTop = containerRect.top + headerHeight;
+    const viewBottom = containerRect.bottom - footerHeight;
+
+    if (cellRect.top < viewTop) {
+      container.scrollTop += cellRect.top - viewTop;
+    } else if (cellRect.bottom > viewBottom) {
+      container.scrollTop += cellRect.bottom - viewBottom;
+    }
+
+    if (cellRect.left < containerRect.left) {
+      container.scrollLeft += cellRect.left - containerRect.left;
+    } else if (cellRect.right > containerRect.right) {
+      container.scrollLeft += cellRect.right - containerRect.right;
+    }
+  }, [containerRef]);
+
   const focusCell = useCallback((row: number, col: number) => {
     const cells = getEditableCells();
     const target = cells.find(el => Number(el.dataset.row) === row && Number(el.dataset.col) === col);
@@ -52,10 +81,24 @@ function useGridNav(containerRef: React.RefObject<HTMLDivElement | null>) {
       const role = target.getAttribute('role');
       if (target.tagName === 'BUTTON' && role !== 'checkbox' && role !== 'combobox') target.click();
       else target.focus();
+      requestAnimationFrame(() => scrollCellIntoView(target));
       return true;
     }
     return false;
-  }, [getEditableCells]);
+  }, [getEditableCells, scrollCellIntoView]);
+
+  const focusCellByRowId = useCallback((rowId: string, col: number) => {
+    const cells = getEditableCells();
+    const target = cells.find(el => el.dataset.rowId === rowId && Number(el.dataset.col) === col);
+    if (target) {
+      const role = target.getAttribute('role');
+      if (target.tagName === 'BUTTON' && role !== 'checkbox' && role !== 'combobox') target.click();
+      else target.focus();
+      requestAnimationFrame(() => scrollCellIntoView(target));
+      return true;
+    }
+    return false;
+  }, [getEditableCells, scrollCellIntoView]);
 
   const getMaxRow = useCallback(() => {
     let max = -1;
@@ -76,6 +119,30 @@ function useGridNav(containerRef: React.RefObject<HTMLDivElement | null>) {
     return prev.length > 0 ? prev[prev.length - 1] : null;
   }, [getEditableCells]);
 
+  const findTargetBeforeSort = useCallback((nextRow: number, nextCol: number) => {
+    const cells = getEditableCells();
+    const target = cells.find(el => Number(el.dataset.row) === nextRow && Number(el.dataset.col) === nextCol);
+    return {
+      row: nextRow,
+      col: nextCol,
+      rowId: target?.dataset.rowId ?? null,
+    };
+  }, [getEditableCells]);
+
+  const focusWithRetry = useCallback((target: { row: number; col: number; rowId: string | null }, attempts = 10) => {
+    let tries = 0;
+    const tryFocus = () => {
+      const focused =
+        (target.rowId ? focusCellByRowId(target.rowId, target.col) : false) ||
+        focusCell(target.row, target.col);
+
+      if (focused || tries >= attempts) return;
+      tries += 1;
+      window.setTimeout(() => requestAnimationFrame(tryFocus), 24);
+    };
+    requestAnimationFrame(tryFocus);
+  }, [focusCell, focusCellByRowId]);
+
   const onCellKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
     const el = e.currentTarget;
     const row = Number(el.dataset.row);
@@ -90,8 +157,9 @@ function useGridNav(containerRef: React.RefObject<HTMLDivElement | null>) {
     const isEditing = target instanceof HTMLElement && target.dataset.gridEditing === 'true';
 
     const moveTo = (nextRow: number, nextCol: number) => {
+      const targetBeforeSort = findTargetBeforeSort(nextRow, nextCol);
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-      requestAnimationFrame(() => focusCell(nextRow, nextCol));
+      focusWithRetry(targetBeforeSort);
     };
 
     if (e.key === 'Tab') {
@@ -133,11 +201,11 @@ function useGridNav(containerRef: React.RefObject<HTMLDivElement | null>) {
       e.preventDefault();
       moveTo(row, nextCol);
     }
-  }, [findNextCol, findPrevCol, focusCell, getMaxRow]);
+  }, [findNextCol, findPrevCol, findTargetBeforeSort, focusWithRetry, getMaxRow]);
 
   const onCellMouseDown = useCallback((_e: React.MouseEvent<HTMLElement>) => {}, []);
 
-  return { onCellKeyDown, onCellMouseDown };
+  return { onCellKeyDown, onCellMouseDown, scrollCellIntoView, focusCellByRowId };
 }
 
 // ─── DataGrid ───
@@ -147,6 +215,7 @@ interface DataGridProps<TData> {
   emptyMessage?: string;
   maxHeight?: string;
   className?: string;
+  fullView?: boolean;
   stickyFirstColumn?: boolean;
   groupBy?: (row: TData) => string;
   renderGroupHeader?: (groupKey: string, groupRows: Row<TData>[]) => React.ReactNode;
@@ -159,14 +228,26 @@ export function DataGrid<TData>({
   emptyMessage = 'No data',
   maxHeight = 'calc(100dvh - 15.5rem)',
   className,
+  fullView = false,
   stickyFirstColumn = true,
   groupBy,
   renderGroupHeader,
   groupOrder,
 }: DataGridProps<TData>) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { onCellKeyDown, onCellMouseDown } = useGridNav(containerRef);
+  const { onCellKeyDown, onCellMouseDown, scrollCellIntoView, focusCellByRowId } = useGridNav(containerRef);
   const rows = table.getRowModel().rows;
+  const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
+  const lastCommittedRowIdRef = useRef<string | null>(null);
+  const pendingCommitFocusRef = useRef<{ rowId: string; col: number } | null>(null);
+  const previousRowPositionsRef = useRef<Map<string, number>>(new Map());
+  const previousGroupKeysRef = useRef<Map<string, string | null>>(new Map());
+  const clearHighlightTimerRef = useRef<number | null>(null);
+
+  const markRowCommitted = useCallback((rowId: string, col: number) => {
+    lastCommittedRowIdRef.current = rowId;
+    pendingCommitFocusRef.current = { rowId, col };
+  }, []);
 
   const groups = React.useMemo(() => {
     if (!groupBy) return null;
@@ -181,12 +262,128 @@ export function DataGrid<TData>({
     return { map, order };
   }, [groupBy, groupOrder, rows]);
 
+  const renderedRows = React.useMemo(() => {
+    if (groups && renderGroupHeader) {
+      return groups.order.flatMap((key) => groups.map.get(key) ?? []);
+    }
+    return rows;
+  }, [groups, renderGroupHeader, rows]);
+
+  const renderedRowIds = React.useMemo(() => renderedRows.map((row) => row.id), [renderedRows]);
+
+  const currentGroupKeys = React.useMemo(() => {
+    const keys = new Map<string, string | null>();
+    for (const row of rows) {
+      keys.set(row.id, groupBy ? groupBy(row.original) : null);
+    }
+    return keys;
+  }, [groupBy, rows]);
+
+  useEffect(() => {
+    const nextPositions = new Map<string, number>(renderedRowIds.map((id, idx) => [id, idx]));
+    const prevPositions = previousRowPositionsRef.current;
+    const prevGroupKeys = previousGroupKeysRef.current;
+    const committedRowId = lastCommittedRowIdRef.current;
+
+    if (committedRowId) {
+      const previousIndex = prevPositions.get(committedRowId);
+      const nextIndex = nextPositions.get(committedRowId);
+      const previousGroupKey = prevGroupKeys.get(committedRowId);
+      const nextGroupKey = currentGroupKeys.get(committedRowId);
+      const movedByPosition = previousIndex != null && nextIndex != null && previousIndex !== nextIndex;
+      const movedByGroup = previousGroupKey !== nextGroupKey;
+
+      if (movedByPosition || movedByGroup) {
+        setHighlightedRowId(committedRowId);
+        if (clearHighlightTimerRef.current != null) window.clearTimeout(clearHighlightTimerRef.current);
+        clearHighlightTimerRef.current = window.setTimeout(() => {
+          setHighlightedRowId(null);
+          clearHighlightTimerRef.current = null;
+        }, 3000);
+      }
+      lastCommittedRowIdRef.current = null;
+    }
+
+    previousRowPositionsRef.current = nextPositions;
+    previousGroupKeysRef.current = currentGroupKeys;
+  }, [currentGroupKeys, renderedRowIds]);
+
+  useEffect(() => {
+    const pending = pendingCommitFocusRef.current;
+    if (!pending) return;
+
+    const active = document.activeElement;
+    const container = containerRef.current;
+    const activeInGridCell =
+      active instanceof HTMLElement &&
+      !!container &&
+      container.contains(active) &&
+      active.dataset.row != null &&
+      active.dataset.col != null;
+
+    if (activeInGridCell) {
+      requestAnimationFrame(() => scrollCellIntoView(active as HTMLElement));
+      pendingCommitFocusRef.current = null;
+      return;
+    }
+
+    let attempts = 0;
+    const restoreFocus = () => {
+      const focused = focusCellByRowId(pending.rowId, pending.col);
+      if (focused) {
+        pendingCommitFocusRef.current = null;
+        return;
+      }
+      if (attempts >= 10) {
+        pendingCommitFocusRef.current = null;
+        return;
+      }
+      attempts += 1;
+      window.setTimeout(() => requestAnimationFrame(restoreFocus), 24);
+    };
+
+    requestAnimationFrame(restoreFocus);
+  }, [focusCellByRowId, renderedRowIds, scrollCellIntoView]);
+
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return;
+    if (!containerRef.current?.contains(active)) return;
+    if (active.dataset.row == null || active.dataset.col == null) return;
+    requestAnimationFrame(() => scrollCellIntoView(active));
+  }, [renderedRowIds, scrollCellIntoView]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.dataset.row == null || target.dataset.col == null) return;
+      requestAnimationFrame(() => scrollCellIntoView(target));
+    };
+
+    container.addEventListener('focusin', handleFocusIn);
+    return () => container.removeEventListener('focusin', handleFocusIn);
+  }, [scrollCellIntoView]);
+
+  useEffect(() => () => {
+    if (clearHighlightTimerRef.current != null) window.clearTimeout(clearHighlightTimerRef.current);
+  }, []);
+
   let visualRowIdx = 0;
 
   const renderDataRow = (row: Row<TData>) => {
     const currentRow = visualRowIdx++;
     return (
-      <tr key={row.id} className="border-b transition-colors hover:bg-muted/50">
+      <tr
+        key={row.id}
+        className={cn(
+          'border-b transition-colors hover:bg-muted/50',
+          highlightedRowId === row.id && 'data-grid-row-resorted',
+        )}
+      >
         {row.getVisibleCells().map((cell, colIdx) => {
           const meta = cell.column.columnDef.meta;
           return (
@@ -194,11 +391,11 @@ export function DataGrid<TData>({
               key={cell.id}
               className={cn(
                 'px-2 py-1 align-middle',
-                colIdx === 0 && stickyFirstColumn && 'sticky left-0 z-10 bg-background',
+                colIdx === 0 && stickyFirstColumn && fullView && 'sticky left-0 z-10 bg-background',
                 meta?.cellClassName,
               )}
             >
-              <DataGridCtx.Provider value={{ rowIndex: currentRow, onCellKeyDown, onCellMouseDown }}>
+              <DataGridCtx.Provider value={{ rowIndex: currentRow, rowId: row.id, onCellKeyDown, onCellMouseDown, onCellCommit: (col) => markRowCommitted(row.id, col) }}>
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
               </DataGridCtx.Provider>
             </td>
@@ -209,9 +406,16 @@ export function DataGrid<TData>({
   };
 
   return (
-    <div ref={containerRef} className={cn('overflow-auto', className)} style={{ maxHeight }}>
+    <div
+      ref={containerRef}
+      className={cn('overflow-auto', fullView && 'h-full min-h-0', className)}
+      style={{ maxHeight: fullView ? 'none' : maxHeight }}
+    >
       <table className="w-full caption-bottom text-xs">
-        <thead className="sticky top-0 z-30 bg-card shadow-[0_1px_0_0_hsl(var(--border))] [&_tr]:border-b-0">
+        <thead className={cn(
+          'z-30 bg-card shadow-[0_1px_0_0_hsl(var(--border))] [&_tr]:border-b-0',
+          fullView && 'sticky top-0',
+        )}>
           {table.getHeaderGroups().map(hg => (
             <tr key={hg.id} className="border-b transition-colors">
               {hg.headers.map((header, colIdx) => {
@@ -223,7 +427,7 @@ export function DataGrid<TData>({
                     className={cn(
                       'h-9 px-2 text-left align-middle font-medium text-muted-foreground',
                       header.column.getCanSort() && 'cursor-pointer select-none hover:bg-muted/50',
-                      colIdx === 0 && stickyFirstColumn && 'sticky left-0 z-40 bg-card',
+                      colIdx === 0 && stickyFirstColumn && fullView && 'sticky left-0 z-40 bg-card',
                       meta?.headerClassName,
                     )}
                     onClick={header.column.getToggleSortingHandler()}
@@ -263,7 +467,10 @@ export function DataGrid<TData>({
           )}
         </tbody>
         {footer && (
-          <tfoot className="border-t bg-muted/50 font-medium [&>tr]:last:border-b-0 sticky bottom-0 z-30">
+          <tfoot className={cn(
+            'border-t bg-muted/50 font-medium [&>tr]:last:border-b-0',
+            fullView && 'sticky bottom-0 z-30',
+          )}>
             {footer}
           </tfoot>
         )}
@@ -310,7 +517,12 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
     if (!focused || !editing) setLocal(String(value));
   }, [value, focused, editing]);
 
-  const commit = () => { if (local !== String(value)) onChange(local); };
+  const commit = () => {
+    if (local !== String(value)) {
+      ctx?.onCellCommit(navCol);
+      onChange(local);
+    }
+  };
 
   return (
     <Input
@@ -320,6 +532,7 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
       readOnly={!editing}
       placeholder={placeholder}
       data-row={ctx?.rowIndex}
+      data-row-id={ctx?.rowId}
       data-col={navCol}
       data-grid-key={cellId}
       data-grid-editing={editing ? 'true' : 'false'}
@@ -427,7 +640,12 @@ export function GridCurrencyCell({ value, onChange, navCol, className }: {
     if (!focused || !editing) setLocal(String(value));
   }, [value, focused, editing]);
 
-  const commit = () => { if (local !== String(value)) onChange(local); };
+  const commit = () => {
+    if (local !== String(value)) {
+      ctx?.onCellCommit(navCol);
+      onChange(local);
+    }
+  };
 
   return (
     <div className="relative min-w-[5rem]">
@@ -438,6 +656,7 @@ export function GridCurrencyCell({ value, onChange, navCol, className }: {
         value={local}
         readOnly={!editing}
         data-row={ctx?.rowIndex}
+        data-row-id={ctx?.rowId}
         data-col={navCol}
         data-grid-editing={editing ? 'true' : 'false'}
         onChange={e => { if (editing) setLocal(e.target.value); }}
@@ -545,7 +764,12 @@ export function GridPercentCell({ value, onChange, navCol, className }: {
     if (!focused || !editing) setLocal(String(value));
   }, [value, focused, editing]);
 
-  const commit = () => { if (local !== String(value)) onChange(local); };
+  const commit = () => {
+    if (local !== String(value)) {
+      ctx?.onCellCommit(navCol);
+      onChange(local);
+    }
+  };
 
   return (
     <div className="relative min-w-[4rem]">
@@ -558,6 +782,7 @@ export function GridPercentCell({ value, onChange, navCol, className }: {
         max={100}
         readOnly={!editing}
         data-row={ctx?.rowIndex}
+        data-row-id={ctx?.rowId}
         data-col={navCol}
         data-grid-editing={editing ? 'true' : 'false'}
         onChange={e => { if (editing) setLocal(e.target.value); }}

@@ -120,3 +120,17 @@
     cursor: not-allowed;
   }
 }
+
+@keyframes data-grid-resort-highlight {
+  0% {
+    background-color: hsl(var(--warning) / 0.2);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.data-grid-row-resorted > td {
+  animation: data-grid-resort-highlight 3s ease-out;
+}

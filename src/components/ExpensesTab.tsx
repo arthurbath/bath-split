@@ -52,6 +52,7 @@ interface ExpensesTabProps {
   onRemove: (id: string) => Promise<void>;
   onAddCategory: (name: string, color?: string | null, id?: string) => Promise<void>;
   onAddLinkedAccount: (name: string, ownerPartner?: string, color?: string | null, id?: string) => Promise<void>;
+  fullView?: boolean;
 }
 
 const FREQ_OPTIONS: FrequencyType[] = ['weekly', 'twice_monthly', 'monthly', 'annual', 'every_n_days', 'every_n_weeks', 'every_n_months', 'k_times_weekly', 'k_times_monthly', 'k_times_annually'];
@@ -94,11 +95,19 @@ function CategoryCell({ exp, categories, onChange, onAddNew }: {
 }) {
   const ctx = useDataGrid();
   return (
-    <Select value={exp.category_id ?? '_none'} onValueChange={v => { if (v === '_add_new') onAddNew(); else onChange(v); }}>
+    <Select value={exp.category_id ?? '_none'} onValueChange={v => {
+      if (v === '_add_new') {
+        onAddNew();
+        return;
+      }
+      ctx?.onCellCommit(1);
+      onChange(v);
+    }}>
       <SelectTrigger
         className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
         style={{ backgroundColor: categories.find(c => c.id === exp.category_id)?.color || 'transparent' }}
         data-row={ctx?.rowIndex}
+        data-row-id={ctx?.rowId}
         data-col={1}
         onMouseDown={ctx?.onCellMouseDown}
         onKeyDown={(e) => {
@@ -125,10 +134,14 @@ function ExpenseFrequencyCell({ exp, onChange }: { exp: Expense; onChange: (fiel
   const ctx = useDataGrid();
   return (
     <div className="flex items-center gap-1">
-      <Select value={exp.frequency_type} onValueChange={v => onChange('frequency_type', v)}>
+      <Select value={exp.frequency_type} onValueChange={v => {
+        ctx?.onCellCommit(4);
+        onChange('frequency_type', v);
+      }}>
         <SelectTrigger
           className="h-7 min-w-0 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2"
           data-row={ctx?.rowIndex}
+          data-row-id={ctx?.rowId}
           data-col={4}
           onMouseDown={ctx?.onCellMouseDown}
           onKeyDown={(e) => {
@@ -158,11 +171,19 @@ function PaymentMethodCell({ exp, linkedAccounts, partnerX, partnerY, onChange, 
 }) {
   const ctx = useDataGrid();
   return (
-    <Select value={exp.linked_account_id ?? '_none'} onValueChange={v => { if (v === '_add_new') onAddNew(); else onChange(v); }}>
+    <Select value={exp.linked_account_id ?? '_none'} onValueChange={v => {
+      if (v === '_add_new') {
+        onAddNew();
+        return;
+      }
+      ctx?.onCellCommit(6);
+      onChange(v);
+    }}>
       <SelectTrigger
         className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
         style={{ backgroundColor: linkedAccounts.find(la => la.id === exp.linked_account_id)?.color || 'transparent' }}
         data-row={ctx?.rowIndex}
+        data-row-id={ctx?.rowId}
         data-col={6}
         onMouseDown={ctx?.onCellMouseDown}
         onKeyDown={(e) => {
@@ -204,10 +225,12 @@ function EstimateCell({ checked, onToggle }: { checked: boolean; onToggle: (v: b
       ref={checkboxRef}
       checked={checked}
       onCheckedChange={v => {
+        ctx?.onCellCommit(3);
         onToggle(!!v);
         focusCheckbox();
       }}
       data-row={ctx?.rowIndex}
+      data-row-id={ctx?.rowId}
       data-col={3}
       onMouseDown={ctx?.onCellMouseDown}
       onKeyDown={(e) => {
@@ -247,7 +270,7 @@ function ExpenseDeleteCell({ name, onRemove }: { name: string; onRemove: () => v
 
 // ─── Main Component ───
 
-export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, partnerX, partnerY, partnerXColor, partnerYColor, onAdd, onUpdate, onRemove, onAddCategory, onAddLinkedAccount }: ExpensesTabProps) {
+export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, partnerX, partnerY, partnerXColor, partnerYColor, onAdd, onUpdate, onRemove, onAddCategory, onAddLinkedAccount, fullView = false }: ExpensesTabProps) {
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [newExpense, setNewExpense] = useState<NewExpenseDraft>(createDefaultExpenseDraft);
   const [addDialog, setAddDialog] = useState<'category' | 'payment_method' | null>(null);
@@ -578,8 +601,11 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
     const gFairX = groupRows.reduce((s, r) => s + r.original.fairX, 0);
     const gFairY = groupRows.reduce((s, r) => s + r.original.fairY, 0);
     return (
-      <tr key={`gh-${key}`} className="bg-muted sticky top-[36px] z-20 border-b-0 shadow-[0_1px_0_0_hsl(var(--border))]">
-        <td className="sticky left-0 z-10 bg-muted font-semibold text-xs px-2 py-1">{getGroupLabel(key)}</td>
+      <tr
+        key={`gh-${key}`}
+        className={`bg-muted border-b-0 shadow-[0_1px_0_0_hsl(var(--border))] ${fullView ? 'sticky top-[36px] z-20' : ''}`}
+      >
+        <td className={`bg-muted font-semibold text-xs px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>{getGroupLabel(key)}</td>
         <td colSpan={4} className="bg-muted" />
         <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(gMonthly)}</td>
         <td colSpan={4} className="bg-muted" />
@@ -593,7 +619,7 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
   const dialogTitle = addDialog === 'category' ? 'New Category' : 'New Payment Method';
 
   return (
-    <Card className="max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0">
+    <Card className={`max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 ${fullView ? 'h-full min-h-0 flex flex-col' : ''}`}>
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <CardTitle>Expenses</CardTitle>
@@ -623,16 +649,19 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
           </div>
         </div>
       </CardHeader>
-      <CardContent className="px-0 pb-0">
+      <CardContent className={`px-0 pb-0 ${fullView ? 'flex-1 min-h-0' : ''}`}>
         <DataGrid
           table={table}
+          fullView={fullView}
+          maxHeight={fullView ? 'none' : undefined}
+          className={fullView ? 'h-full min-h-0' : undefined}
           emptyMessage='No expenses yet. Click "Add" to start.'
           groupBy={getGroupKey}
           renderGroupHeader={renderGroupHeader}
           groupOrder={groupOrder}
           footer={computedData.length > 0 ? (
             <tr className="bg-muted shadow-[0_-1px_0_0_hsl(var(--border))]">
-              <td className="font-semibold text-xs sticky left-0 z-10 bg-muted px-2 py-1">Totals</td>
+              <td className={`font-semibold text-xs bg-muted px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Totals</td>
               <td colSpan={4} className="bg-muted" />
               <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(totalMonthly)}</td>
               <td colSpan={4} className="bg-muted" />
