@@ -139,10 +139,7 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
     <div className={`bg-background ${isFullViewGridRoute ? 'h-dvh overflow-y-hidden overflow-x-visible flex flex-col' : 'min-h-screen'}`}>
       <ToplineHeader title="Budget" userId={userId} displayName={household.displayName} onSignOut={onSignOut} />
 
-      <main className={isFullViewGridRoute
-        ? 'mx-auto flex w-full max-w-5xl flex-1 min-h-0 flex-col gap-6 overflow-y-hidden overflow-x-visible px-4 pt-6 pb-0'
-        : 'mx-auto max-w-5xl px-4 pt-6 pb-6 space-y-6'}
-      >
+      <div className="mx-auto max-w-5xl w-full px-4 pt-6">
         <nav className="grid w-full grid-cols-5 rounded-lg bg-muted p-1 text-muted-foreground">
           {([
             { path: '/summary', icon: PieChart, label: 'Summary' },
@@ -165,87 +162,94 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
             );
           })}
         </nav>
+      </div>
 
-        {isIncomesRoute && (
-          <div className="flex-1 min-h-0">
-            <IncomesTab
+      {isFullViewGridRoute ? (
+        <main className="flex w-full flex-1 min-h-0 flex-col pt-6 pb-0">
+          {isIncomesRoute && (
+            <div className="flex-1 min-h-0">
+              <IncomesTab
+                incomes={incomes}
+                partnerX={household.partnerX}
+                partnerY={household.partnerY}
+                onAdd={addIncome}
+                onUpdate={updateIncome}
+                onRemove={removeIncome}
+                fullView
+              />
+            </div>
+          )}
+          {isExpensesRoute && (
+            <div className="flex-1 min-h-0">
+              <ExpensesTab
+                expenses={expenses}
+                categories={categories}
+                linkedAccounts={linkedAccounts}
+                incomes={incomes}
+                partnerX={household.partnerX}
+                partnerY={household.partnerY}
+                partnerXColor={household.partnerXColor}
+                partnerYColor={household.partnerYColor}
+                onAdd={addExpense}
+                onUpdate={updateExpense}
+                onRemove={removeExpense}
+                onAddCategory={addCategory}
+                onAddLinkedAccount={addLinkedAccount}
+                fullView
+              />
+            </div>
+          )}
+        </main>
+      ) : (
+        <main className="mx-auto max-w-5xl px-4 pt-6 pb-6 space-y-6">
+          {isSummaryRoute && (
+            <SummaryTab
               incomes={incomes}
+              expenses={expenses}
+              linkedAccounts={linkedAccounts}
               partnerX={household.partnerX}
               partnerY={household.partnerY}
-              onAdd={addIncome}
-              onUpdate={updateIncome}
-              onRemove={removeIncome}
-              fullView
             />
-          </div>
-        )}
-        {isExpensesRoute && (
-          <div className="flex-1 min-h-0">
-            <ExpensesTab
-              expenses={expenses}
+          )}
+          {isConfigRoute && (
+            <ConfigurationTab
               categories={categories}
               linkedAccounts={linkedAccounts}
-              incomes={incomes}
+              expenses={expenses}
               partnerX={household.partnerX}
               partnerY={household.partnerY}
               partnerXColor={household.partnerXColor}
               partnerYColor={household.partnerYColor}
-              onAdd={addExpense}
-              onUpdate={updateExpense}
-              onRemove={removeExpense}
+              inviteCode={household.inviteCode}
+              onUpdatePartnerNames={onUpdatePartnerNames}
+              onUpdatePartnerColors={onUpdatePartnerColors}
               onAddCategory={addCategory}
+              onUpdateCategory={updateCategory}
+              onRemoveCategory={removeCategory}
+              onReassignCategory={handleReassignCategory}
+              onUpdateCategoryColor={updateCategoryColor}
               onAddLinkedAccount={addLinkedAccount}
-              fullView
+              onUpdateLinkedAccount={updateLinkedAccount}
+              onRemoveLinkedAccount={removeLinkedAccount}
+              onReassignLinkedAccount={handleReassignLinkedAccount}
+              onUpdateLinkedAccountColor={updateLinkedAccountColor}
             />
-          </div>
-        )}
-        {isSummaryRoute && (
-          <SummaryTab
-            incomes={incomes}
-            expenses={expenses}
-            linkedAccounts={linkedAccounts}
-            partnerX={household.partnerX}
-            partnerY={household.partnerY}
-          />
-        )}
-        {isConfigRoute && (
-          <ConfigurationTab
-            categories={categories}
-            linkedAccounts={linkedAccounts}
-            expenses={expenses}
-            partnerX={household.partnerX}
-            partnerY={household.partnerY}
-            partnerXColor={household.partnerXColor}
-            partnerYColor={household.partnerYColor}
-            inviteCode={household.inviteCode}
-            onUpdatePartnerNames={onUpdatePartnerNames}
-            onUpdatePartnerColors={onUpdatePartnerColors}
-            onAddCategory={addCategory}
-            onUpdateCategory={updateCategory}
-            onRemoveCategory={removeCategory}
-            onReassignCategory={handleReassignCategory}
-            onUpdateCategoryColor={updateCategoryColor}
-            onAddLinkedAccount={addLinkedAccount}
-            onUpdateLinkedAccount={updateLinkedAccount}
-            onRemoveLinkedAccount={removeLinkedAccount}
-            onReassignLinkedAccount={handleReassignLinkedAccount}
-            onUpdateLinkedAccountColor={updateLinkedAccountColor}
-          />
-        )}
-        {isRestoreRoute && (
-          <RestoreTab
-            points={points}
-            incomes={incomes}
-            expenses={expenses}
-            categories={categories}
-            linkedAccounts={linkedAccounts}
-            onSave={savePoint}
-            onRemove={removePoint}
-            onUpdateNotes={updateRestorePointNotes}
-            onRestore={handleRestore}
-          />
-        )}
-      </main>
+          )}
+          {isRestoreRoute && (
+            <RestoreTab
+              points={points}
+              incomes={incomes}
+              expenses={expenses}
+              categories={categories}
+              linkedAccounts={linkedAccounts}
+              onSave={savePoint}
+              onRemove={removePoint}
+              onUpdateNotes={updateRestorePointNotes}
+              onRestore={handleRestore}
+            />
+          )}
+        </main>
+      )}
     </div>
   );
 }
