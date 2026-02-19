@@ -531,7 +531,11 @@ function focusInputAtEnd(input: HTMLInputElement | null) {
   if (!input) return;
   input.focus();
   const end = input.value.length;
-  input.setSelectionRange(end, end);
+  try {
+    input.setSelectionRange(end, end);
+  } catch {
+    // Some input types (for example number in Safari) do not support selection ranges.
+  }
 }
 
 export function GridEditableCell({ value, onChange, navCol, type = 'text', className, placeholder, cellId }: {
