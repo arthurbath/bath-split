@@ -19,8 +19,8 @@ export function useLinkedAccounts(householdId: string) {
 
   const fetch = useCallback(async () => {
     try {
-      const { data, error } = await retryOnLikelyNetworkError(() =>
-        supabase
+      const { data, error } = await retryOnLikelyNetworkError(async () =>
+        await supabase
           .from('budget_linked_accounts')
           .select('*')
           .eq('household_id', householdId)
@@ -42,8 +42,8 @@ export function useLinkedAccounts(householdId: string) {
     setLinkedAccounts(prev => sortByName([...prev, optimistic]));
 
     try {
-      const { data, error } = await retryOnLikelyNetworkError(() =>
-        supabase
+      const { data, error } = await retryOnLikelyNetworkError(async () =>
+        await supabase
           .from('budget_linked_accounts')
           .insert({ id, household_id: householdId, name, owner_partner: ownerPartner, color })
           .select('*')
@@ -66,8 +66,8 @@ export function useLinkedAccounts(householdId: string) {
     const prevAccounts = accountsRef.current;
     setLinkedAccounts(prev => sortByName(prev.map(a => a.id === id ? { ...a, ...updates } : a)));
     try {
-      const { data, error } = await retryOnLikelyNetworkError(() =>
-        supabase.from('budget_linked_accounts').update(updates).eq('id', id).select('*').single(),
+      const { data, error } = await retryOnLikelyNetworkError(async () =>
+        await supabase.from('budget_linked_accounts').update(updates).eq('id', id).select('*').single(),
       );
       if (error) throw error;
       if (data) {
@@ -86,8 +86,8 @@ export function useLinkedAccounts(householdId: string) {
     const prevAccounts = accountsRef.current;
     setLinkedAccounts(prev => sortByName(prev.map(a => a.id === id ? { ...a, color } : a)));
     try {
-      const { data, error } = await retryOnLikelyNetworkError(() =>
-        supabase.from('budget_linked_accounts').update({ color }).eq('id', id).select('*').single(),
+      const { data, error } = await retryOnLikelyNetworkError(async () =>
+        await supabase.from('budget_linked_accounts').update({ color }).eq('id', id).select('*').single(),
       );
       if (error) throw error;
       if (data) {
@@ -106,8 +106,8 @@ export function useLinkedAccounts(householdId: string) {
     const prevAccounts = accountsRef.current;
     setLinkedAccounts(prev => prev.filter(a => a.id !== id));
     try {
-      const { error } = await retryOnLikelyNetworkError(() =>
-        supabase.from('budget_linked_accounts').delete().eq('id', id),
+      const { error } = await retryOnLikelyNetworkError(async () =>
+        await supabase.from('budget_linked_accounts').delete().eq('id', id),
       );
       if (error) throw error;
     } catch (e: any) {
