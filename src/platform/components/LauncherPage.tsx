@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAuthContext } from '@/platform/contexts/AuthContext';
 import { getModuleUrl } from '@/platform/hooks/useHostModule';
 import { ArrowRight } from 'lucide-react';
@@ -29,7 +30,7 @@ export default function LauncherPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">Loading...</p>
+        <LoadingSpinner />
       </div>
     );
   }
@@ -70,7 +71,7 @@ export default function LauncherPage() {
   // Single module — redirect is handled by the effect above; show loading in the meantime
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <p className="text-muted-foreground">Loading...</p>
+      <LoadingSpinner />
     </div>
   );
 }

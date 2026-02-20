@@ -30,6 +30,9 @@ interface DataGridContextValue {
 const DataGridCtx = createContext<DataGridContextValue | null>(null);
 export function useDataGrid() { return useContext(DataGridCtx); }
 
+export const GRID_HEADER_TONE_CLASS = 'bg-border';
+export const GRID_READONLY_TEXT_CLASS = 'text-muted-foreground';
+
 /** Spread onto any interactive element to wire it into grid keyboard navigation. */
 export function gridNavProps(ctx: DataGridContextValue | null, navCol: number): Record<string, unknown> {
   return {
@@ -427,8 +430,9 @@ export function DataGrid<TData>({
             <td
               key={cell.id}
               className={cn(
-                'px-2 py-1 align-middle',
-                colIdx === 0 && stickyFirstColumn && fullView && 'sticky left-0 z-10 bg-background',
+                'px-2 py-1 align-middle font-normal',
+                colIdx === 0 && stickyFirstColumn && GRID_HEADER_TONE_CLASS,
+                colIdx === 0 && stickyFirstColumn && fullView && 'sticky left-0 z-10',
                 meta?.cellClassName,
               )}
             >
@@ -450,7 +454,7 @@ export function DataGrid<TData>({
     >
       <table className="w-full caption-bottom text-xs">
         <thead className={cn(
-          'z-30 bg-card shadow-[0_1px_0_0_hsl(var(--border))] [&_tr]:border-b-0',
+          `z-30 ${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS} shadow-[0_1px_0_0_hsl(var(--border))] [&_tr]:border-b-0`,
           fullView && 'sticky top-0',
         )}>
           {table.getHeaderGroups().map(hg => (
@@ -462,9 +466,10 @@ export function DataGrid<TData>({
                   <th
                     key={header.id}
                     className={cn(
-                      'h-9 px-2 text-left align-middle font-medium text-muted-foreground',
+                      `h-9 px-2 text-left align-middle font-medium ${GRID_READONLY_TEXT_CLASS}`,
                       header.column.getCanSort() && 'cursor-pointer select-none hover:bg-muted/50',
-                      colIdx === 0 && stickyFirstColumn && fullView && 'sticky left-0 z-40 bg-card',
+                      colIdx === 0 && stickyFirstColumn && GRID_HEADER_TONE_CLASS,
+                      colIdx === 0 && stickyFirstColumn && fullView && 'sticky left-0 z-40',
                       meta?.headerClassName,
                     )}
                     onClick={header.column.getToggleSortingHandler()}
@@ -505,7 +510,7 @@ export function DataGrid<TData>({
         </tbody>
         {footer && (
           <tfoot className={cn(
-            'border-t bg-muted/50 font-medium [&>tr]:last:border-b-0',
+            `border-t ${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS} font-medium [&>tr]:last:border-b-0`,
             fullView && 'sticky bottom-0 z-30',
           )}>
             {footer}
@@ -517,7 +522,7 @@ export function DataGrid<TData>({
 }
 
 // ─── Cell Primitives ───
-const CELL_INPUT_CLASS = 'h-7 rounded-md border border-transparent bg-transparent px-1 hover:border-border focus:border-transparent focus:ring-2 focus:ring-ring !text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 cursor-pointer [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+const CELL_INPUT_CLASS = 'h-7 rounded-md border border-transparent bg-transparent px-1 hover:border-border focus:border-transparent focus:ring-2 focus:ring-ring !text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 cursor-pointer [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
 
 function isPrintableEntryKey(e: React.KeyboardEvent<HTMLInputElement>) {
   return e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey;
@@ -698,7 +703,7 @@ export function GridCurrencyCell({ value, onChange, navCol, className }: {
 
   return (
     <div className="relative min-w-[5rem]">
-      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 !text-xs text-muted-foreground">$</span>
+      <span className={cn('pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 !text-xs font-normal', GRID_READONLY_TEXT_CLASS)}>$</span>
       <Input
         ref={ref}
         type="number"
@@ -829,7 +834,7 @@ export function GridPercentCell({ value, onChange, navCol, className }: {
 
   return (
     <div className="relative min-w-[4rem]">
-      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 !text-xs text-muted-foreground">%</span>
+      <span className={cn('pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 !text-xs font-normal', GRID_READONLY_TEXT_CLASS)}>%</span>
       <Input
         ref={ref}
         type="number"

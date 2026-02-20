@@ -51,6 +51,8 @@
     --info-foreground: 0 0% 100%;
     --admin: 270 50% 55%;
     --admin-foreground: 0 0% 100%;
+
+    --category-group-row-bg: 0 0% 38%;
   }
 
   .dark {
@@ -99,6 +101,8 @@
     --info-foreground: 0 0% 100%;
     --admin: 270 45% 60%;
     --admin-foreground: 0 0% 100%;
+
+    --category-group-row-bg: 0 0% 38%;
   }
 }
 
