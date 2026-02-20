@@ -10,11 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
 import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-affix-input';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, MoreHorizontal } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
 import { DataGrid, GridEditableCell, GridCurrencyCell, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
@@ -114,14 +115,29 @@ function FrequencyCell({ income, onChange }: { income: Income; onChange: (field:
   );
 }
 
-function DeleteCell({ income, onRemove }: { income: Income; onRemove: (id: string) => void }) {
+function IncomeActionsCell({ income, onRemove }: { income: Income; onRemove: (id: string) => void }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost-destructive" size="icon" className="h-7 w-7">
-          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-7 w-7 cursor-pointer hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
+            aria-label={`Actions for ${income.name}`}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="bg-popover">
+          <DropdownMenuItem onClick={() => setConfirmOpen(true)} className="text-destructive focus:text-destructive">
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete income</AlertDialogTitle>
@@ -222,8 +238,8 @@ export function IncomesTab({ incomes, partnerX, partnerY, onAdd, onUpdate, onRem
       id: 'actions',
       header: '',
       enableSorting: false,
-      meta: { headerClassName: 'w-10' },
-      cell: ({ row }) => <DeleteCell income={row.original} onRemove={handleRemove} />,
+      meta: { headerClassName: 'w-12' },
+      cell: ({ row }) => <IncomeActionsCell income={row.original} onRemove={handleRemove} />,
     }),
   ], [partnerX, partnerY]);
 
@@ -261,13 +277,13 @@ export function IncomesTab({ incomes, partnerX, partnerY, onAdd, onUpdate, onRem
           footer={incomes.length > 0 ? (
             <>
               <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
-                <td className={`font-semibold text-xs ${GRID_HEADER_TONE_CLASS} px-1 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Totals</td>
-                <td colSpan={3} className={`text-xs ${GRID_HEADER_TONE_CLASS} px-1 py-1`}>{partnerX}: ${Math.round(xTotal)} · {partnerY}: ${Math.round(yTotal)}</td>
-                <td className={`text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-1 py-1`}>${Math.round(total)}</td>
+                <td className={`font-semibold text-xs ${GRID_HEADER_TONE_CLASS} px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Totals</td>
+                <td colSpan={3} className={`text-xs ${GRID_HEADER_TONE_CLASS} px-2 py-1`}>{partnerX}: ${Math.round(xTotal)} · {partnerY}: ${Math.round(yTotal)}</td>
+                <td className={`text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2 py-1`}>${Math.round(total)}</td>
                 <td className={GRID_HEADER_TONE_CLASS} />
               </tr>
               <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
-                <td className={`text-xs ${GRID_HEADER_TONE_CLASS} px-1 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Income ratio: {partnerX} {ratioX.toFixed(0)}% / {partnerY} {(100 - ratioX).toFixed(0)}%</td>
+                <td className={`text-xs ${GRID_HEADER_TONE_CLASS} px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Income ratio: {partnerX} {ratioX.toFixed(0)}% / {partnerY} {(100 - ratioX).toFixed(0)}%</td>
                 <td colSpan={5} className={GRID_HEADER_TONE_CLASS} />
               </tr>
             </>
