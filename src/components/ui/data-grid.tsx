@@ -267,6 +267,19 @@ export function DataGrid<TData>({
     }, []),
   );
   const rows = table.getRowModel().rows;
+  const coreRows = table.getCoreRowModel().rows;
+  const alphabeticalColumnIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of coreRows) {
+      for (const cell of row.getAllCells()) {
+        const value = cell.getValue();
+        if (typeof value === 'string' && value.trim().length > 0) {
+          ids.add(cell.column.id);
+        }
+      }
+    }
+    return ids;
+  }, [coreRows]);
 
   const markRowCommitted = useCallback((rowId: string, col: number) => {
     lastCommittedRowIdRef.current = rowId;
@@ -462,6 +475,7 @@ export function DataGrid<TData>({
               {hg.headers.map((header, colIdx) => {
                 const meta = header.column.columnDef.meta;
                 const sortState = header.column.getIsSorted();
+                const isAlphabeticalColumn = alphabeticalColumnIds.has(header.column.id);
                 return (
                   <th
                     key={header.id}
@@ -477,8 +491,12 @@ export function DataGrid<TData>({
                     {header.isPlaceholder ? null : (
                       <span className="inline-flex items-center gap-1">
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getCanSort() && sortState === 'asc' && <ArrowUp className="h-3 w-3" />}
-                        {header.column.getCanSort() && sortState === 'desc' && <ArrowDown className="h-3 w-3" />}
+                        {header.column.getCanSort() && sortState === 'asc' && (isAlphabeticalColumn
+                          ? <ArrowDown className="h-3 w-3" />
+                          : <ArrowUp className="h-3 w-3" />)}
+                        {header.column.getCanSort() && sortState === 'desc' && (isAlphabeticalColumn
+                          ? <ArrowUp className="h-3 w-3" />
+                          : <ArrowDown className="h-3 w-3" />)}
                       </span>
                     )}
                   </th>
