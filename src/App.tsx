@@ -11,6 +11,7 @@ import ForgotPasswordPage from "@/platform/components/ForgotPasswordPage";
 import ResetPasswordPage from "@/platform/components/ResetPasswordPage";
 import TermsPage from "@/platform/components/TermsPage";
 import AdminPage from "@/platform/components/AdminPage";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import TermsGate from "@/platform/components/TermsGate";
 import AuthCallbackToasts from "@/platform/components/AuthCallbackToasts";
 import Index from "./pages/Index";
@@ -33,7 +34,7 @@ function DeferredNotFound() {
   if (!show) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">Loading...</p>
+        <LoadingSpinner />
       </div>
     );
   }

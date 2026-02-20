@@ -1,5 +1,6 @@
 import { HouseholdSetup } from '@/components/HouseholdSetup';
 import { AppShell } from '@/components/AppShell';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAuth } from '@/hooks/useAuth';
 import { useHouseholdData } from '@/hooks/useHouseholdData';
 import AuthPage from '@/platform/components/AuthPage';
@@ -12,7 +13,7 @@ const Index = () => {
   if (authLoading || hhLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">Loading…</p>
+        <LoadingSpinner />
       </div>
     );
   }

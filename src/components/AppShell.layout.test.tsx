@@ -134,8 +134,9 @@ describe("AppShell full-view layout", () => {
       expect(shell).toHaveClass("h-dvh");
       expect(shell).toHaveClass("overflow-x-visible");
       expect(shell).toHaveClass("overflow-y-hidden");
-      expect(main).toHaveClass("overflow-x-visible");
-      expect(main).toHaveClass("overflow-y-hidden");
+      expect(main).toHaveClass("w-full");
+      expect(main).toHaveClass("flex-1");
+      expect(main).not.toHaveClass("max-w-5xl");
     } finally {
       unmountShell(root, container);
     }

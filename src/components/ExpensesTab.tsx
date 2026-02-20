@@ -22,7 +22,7 @@ import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-af
 import { Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
-import { DataGrid, GridEditableCell, GridCurrencyCell, GridPercentCell, useDataGrid } from '@/components/ui/data-grid';
+import { DataGrid, GridEditableCell, GridCurrencyCell, GridPercentCell, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
 import type { FrequencyType } from '@/types/fairshare';
 import type { Expense } from '@/hooks/useExpenses';
 import type { Category } from '@/hooks/useCategories';
@@ -104,7 +104,7 @@ function CategoryCell({ exp, categories, onChange, onAddNew }: {
       onChange(v);
     }}>
       <SelectTrigger
-        className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
+        className="h-7 border-transparent hover:border-border text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
         style={{ backgroundColor: categories.find(c => c.id === exp.category_id)?.color || 'transparent' }}
         data-row={ctx?.rowIndex}
         data-row-id={ctx?.rowId}
@@ -139,7 +139,7 @@ function ExpenseFrequencyCell({ exp, onChange }: { exp: Expense; onChange: (fiel
         onChange('frequency_type', v);
       }}>
         <SelectTrigger
-          className="h-7 min-w-0 border-transparent bg-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2"
+          className="h-7 min-w-0 border-transparent bg-transparent hover:border-border text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2"
           data-row={ctx?.rowIndex}
           data-row-id={ctx?.rowId}
           data-col={4}
@@ -180,7 +180,7 @@ function PaymentMethodCell({ exp, linkedAccounts, partnerX, partnerY, onChange, 
       onChange(v);
     }}>
       <SelectTrigger
-        className="h-7 border-transparent hover:border-border text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
+        className="h-7 border-transparent hover:border-border text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm"
         style={{ backgroundColor: linkedAccounts.find(la => la.id === exp.linked_account_id)?.color || 'transparent' }}
         data-row={ctx?.rowIndex}
         data-row-id={ctx?.rowId}
@@ -482,7 +482,7 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
       header: () => (
         <Tooltip><TooltipTrigger asChild><span className="underline decoration-dotted underline-offset-2">Monthly</span></TooltipTrigger><TooltipContent side="bottom">Expense normalized to how much it costs you monthly</TooltipContent></Tooltip>
       ),
-      meta: { headerClassName: 'text-right', cellClassName: 'text-right font-medium tabular-nums text-xs' },
+      meta: { headerClassName: 'text-right', cellClassName: `text-right tabular-nums text-xs ${GRID_READONLY_TEXT_CLASS}` },
       cell: ({ getValue }) => `$${Math.round(getValue())}`,
     }),
     columnHelper.accessor(r => r.exp.linked_account_id, {
@@ -511,7 +511,7 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
           <span className="text-xs px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: (p === 'X' ? partnerXColor : partnerYColor) || 'transparent' }}>
             {p === 'X' ? partnerX : partnerY}
           </span>
-        ) : <span className="text-muted-foreground text-xs px-1">—</span>;
+        ) : <span className={`text-xs px-1 ${GRID_READONLY_TEXT_CLASS}`}>—</span>;
       },
     }),
     columnHelper.accessor(r => r.exp.benefit_x, {
@@ -537,13 +537,13 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
     columnHelper.accessor('fairX', {
       id: 'fair_x',
       header: `Fair ${partnerX}`,
-      meta: { headerClassName: 'text-right', cellClassName: 'text-right tabular-nums text-xs' },
+      meta: { headerClassName: 'text-right', cellClassName: `text-right tabular-nums text-xs ${GRID_READONLY_TEXT_CLASS}` },
       cell: ({ getValue }) => `$${Math.round(getValue())}`,
     }),
     columnHelper.accessor('fairY', {
       id: 'fair_y',
       header: `Fair ${partnerY}`,
-      meta: { headerClassName: 'text-right', cellClassName: 'text-right tabular-nums text-xs' },
+      meta: { headerClassName: 'text-right', cellClassName: `text-right tabular-nums text-xs ${GRID_READONLY_TEXT_CLASS}` },
       cell: ({ getValue }) => `$${Math.round(getValue())}`,
     }),
     columnHelper.display({
@@ -600,18 +600,22 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
     const gMonthly = groupRows.reduce((s, r) => s + r.original.monthly, 0);
     const gFairX = groupRows.reduce((s, r) => s + r.original.fairX, 0);
     const gFairY = groupRows.reduce((s, r) => s + r.original.fairY, 0);
+    const isCategoryGroup = groupBy === 'category';
+    const groupRowBgClass = isCategoryGroup ? 'bg-[hsl(var(--category-group-row-bg))]' : GRID_HEADER_TONE_CLASS;
+    const groupRowTextClass = isCategoryGroup ? 'text-white' : GRID_READONLY_TEXT_CLASS;
+    const groupRowFontClass = isCategoryGroup ? 'font-medium' : 'font-normal';
     return (
       <tr
         key={`gh-${key}`}
-        className={`bg-muted border-b-0 shadow-[0_1px_0_0_hsl(var(--border))] ${fullView ? 'sticky top-[36px] z-20' : ''}`}
+        className={`${groupRowBgClass} ${groupRowTextClass} border-b-0 shadow-[0_1px_0_0_hsl(var(--border))] ${fullView ? 'sticky top-[36px] z-20' : ''}`}
       >
-        <td className={`bg-muted font-semibold text-xs px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>{getGroupLabel(key)}</td>
-        <td colSpan={4} className="bg-muted" />
-        <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(gMonthly)}</td>
-        <td colSpan={4} className="bg-muted" />
-        <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(gFairX)}</td>
-        <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(gFairY)}</td>
-        <td className="bg-muted" />
+        <td className={`${groupRowBgClass} ${groupRowFontClass} text-xs px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>{getGroupLabel(key)}</td>
+        <td colSpan={4} className={groupRowBgClass} />
+        <td className={`text-right ${groupRowFontClass} tabular-nums text-xs ${groupRowBgClass} px-2 py-1`}>${Math.round(gMonthly)}</td>
+        <td colSpan={4} className={groupRowBgClass} />
+        <td className={`text-right ${groupRowFontClass} tabular-nums text-xs ${groupRowBgClass} px-2 py-1`}>${Math.round(gFairX)}</td>
+        <td className={`text-right ${groupRowFontClass} tabular-nums text-xs ${groupRowBgClass} px-2 py-1`}>${Math.round(gFairY)}</td>
+        <td className={groupRowBgClass} />
       </tr>
     );
   };
@@ -660,14 +664,14 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
           renderGroupHeader={renderGroupHeader}
           groupOrder={groupOrder}
           footer={computedData.length > 0 ? (
-            <tr className="bg-muted shadow-[0_-1px_0_0_hsl(var(--border))]">
-              <td className={`font-semibold text-xs bg-muted px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Totals</td>
-              <td colSpan={4} className="bg-muted" />
-              <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(totalMonthly)}</td>
-              <td colSpan={4} className="bg-muted" />
-              <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(totalFairX)}</td>
-              <td className="text-right font-semibold tabular-nums text-xs bg-muted px-2 py-1">${Math.round(totalFairY)}</td>
-              <td className="bg-muted" />
+            <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
+              <td className={`font-semibold text-xs ${GRID_HEADER_TONE_CLASS} px-2 py-1 ${fullView ? 'sticky left-0 z-10' : ''}`}>Totals</td>
+              <td colSpan={4} className={GRID_HEADER_TONE_CLASS} />
+              <td className={`text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2 py-1`}>${Math.round(totalMonthly)}</td>
+              <td colSpan={4} className={GRID_HEADER_TONE_CLASS} />
+              <td className={`text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2 py-1`}>${Math.round(totalFairX)}</td>
+              <td className={`text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2 py-1`}>${Math.round(totalFairY)}</td>
+              <td className={GRID_HEADER_TONE_CLASS} />
             </tr>
           ) : undefined}
         />
