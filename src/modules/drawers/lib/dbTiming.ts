@@ -7,15 +7,16 @@ export async function withDrawersDbTiming<T>(operation: string, run: () => Promi
     return await run();
   } finally {
     const durationMs = performance.now() - start;
-    if (!import.meta.env.DEV && durationMs < SLOW_OPERATION_THRESHOLD_MS) return;
+    const shouldLog = import.meta.env.DEV || durationMs >= SLOW_OPERATION_THRESHOLD_MS;
+    if (shouldLog) {
+      const durationText = `${Math.round(durationMs)}ms`;
+      const message = `[drawers][db] ${operation} completed in ${durationText}`;
 
-    const durationText = `${Math.round(durationMs)}ms`;
-    const message = `[drawers][db] ${operation} completed in ${durationText}`;
-
-    if (durationMs >= SLOW_OPERATION_THRESHOLD_MS) {
-      console.warn(message);
-    } else {
-      console.debug(message);
+      if (durationMs >= SLOW_OPERATION_THRESHOLD_MS) {
+        console.warn(message);
+      } else {
+        console.debug(message);
+      }
     }
   }
 }
