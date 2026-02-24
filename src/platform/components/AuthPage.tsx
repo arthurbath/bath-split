@@ -73,7 +73,7 @@ export default function AuthPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">BathOS</CardTitle>
-          <CardDescription>Sign in to continue</CardDescription>
+          <CardDescription>A bunch of hyper-specific apps for Art and his friends</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login">

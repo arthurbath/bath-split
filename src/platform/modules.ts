@@ -17,7 +17,7 @@ const BUDGET_MODULE: PlatformModule = {
 const DRAWERS_MODULE: PlatformModule = {
   id: 'drawers',
   name: 'Drawer Planner',
-  description: 'Plan Kallax-style cubbies and insert arrangements.',
+  description: 'Plan Kallax-style cubbies and drawer arrangements.',
   launchPath: '/drawers/plan',
 };
 

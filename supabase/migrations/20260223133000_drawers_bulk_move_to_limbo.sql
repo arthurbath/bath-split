@@ -1,6 +1,6 @@
--- Drawer Planner: bulk move all cubby inserts in a unit to limbo in one transaction
+-- Drawer Planner: bulk move all cubby drawers in a unit to limbo in one transaction
 
-CREATE OR REPLACE FUNCTION public.move_drawers_unit_inserts_to_limbo(_unit_id uuid)
+CREATE OR REPLACE FUNCTION public.move_drawers_unit_drawers_to_limbo(_unit_id uuid)
 RETURNS integer
 LANGUAGE plpgsql
 SET search_path TO 'public'
@@ -26,19 +26,19 @@ BEGIN
 
   SELECT COALESCE(MAX(limbo_order), 0) + 1
     INTO v_next_limbo_order
-  FROM public.drawers_insert_instances
+  FROM public.drawers_instances
   WHERE household_id = v_household_id
     AND location_kind = 'limbo';
 
   WITH displaced AS (
     SELECT id,
            row_number() OVER (ORDER BY created_at, id) AS rn
-    FROM public.drawers_insert_instances
+    FROM public.drawers_instances
     WHERE unit_id = _unit_id
       AND location_kind = 'cubby'
     FOR UPDATE
   )
-  UPDATE public.drawers_insert_instances di
+  UPDATE public.drawers_instances di
   SET location_kind = 'limbo',
       unit_id = NULL,
       cubby_x = NULL,
@@ -53,4 +53,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.move_drawers_unit_inserts_to_limbo(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.move_drawers_unit_drawers_to_limbo(uuid) TO authenticated;

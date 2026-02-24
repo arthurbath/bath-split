@@ -26,10 +26,10 @@ CREATE TABLE public.drawers_units (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE public.drawers_insert_instances (
+CREATE TABLE public.drawers_instances (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   household_id uuid NOT NULL REFERENCES public.drawers_households(id) ON DELETE CASCADE,
-  insert_type text NOT NULL CHECK (insert_type IN ('black', 'wicker', 'blank')),
+  drawer_type text NOT NULL CHECK (drawer_type IN ('black', 'wicker', 'blank')),
   label text,
   location_kind text NOT NULL CHECK (location_kind IN ('limbo', 'cubby')),
   unit_id uuid REFERENCES public.drawers_units(id) ON DELETE SET NULL,
@@ -65,11 +65,11 @@ CREATE INDEX drawers_household_members_user_id_idx
 CREATE INDEX drawers_units_household_sort_order_idx
   ON public.drawers_units(household_id, sort_order);
 
-CREATE INDEX drawers_insert_instances_household_location_idx
-  ON public.drawers_insert_instances(household_id, location_kind, limbo_order);
+CREATE INDEX drawers_instances_household_location_idx
+  ON public.drawers_instances(household_id, location_kind, limbo_order);
 
-CREATE UNIQUE INDEX drawers_insert_instances_unique_cubby_idx
-  ON public.drawers_insert_instances(unit_id, cubby_x, cubby_y)
+CREATE UNIQUE INDEX drawers_instances_unique_cubby_idx
+  ON public.drawers_instances(unit_id, cubby_x, cubby_y)
   WHERE location_kind = 'cubby';
 
 CREATE OR REPLACE FUNCTION public.is_drawers_household_member(_user_id uuid, _household_id uuid)
@@ -104,7 +104,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.move_drawers_insert_to_limbo(_insert_id uuid)
+CREATE OR REPLACE FUNCTION public.move_drawers_drawer_to_limbo(_drawer_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SET search_path TO 'public'
@@ -115,12 +115,12 @@ DECLARE
 BEGIN
   SELECT household_id
     INTO v_household_id
-  FROM public.drawers_insert_instances
-  WHERE id = _insert_id
+  FROM public.drawers_instances
+  WHERE id = _drawer_id
   FOR UPDATE;
 
   IF v_household_id IS NULL THEN
-    RAISE EXCEPTION 'Insert instance not found';
+    RAISE EXCEPTION 'Drawer instance not found';
   END IF;
 
   IF NOT public.is_drawers_household_member(auth.uid(), v_household_id) THEN
@@ -129,23 +129,23 @@ BEGIN
 
   SELECT COALESCE(MAX(limbo_order), 0) + 1
     INTO v_next_limbo_order
-  FROM public.drawers_insert_instances
+  FROM public.drawers_instances
   WHERE household_id = v_household_id
     AND location_kind = 'limbo';
 
-  UPDATE public.drawers_insert_instances
+  UPDATE public.drawers_instances
   SET location_kind = 'limbo',
       unit_id = NULL,
       cubby_x = NULL,
       cubby_y = NULL,
       limbo_order = v_next_limbo_order,
       updated_at = now()
-  WHERE id = _insert_id;
+  WHERE id = _drawer_id;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.move_drawers_insert(
-  _insert_id uuid,
+CREATE OR REPLACE FUNCTION public.move_drawers_drawer(
+  _drawer_id uuid,
   _target_unit_id uuid,
   _target_x integer,
   _target_y integer
@@ -155,8 +155,8 @@ LANGUAGE plpgsql
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_source public.drawers_insert_instances%ROWTYPE;
-  v_target public.drawers_insert_instances%ROWTYPE;
+  v_source public.drawers_instances%ROWTYPE;
+  v_target public.drawers_instances%ROWTYPE;
   v_target_household_id uuid;
   v_next_limbo_order integer;
 BEGIN
@@ -166,12 +166,12 @@ BEGIN
 
   SELECT *
     INTO v_source
-  FROM public.drawers_insert_instances
-  WHERE id = _insert_id
+  FROM public.drawers_instances
+  WHERE id = _drawer_id
   FOR UPDATE;
 
   IF v_source.id IS NULL THEN
-    RAISE EXCEPTION 'Insert instance not found';
+    RAISE EXCEPTION 'Drawer instance not found';
   END IF;
 
   IF NOT public.is_drawers_household_member(auth.uid(), v_source.household_id) THEN
@@ -200,17 +200,17 @@ BEGIN
 
   SELECT *
     INTO v_target
-  FROM public.drawers_insert_instances
+  FROM public.drawers_instances
   WHERE unit_id = _target_unit_id
     AND cubby_x = _target_x
     AND cubby_y = _target_y
     AND location_kind = 'cubby'
-    AND id <> _insert_id
+    AND id <> _drawer_id
   FOR UPDATE;
 
   IF v_target.id IS NOT NULL THEN
     IF v_source.location_kind = 'cubby' THEN
-      UPDATE public.drawers_insert_instances
+      UPDATE public.drawers_instances
       SET location_kind = 'cubby',
           unit_id = v_source.unit_id,
           cubby_x = v_source.cubby_x,
@@ -221,11 +221,11 @@ BEGIN
     ELSE
       SELECT COALESCE(MAX(limbo_order), 0) + 1
         INTO v_next_limbo_order
-      FROM public.drawers_insert_instances
+      FROM public.drawers_instances
       WHERE household_id = v_source.household_id
         AND location_kind = 'limbo';
 
-      UPDATE public.drawers_insert_instances
+      UPDATE public.drawers_instances
       SET location_kind = 'limbo',
           unit_id = NULL,
           cubby_x = NULL,
@@ -236,14 +236,14 @@ BEGIN
     END IF;
   END IF;
 
-  UPDATE public.drawers_insert_instances
+  UPDATE public.drawers_instances
   SET location_kind = 'cubby',
       unit_id = _target_unit_id,
       cubby_x = _target_x,
       cubby_y = _target_y,
       limbo_order = NULL,
       updated_at = now()
-  WHERE id = _insert_id;
+  WHERE id = _drawer_id;
 END;
 $$;
 
@@ -286,19 +286,19 @@ BEGIN
 
   SELECT COALESCE(MAX(limbo_order), 0) + 1
     INTO v_next_limbo_order
-  FROM public.drawers_insert_instances
+  FROM public.drawers_instances
   WHERE household_id = v_household_id
     AND location_kind = 'limbo';
 
   WITH displaced AS (
     SELECT id,
            row_number() OVER (ORDER BY created_at, id) AS rn
-    FROM public.drawers_insert_instances
+    FROM public.drawers_instances
     WHERE unit_id = _unit_id
       AND location_kind = 'cubby'
       AND (cubby_x > _new_w OR cubby_y > _new_h)
   )
-  UPDATE public.drawers_insert_instances di
+  UPDATE public.drawers_instances di
   SET location_kind = 'limbo',
       unit_id = NULL,
       cubby_x = NULL,
@@ -313,7 +313,7 @@ $$;
 ALTER TABLE public.drawers_households ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.drawers_household_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.drawers_units ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.drawers_insert_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.drawers_instances ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Members can view drawers households"
 ON public.drawers_households
@@ -382,27 +382,27 @@ FOR DELETE
 TO authenticated
 USING (public.is_drawers_household_member(auth.uid(), household_id));
 
-CREATE POLICY "Members can view drawers inserts"
-ON public.drawers_insert_instances
+CREATE POLICY "Members can view drawers instances"
+ON public.drawers_instances
 FOR SELECT
 TO authenticated
 USING (public.is_drawers_household_member(auth.uid(), household_id));
 
-CREATE POLICY "Members can insert drawers inserts"
-ON public.drawers_insert_instances
+CREATE POLICY "Members can insert drawers instances"
+ON public.drawers_instances
 FOR INSERT
 TO authenticated
 WITH CHECK (public.is_drawers_household_member(auth.uid(), household_id));
 
-CREATE POLICY "Members can update drawers inserts"
-ON public.drawers_insert_instances
+CREATE POLICY "Members can update drawers instances"
+ON public.drawers_instances
 FOR UPDATE
 TO authenticated
 USING (public.is_drawers_household_member(auth.uid(), household_id))
 WITH CHECK (public.is_drawers_household_member(auth.uid(), household_id));
 
-CREATE POLICY "Members can delete drawers inserts"
-ON public.drawers_insert_instances
+CREATE POLICY "Members can delete drawers instances"
+ON public.drawers_instances
 FOR DELETE
 TO authenticated
 USING (public.is_drawers_household_member(auth.uid(), household_id));
@@ -410,10 +410,10 @@ USING (public.is_drawers_household_member(auth.uid(), household_id));
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.drawers_households TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.drawers_household_members TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.drawers_units TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.drawers_insert_instances TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.drawers_instances TO authenticated;
 
 GRANT EXECUTE ON FUNCTION public.is_drawers_household_member(uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.lookup_drawers_household_by_invite_code(text) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.move_drawers_insert_to_limbo(uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.move_drawers_insert(uuid, uuid, integer, integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.move_drawers_drawer_to_limbo(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.move_drawers_drawer(uuid, uuid, integer, integer) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.resize_drawers_unit(uuid, integer, integer) TO authenticated;

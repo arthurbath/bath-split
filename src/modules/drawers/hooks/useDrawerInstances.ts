@@ -2,43 +2,43 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { retryOnLikelyNetworkError, showMutationError } from '@/lib/networkErrors';
 import { withDrawersDbTiming } from '@/modules/drawers/lib/dbTiming';
-import type { DrawerInsertInstance, DrawerInsertType } from '@/modules/drawers/types/drawers';
+import type { DrawerInstance, DrawerType } from '@/modules/drawers/types/drawers';
 
-function toInsertArray(data: unknown): DrawerInsertInstance[] {
-  return (data as DrawerInsertInstance[]) ?? [];
+function toDrawersArray(data: unknown): DrawerInstance[] {
+  return (data as DrawerInstance[]) ?? [];
 }
 
-interface AddInsertTarget {
+interface AddDrawerTarget {
   unitId: string;
   cubbyX: number;
   cubbyY: number;
 }
 
-const CREATE_PENDING_KEY = '__create_insert__';
+const CREATE_DRAWER_PENDING_KEY = '__create_drawer__';
 
-function nextLimboOrder(inserts: DrawerInsertInstance[]): number {
-  return inserts.reduce((max, insert) => {
+function nextLimboOrder(drawers: DrawerInstance[]): number {
+  return drawers.reduce((max, insert) => {
     if (insert.location_kind !== 'limbo') return max;
     return Math.max(max, insert.limbo_order ?? 0);
   }, 0) + 1;
 }
 
-function compareByCreatedAtAndId(a: DrawerInsertInstance, b: DrawerInsertInstance): number {
+function compareByCreatedAtAndId(a: DrawerInstance, b: DrawerInstance): number {
   const aCreatedAt = a.created_at ?? '';
   const bCreatedAt = b.created_at ?? '';
   if (aCreatedAt !== bCreatedAt) return aCreatedAt.localeCompare(bCreatedAt);
   return a.id.localeCompare(b.id);
 }
 
-function applyMoveToLimboState(inserts: DrawerInsertInstance[], insertId: string): DrawerInsertInstance[] {
-  const target = inserts.find(insert => insert.id === insertId);
-  if (!target || target.location_kind === 'limbo') return inserts;
+function applyMoveToLimboState(drawers: DrawerInstance[], drawerId: string): DrawerInstance[] {
+  const target = drawers.find(insert => insert.id === drawerId);
+  if (!target || target.location_kind === 'limbo') return drawers;
 
-  const newLimboOrder = nextLimboOrder(inserts);
+  const newLimboOrder = nextLimboOrder(drawers);
   const nowIso = new Date().toISOString();
 
-  return inserts.map(insert => {
-    if (insert.id !== insertId) return insert;
+  return drawers.map(insert => {
+    if (insert.id !== drawerId) return insert;
     return {
       ...insert,
       location_kind: 'limbo',
@@ -52,14 +52,14 @@ function applyMoveToLimboState(inserts: DrawerInsertInstance[], insertId: string
 }
 
 function applyMoveToCubbyState(
-  inserts: DrawerInsertInstance[],
-  insertId: string,
+  drawers: DrawerInstance[],
+  drawerId: string,
   unitId: string,
   cubbyX: number,
   cubbyY: number,
-): DrawerInsertInstance[] {
-  const source = inserts.find(insert => insert.id === insertId);
-  if (!source) return inserts;
+): DrawerInstance[] {
+  const source = drawers.find(insert => insert.id === drawerId);
+  if (!source) return drawers;
 
   if (
     source.location_kind === 'cubby' &&
@@ -67,11 +67,11 @@ function applyMoveToCubbyState(
     source.cubby_x === cubbyX &&
     source.cubby_y === cubbyY
   ) {
-    return inserts;
+    return drawers;
   }
 
-  const target = inserts.find(insert =>
-    insert.id !== insertId &&
+  const target = drawers.find(insert =>
+    insert.id !== drawerId &&
     insert.location_kind === 'cubby' &&
     insert.unit_id === unitId &&
     insert.cubby_x === cubbyX &&
@@ -79,10 +79,10 @@ function applyMoveToCubbyState(
   );
 
   const nowIso = new Date().toISOString();
-  const moveTargetToLimboOrder = target ? nextLimboOrder(inserts) : null;
+  const moveTargetToLimboOrder = target ? nextLimboOrder(drawers) : null;
 
-  return inserts.map(insert => {
-    if (insert.id === insertId) {
+  return drawers.map(insert => {
+    if (insert.id === drawerId) {
       return {
         ...insert,
         location_kind: 'cubby',
@@ -108,19 +108,19 @@ function applyMoveToCubbyState(
   });
 }
 
-function applyMoveUnitInsertsToLimboState(inserts: DrawerInsertInstance[], unitId: string): DrawerInsertInstance[] {
-  const displaced = inserts
+function applyMoveUnitDrawersToLimboState(drawers: DrawerInstance[], unitId: string): DrawerInstance[] {
+  const displaced = drawers
     .filter(insert => insert.unit_id === unitId && insert.location_kind === 'cubby')
     .sort(compareByCreatedAtAndId);
 
-  if (displaced.length === 0) return inserts;
+  if (displaced.length === 0) return drawers;
 
-  const firstLimboOrder = nextLimboOrder(inserts);
+  const firstLimboOrder = nextLimboOrder(drawers);
   const limboOrderById = new Map<string, number>();
   displaced.forEach((insert, idx) => limboOrderById.set(insert.id, firstLimboOrder + idx));
   const nowIso = new Date().toISOString();
 
-  return inserts.map(insert => {
+  return drawers.map(insert => {
     const limboOrder = limboOrderById.get(insert.id);
     if (limboOrder === undefined) return insert;
 
@@ -136,16 +136,16 @@ function applyMoveUnitInsertsToLimboState(inserts: DrawerInsertInstance[], unitI
   });
 }
 
-export function useDrawerInsertInstances(householdId: string) {
-  const [inserts, setInserts] = useState<DrawerInsertInstance[]>([]);
+export function useDrawerInstances(householdId: string) {
+  const [drawers, setDrawers] = useState<DrawerInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingById, setPendingById] = useState<Record<string, boolean>>({});
-  const insertsRef = useRef<DrawerInsertInstance[]>([]);
+  const drawersRef = useRef<DrawerInstance[]>([]);
   const structuralQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    insertsRef.current = inserts;
-  }, [inserts]);
+    drawersRef.current = drawers;
+  }, [drawers]);
 
   const setPending = useCallback((keys: string[], pending: boolean) => {
     if (keys.length === 0) return;
@@ -185,15 +185,15 @@ export function useDrawerInsertInstances(householdId: string) {
 
   const fetch = useCallback(async () => {
     if (!householdId) {
-      setInserts([]);
+      setDrawers([]);
       setLoading(false);
       return;
     }
 
-    const { data, error } = await withDrawersDbTiming('drawers_insert_instances.fetch', async () =>
+    const { data, error } = await withDrawersDbTiming('drawers_instances.fetch', async () =>
       await retryOnLikelyNetworkError(async () =>
         await supabase
-          .from('drawers_insert_instances')
+          .from('drawers_instances')
           .select('*')
           .eq('household_id', householdId)
           .order('location_kind', { ascending: true })
@@ -204,7 +204,7 @@ export function useDrawerInsertInstances(householdId: string) {
 
     if (error) throw error;
 
-    setInserts(toInsertArray(data));
+    setDrawers(toDrawersArray(data));
     setLoading(false);
   }, [householdId]);
 
@@ -213,21 +213,21 @@ export function useDrawerInsertInstances(householdId: string) {
   }, [fetch]);
 
   const add = useCallback(
-    async (insertType: DrawerInsertType, label: string | null, target?: AddInsertTarget) => {
-      setPending([CREATE_PENDING_KEY], true);
+    async (drawerType: DrawerType, label: string | null, target?: AddDrawerTarget) => {
+      setPending([CREATE_DRAWER_PENDING_KEY], true);
       try {
-        return await runStructuralMutation('drawers_insert_instances.add', async () => {
+        return await runStructuralMutation('drawers_instances.add', async () => {
           const id = crypto.randomUUID();
           const normalizedLabel = label?.trim() || null;
-          const nextOrder = target ? null : nextLimboOrder(insertsRef.current);
+          const nextOrder = target ? null : nextLimboOrder(drawersRef.current);
 
           const { data, error } = await retryOnLikelyNetworkError(async () =>
             await supabase
-              .from('drawers_insert_instances')
+              .from('drawers_instances')
               .insert({
                 id,
                 household_id: householdId,
-                insert_type: insertType,
+                drawer_type: drawerType,
                 label: normalizedLabel,
                 location_kind: target ? 'cubby' : 'limbo',
                 unit_id: target?.unitId ?? null,
@@ -241,32 +241,32 @@ export function useDrawerInsertInstances(householdId: string) {
 
           if (error) throw error;
 
-          const inserted = (data as DrawerInsertInstance | null) ?? null;
+          const inserted = (data as DrawerInstance | null) ?? null;
           if (!inserted?.id) {
-            throw new Error('Failed to add insert.');
+            throw new Error('Failed to add drawer.');
           }
 
-          setInserts(prev => [...prev, inserted]);
+          setDrawers(prev => [...prev, inserted]);
           return inserted.id;
         });
       } catch (error: unknown) {
         showMutationError(error);
         throw error;
       } finally {
-        setPending([CREATE_PENDING_KEY], false);
+        setPending([CREATE_DRAWER_PENDING_KEY], false);
       }
     },
     [householdId, runStructuralMutation, setPending],
   );
 
-  const update = useCallback(async (id: string, updates: Partial<Pick<DrawerInsertInstance, 'label' | 'insert_type'>>) => {
+  const update = useCallback(async (id: string, updates: Partial<Pick<DrawerInstance, 'label' | 'drawer_type'>>) => {
     setPending([id], true);
     try {
-      await runDirectMutation('drawers_insert_instances.update', async () => {
+      await runDirectMutation('drawers_instances.update', async () => {
         const nextUpdates: {
           updated_at: string;
           label?: string | null;
-          insert_type?: DrawerInsertType;
+          drawer_type?: DrawerType;
         } = {
           updated_at: new Date().toISOString(),
         };
@@ -274,13 +274,13 @@ export function useDrawerInsertInstances(householdId: string) {
         if (updates.label !== undefined) {
           nextUpdates.label = updates.label?.trim() || null;
         }
-        if (updates.insert_type !== undefined) {
-          nextUpdates.insert_type = updates.insert_type;
+        if (updates.drawer_type !== undefined) {
+          nextUpdates.drawer_type = updates.drawer_type;
         }
 
         const { data, error } = await retryOnLikelyNetworkError(async () =>
           await supabase
-            .from('drawers_insert_instances')
+            .from('drawers_instances')
             .update(nextUpdates)
             .eq('id', id)
             .select('*')
@@ -289,12 +289,12 @@ export function useDrawerInsertInstances(householdId: string) {
 
         if (error) throw error;
 
-        const saved = (data as DrawerInsertInstance | null) ?? null;
+        const saved = (data as DrawerInstance | null) ?? null;
         if (!saved?.id) {
-          throw new Error('Failed to update insert.');
+          throw new Error('Failed to update drawer.');
         }
 
-        setInserts(prev => prev.map(insert => (insert.id === id ? saved : insert)));
+        setDrawers(prev => prev.map(insert => (insert.id === id ? saved : insert)));
       });
     } catch (error: unknown) {
       showMutationError(error);
@@ -307,12 +307,12 @@ export function useDrawerInsertInstances(householdId: string) {
   const remove = useCallback(async (id: string) => {
     setPending([id], true);
     try {
-      await runStructuralMutation('drawers_insert_instances.remove', async () => {
+      await runStructuralMutation('drawers_instances.remove', async () => {
         const { error } = await retryOnLikelyNetworkError(async () =>
-          await supabase.from('drawers_insert_instances').delete().eq('id', id),
+          await supabase.from('drawers_instances').delete().eq('id', id),
         );
         if (error) throw error;
-        setInserts(prev => prev.filter(insert => insert.id !== id));
+        setDrawers(prev => prev.filter(insert => insert.id !== id));
       });
     } catch (error: unknown) {
       showMutationError(error);
@@ -323,23 +323,23 @@ export function useDrawerInsertInstances(householdId: string) {
   }, [runStructuralMutation, setPending]);
 
   const moveToCubby = useCallback(async (
-    insertId: string,
+    drawerId: string,
     unitId: string,
     cubbyX: number,
     cubbyY: number,
-    existingInsertId?: string | null,
+    existingDrawerId?: string | null,
   ) => {
-    const pendingIds = [insertId];
-    if (existingInsertId && existingInsertId !== insertId) {
-      pendingIds.push(existingInsertId);
+    const pendingIds = [drawerId];
+    if (existingDrawerId && existingDrawerId !== drawerId) {
+      pendingIds.push(existingDrawerId);
     }
 
     setPending(pendingIds, true);
     try {
-      await runStructuralMutation('drawers_insert_instances.move_to_cubby', async () => {
+      await runStructuralMutation('drawers_instances.move_to_cubby', async () => {
         const { error } = await retryOnLikelyNetworkError(async () =>
-          await supabase.rpc('move_drawers_insert', {
-            _insert_id: insertId,
+          await supabase.rpc('move_drawers_drawer', {
+            _drawer_id: drawerId,
             _target_unit_id: unitId,
             _target_x: cubbyX,
             _target_y: cubbyY,
@@ -348,7 +348,7 @@ export function useDrawerInsertInstances(householdId: string) {
 
         if (error) throw error;
 
-        setInserts(prev => applyMoveToCubbyState(prev, insertId, unitId, cubbyX, cubbyY));
+        setDrawers(prev => applyMoveToCubbyState(prev, drawerId, unitId, cubbyX, cubbyY));
       });
     } catch (error: unknown) {
       showMutationError(error);
@@ -358,39 +358,39 @@ export function useDrawerInsertInstances(householdId: string) {
     }
   }, [runStructuralMutation, setPending]);
 
-  const moveToLimbo = useCallback(async (insertId: string) => {
-    setPending([insertId], true);
+  const moveToLimbo = useCallback(async (drawerId: string) => {
+    setPending([drawerId], true);
     try {
-      await runStructuralMutation('drawers_insert_instances.move_to_limbo', async () => {
+      await runStructuralMutation('drawers_instances.move_to_limbo', async () => {
         const { error } = await retryOnLikelyNetworkError(async () =>
-          await supabase.rpc('move_drawers_insert_to_limbo', {
-            _insert_id: insertId,
+          await supabase.rpc('move_drawers_drawer_to_limbo', {
+            _drawer_id: drawerId,
           }),
         );
 
         if (error) throw error;
 
-        setInserts(prev => applyMoveToLimboState(prev, insertId));
+        setDrawers(prev => applyMoveToLimboState(prev, drawerId));
       });
     } catch (error: unknown) {
       showMutationError(error);
       throw error;
     } finally {
-      setPending([insertId], false);
+      setPending([drawerId], false);
     }
   }, [runStructuralMutation, setPending]);
 
-  const deleteInsertsInUnit = useCallback(async (unitId: string) => {
-    const affectedIds = insertsRef.current
+  const deleteDrawersInUnit = useCallback(async (unitId: string) => {
+    const affectedIds = drawersRef.current
       .filter(insert => insert.unit_id === unitId && insert.location_kind === 'cubby')
       .map(insert => insert.id);
 
     setPending(affectedIds, true);
     try {
-      await runStructuralMutation('drawers_insert_instances.delete_in_unit', async () => {
+      await runStructuralMutation('drawers_instances.delete_in_unit', async () => {
         const { error } = await retryOnLikelyNetworkError(async () =>
           await supabase
-            .from('drawers_insert_instances')
+            .from('drawers_instances')
             .delete()
             .eq('household_id', householdId)
             .eq('unit_id', unitId)
@@ -399,7 +399,7 @@ export function useDrawerInsertInstances(householdId: string) {
 
         if (error) throw error;
 
-        setInserts(prev => prev.filter(insert => !(insert.unit_id === unitId && insert.location_kind === 'cubby')));
+        setDrawers(prev => prev.filter(insert => !(insert.unit_id === unitId && insert.location_kind === 'cubby')));
       });
     } catch (error: unknown) {
       showMutationError(error);
@@ -409,19 +409,19 @@ export function useDrawerInsertInstances(householdId: string) {
     }
   }, [householdId, runStructuralMutation, setPending]);
 
-  const moveInsertsInUnitToLimbo = useCallback(async (unitId: string) => {
-    const affectedIds = insertsRef.current
+  const moveDrawersInUnitToLimbo = useCallback(async (unitId: string) => {
+    const affectedIds = drawersRef.current
       .filter(insert => insert.unit_id === unitId && insert.location_kind === 'cubby')
       .map(insert => insert.id);
 
     setPending(affectedIds, true);
     try {
-      await runStructuralMutation('drawers_insert_instances.move_unit_to_limbo', async () => {
+      await runStructuralMutation('drawers_instances.move_unit_to_limbo', async () => {
         const { error } = await retryOnLikelyNetworkError(async () =>
-          await supabase.rpc('move_drawers_unit_inserts_to_limbo', { _unit_id: unitId }),
+          await supabase.rpc('move_drawers_unit_drawers_to_limbo', { _unit_id: unitId }),
         );
         if (error) throw error;
-        setInserts(prev => applyMoveUnitInsertsToLimboState(prev, unitId));
+        setDrawers(prev => applyMoveUnitDrawersToLimboState(prev, unitId));
       });
     } catch (error: unknown) {
       showMutationError(error);
@@ -431,15 +431,15 @@ export function useDrawerInsertInstances(householdId: string) {
     }
   }, [runStructuralMutation, setPending]);
 
-  const limboInserts = useMemo(
-    () => inserts.filter(insert => insert.location_kind === 'limbo').sort((a, b) => (a.limbo_order ?? 0) - (b.limbo_order ?? 0)),
-    [inserts],
+  const limboDrawers = useMemo(
+    () => drawers.filter(insert => insert.location_kind === 'limbo').sort((a, b) => (a.limbo_order ?? 0) - (b.limbo_order ?? 0)),
+    [drawers],
   );
-  const creating = !!pendingById[CREATE_PENDING_KEY];
+  const creating = !!pendingById[CREATE_DRAWER_PENDING_KEY];
 
   return {
-    inserts,
-    limboInserts,
+    drawers,
+    limboDrawers,
     loading,
     pendingById,
     creating,
@@ -448,8 +448,8 @@ export function useDrawerInsertInstances(householdId: string) {
     remove,
     moveToCubby,
     moveToLimbo,
-    deleteInsertsInUnit,
-    moveInsertsInUnitToLimbo,
+    deleteDrawersInUnit,
+    moveDrawersInUnitToLimbo,
     refetch: fetch,
   };
 }
