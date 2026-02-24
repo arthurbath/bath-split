@@ -78,19 +78,19 @@ export default function AuthPage() {
         <CardContent>
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Log in</TabsTrigger>
-              <TabsTrigger value="signup">Sign up</TabsTrigger>
+              <TabsTrigger value="login">Log In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4 pt-2">
                 <Input placeholder="Email" type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
                 <Input placeholder="Password" type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
-                <Button type="submit" className="w-full" disabled={loading}>Log in</Button>
+                <Button type="submit" className="w-full" disabled={loading}>Log In</Button>
               </form>
               <div className="mt-3 text-center">
                 <Link to="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground underline">
-                  Forgot password
+                  Forgot Password
                 </Link>
               </div>
             </TabsContent>
@@ -120,7 +120,7 @@ export default function AuthPage() {
                     </button>
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={loading || !termsAccepted || !isPasswordValid(signupPassword)}>Sign up</Button>
+                <Button type="submit" className="w-full" disabled={loading || !termsAccepted || !isPasswordValid(signupPassword)}>Sign Up</Button>
               </form>
             </TabsContent>
           </Tabs>
