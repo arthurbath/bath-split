@@ -486,14 +486,14 @@ export type Database = {
         }
         Relationships: []
       }
-      drawers_insert_instances: {
+      drawers_instances: {
         Row: {
           created_at: string
           cubby_x: number | null
           cubby_y: number | null
           household_id: string
           id: string
-          insert_type: string
+          drawer_type: string
           label: string | null
           limbo_order: number | null
           location_kind: string
@@ -506,7 +506,7 @@ export type Database = {
           cubby_y?: number | null
           household_id: string
           id?: string
-          insert_type: string
+          drawer_type: string
           label?: string | null
           limbo_order?: number | null
           location_kind: string
@@ -519,7 +519,7 @@ export type Database = {
           cubby_y?: number | null
           household_id?: string
           id?: string
-          insert_type?: string
+          drawer_type?: string
           label?: string | null
           limbo_order?: number | null
           location_kind?: string
@@ -528,14 +528,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "drawers_insert_instances_household_id_fkey"
+            foreignKeyName: "drawers_instances_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "drawers_households"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "drawers_insert_instances_unit_id_fkey"
+            foreignKeyName: "drawers_instances_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "drawers_units"
@@ -659,20 +659,20 @@ export type Database = {
         Args: { _code: string }
         Returns: string
       }
-      move_drawers_insert: {
+      move_drawers_drawer: {
         Args: {
-          _insert_id: string
+          _drawer_id: string
           _target_unit_id: string
           _target_x: number
           _target_y: number
         }
         Returns: undefined
       }
-      move_drawers_insert_to_limbo: {
-        Args: { _insert_id: string }
+      move_drawers_drawer_to_limbo: {
+        Args: { _drawer_id: string }
         Returns: undefined
       }
-      move_drawers_unit_inserts_to_limbo: {
+      move_drawers_unit_drawers_to_limbo: {
         Args: { _unit_id: string }
         Returns: number
       }

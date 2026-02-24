@@ -12,8 +12,8 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from '@/hooks/use-toast';
 import { useDrawersUnits } from '@/modules/drawers/hooks/useDrawersUnits';
-import { useDrawerInsertInstances } from '@/modules/drawers/hooks/useDrawerInsertInstances';
-import type { DrawerInsertInstance, DrawerInsertType, DrawersHouseholdData, DrawersUnit, DrawersUnitFrameColor } from '@/modules/drawers/types/drawers';
+import { useDrawerInstances } from '@/modules/drawers/hooks/useDrawerInstances';
+import type { DrawerInstance, DrawerType, DrawersHouseholdData, DrawersUnit, DrawersUnitFrameColor } from '@/modules/drawers/types/drawers';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useModuleBasePath } from '@/platform/hooks/useHostModule';
 
@@ -24,32 +24,32 @@ interface DrawersPlannerProps {
 }
 
 type DeleteMode = 'move' | 'delete';
-type AddInsertTarget = { unitId: string; cubbyX: number; cubbyY: number } | null;
+type AddDrawerTarget = { unitId: string; cubbyX: number; cubbyY: number } | null;
 
-function limboInsertVisualClass(insertType: DrawerInsertType): string {
-  if (insertType === 'black') return 'bg-primary text-primary-foreground border-primary';
-  if (insertType === 'wicker') return 'bg-[hsl(var(--drawer-wicker))] text-[hsl(var(--drawer-wicker-foreground))] border-[hsl(var(--drawer-wicker))]';
+function limboDrawerVisualClass(drawerType: DrawerType): string {
+  if (drawerType === 'black') return 'bg-primary text-primary-foreground border-primary';
+  if (drawerType === 'wicker') return 'bg-[hsl(var(--drawer-wicker))] text-[hsl(var(--drawer-wicker-foreground))] border-[hsl(var(--drawer-wicker))]';
   return 'bg-white text-black border-border';
 }
 
-function unitCellVisualClass(_frameColor: DrawersUnitFrameColor | null | undefined, insertType: DrawerInsertType | null): string {
+function unitCellVisualClass(_frameColor: DrawersUnitFrameColor | null | undefined, drawerType: DrawerType | null): string {
   const grayFillClass = 'bg-[hsl(var(--grid-sticky-line))]';
   const grayBorderClass = 'border-[hsl(var(--muted-foreground))]';
 
   // Empty cubby slots are always solid gray with gray borders.
-  if (!insertType) {
+  if (!drawerType) {
     return `${grayFillClass} text-foreground ${grayBorderClass}`;
   }
 
-  if (insertType === 'blank') {
+  if (drawerType === 'blank') {
     return `bg-white text-black ${grayBorderClass}`;
   }
 
-  if (insertType === 'black') {
+  if (drawerType === 'black') {
     return `bg-primary text-primary-foreground ${grayBorderClass}`;
   }
 
-  // insertType === 'wicker' (displayed as Brown in UI)
+  // drawerType === 'wicker' (displayed as Brown in UI)
   return `bg-[hsl(var(--drawer-wicker))] text-[hsl(var(--drawer-wicker-foreground))] ${grayBorderClass}`;
 }
 
@@ -116,19 +116,19 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
     household.householdId,
   );
   const {
-    inserts,
-    limboInserts,
-    loading: insertsLoading,
-    add: addInsert,
-    update: updateInsert,
-    remove: removeInsert,
+    drawers,
+    limboDrawers,
+    loading: drawersLoading,
+    add: addDrawer,
+    update: updateDrawer,
+    remove: removeDrawer,
     moveToCubby,
     moveToLimbo,
-    deleteInsertsInUnit,
-    moveInsertsInUnitToLimbo,
-    pendingById: insertPendingById = {},
-    creating: creatingInsert = false,
-  } = useDrawerInsertInstances(household.householdId);
+    deleteDrawersInUnit,
+    moveDrawersInUnitToLimbo,
+    pendingById: drawerPendingById = {},
+    creating: creatingDrawer = false,
+  } = useDrawerInstances(household.householdId);
 
   const [unitDialogOpen, setUnitDialogOpen] = useState(false);
   const [unitDialogBusy, setUnitDialogBusy] = useState(false);
@@ -138,47 +138,47 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
   const [unitHeightDraft, setUnitHeightDraft] = useState('2');
   const [unitFrameColorDraft, setUnitFrameColorDraft] = useState<DrawersUnitFrameColor>('white');
 
-  const [addInsertDialogOpen, setAddInsertDialogOpen] = useState(false);
-  const [addInsertBusy, setAddInsertBusy] = useState(false);
-  const [addInsertTarget, setAddInsertTarget] = useState<AddInsertTarget>(null);
+  const [addDrawerDialogOpen, setAddDrawerDialogOpen] = useState(false);
+  const [addDrawerBusy, setAddDrawerBusy] = useState(false);
+  const [addDrawerTarget, setAddDrawerTarget] = useState<AddDrawerTarget>(null);
   const [inviteCodeCopied, setInviteCodeCopied] = useState(false);
-  const [newInsertType, setNewInsertType] = useState<DrawerInsertType>('black');
-  const [newInsertLabel, setNewInsertLabel] = useState('');
+  const [newDrawerType, setNewDrawerType] = useState<DrawerType>('black');
+  const [newDrawerLabel, setNewDrawerLabel] = useState('');
 
-  const [heldInsertId, setHeldInsertId] = useState<string | null>(null);
-  const [editInsertDialogOpen, setEditInsertDialogOpen] = useState(false);
-  const [editInsertBusy, setEditInsertBusy] = useState(false);
-  const [editInsertId, setEditInsertId] = useState<string | null>(null);
-  const [editInsertType, setEditInsertType] = useState<DrawerInsertType>('black');
-  const [editInsertLabel, setEditInsertLabel] = useState('');
+  const [heldDrawerId, setHeldDrawerId] = useState<string | null>(null);
+  const [editDrawerDialogOpen, setEditDrawerDialogOpen] = useState(false);
+  const [editDrawerBusy, setEditDrawerBusy] = useState(false);
+  const [editDrawerId, setEditDrawerId] = useState<string | null>(null);
+  const [editDrawerType, setEditDrawerType] = useState<DrawerType>('black');
+  const [editDrawerLabel, setEditDrawerLabel] = useState('');
 
   const [unitPendingDelete, setUnitPendingDelete] = useState<DrawersUnit | null>(null);
   const [deleteMode, setDeleteMode] = useState<DeleteMode>('move');
   const [deleteBusy, setDeleteBusy] = useState(false);
 
-  const insertsById = useMemo(() => {
-    const map = new Map<string, DrawerInsertInstance>();
-    inserts.forEach(insert => map.set(insert.id, insert));
+  const drawersById = useMemo(() => {
+    const map = new Map<string, DrawerInstance>();
+    drawers.forEach(drawer => map.set(drawer.id, drawer));
     return map;
-  }, [inserts]);
+  }, [drawers]);
 
   const cubbyMap = useMemo(() => {
-    const map = new Map<string, DrawerInsertInstance>();
-    inserts.forEach(insert => {
-      if (insert.location_kind === 'cubby' && insert.unit_id && insert.cubby_x && insert.cubby_y) {
-        map.set(cubbyKey(insert.unit_id, insert.cubby_x, insert.cubby_y), insert);
+    const map = new Map<string, DrawerInstance>();
+    drawers.forEach(drawer => {
+      if (drawer.location_kind === 'cubby' && drawer.unit_id && drawer.cubby_x && drawer.cubby_y) {
+        map.set(cubbyKey(drawer.unit_id, drawer.cubby_x, drawer.cubby_y), drawer);
       }
     });
     return map;
-  }, [inserts]);
+  }, [drawers]);
 
-  const heldInsert = heldInsertId ? insertsById.get(heldInsertId) ?? null : null;
-  const heldInsertPending = heldInsert ? !!insertPendingById[heldInsert.id] : false;
-  const addTargetUnit = addInsertTarget ? units.find(unit => unit.id === addInsertTarget.unitId) ?? null : null;
-  const pendingUnitInsertCount = unitPendingDelete
-    ? inserts.filter(insert => insert.location_kind === 'cubby' && insert.unit_id === unitPendingDelete.id).length
+  const heldDrawer = heldDrawerId ? drawersById.get(heldDrawerId) ?? null : null;
+  const heldDrawerPending = heldDrawer ? !!drawerPendingById[heldDrawer.id] : false;
+  const addTargetUnit = addDrawerTarget ? units.find(unit => unit.id === addDrawerTarget.unitId) ?? null : null;
+  const pendingUnitDrawerCount = unitPendingDelete
+    ? drawers.filter(drawer => drawer.location_kind === 'cubby' && drawer.unit_id === unitPendingDelete.id).length
     : 0;
-  const pendingUnitHasInserts = pendingUnitInsertCount > 0;
+  const pendingUnitHasDrawers = pendingUnitDrawerCount > 0;
 
   const normalizeDimension = (value: number) => {
     if (Number.isNaN(value)) return 1;
@@ -254,62 +254,62 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
     }
   };
 
-  const resetAddInsertDialog = () => {
-    setAddInsertBusy(false);
-    setAddInsertDialogOpen(false);
-    setAddInsertTarget(null);
-    setNewInsertType('black');
-    setNewInsertLabel('');
+  const resetAddDrawerDialog = () => {
+    setAddDrawerBusy(false);
+    setAddDrawerDialogOpen(false);
+    setAddDrawerTarget(null);
+    setNewDrawerType('black');
+    setNewDrawerLabel('');
   };
 
-  const resetEditInsertDialog = () => {
-    setEditInsertBusy(false);
-    setEditInsertDialogOpen(false);
-    setEditInsertId(null);
-    setEditInsertType('black');
-    setEditInsertLabel('');
+  const resetEditDrawerDialog = () => {
+    setEditDrawerBusy(false);
+    setEditDrawerDialogOpen(false);
+    setEditDrawerId(null);
+    setEditDrawerType('black');
+    setEditDrawerLabel('');
   };
 
-  const openEditInsertDialog = (insert: DrawerInsertInstance) => {
-    setEditInsertId(insert.id);
-    setEditInsertType(insert.insert_type);
-    setEditInsertLabel(insert.label ?? '');
-    setEditInsertDialogOpen(true);
+  const openEditDrawerDialog = (drawer: DrawerInstance) => {
+    setEditDrawerId(drawer.id);
+    setEditDrawerType(drawer.drawer_type);
+    setEditDrawerLabel(drawer.label ?? '');
+    setEditDrawerDialogOpen(true);
   };
 
-  const handleSaveEditInsert = async (event: React.FormEvent) => {
+  const handleSaveEditDrawer = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!editInsertId || editInsertBusy) return;
+    if (!editDrawerId || editDrawerBusy) return;
 
-    setEditInsertBusy(true);
+    setEditDrawerBusy(true);
     try {
-      await updateInsert(editInsertId, {
-        insert_type: editInsertType,
-        label: editInsertLabel,
+      await updateDrawer(editDrawerId, {
+        drawer_type: editDrawerType,
+        label: editDrawerLabel,
       });
-      resetEditInsertDialog();
+      resetEditDrawerDialog();
     } catch (error: unknown) {
-      setEditInsertBusy(false);
+      setEditDrawerBusy(false);
       toast({
-        title: 'Failed to Update Insert',
+        title: 'Failed to Update Drawer',
         description: getErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
     }
   };
 
-  const openAddInsertDialog = (target: AddInsertTarget) => {
-    setAddInsertTarget(target);
-    setAddInsertDialogOpen(true);
+  const openAddDrawerDialog = (target: AddDrawerTarget) => {
+    setAddDrawerTarget(target);
+    setAddDrawerDialogOpen(true);
   };
 
-  const handleAddInsert = async (event: React.FormEvent) => {
+  const handleAddDrawer = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (addInsertBusy) return;
+    if (addDrawerBusy) return;
 
-    if (addInsertTarget) {
-      const occupied = cubbyMap.get(cubbyKey(addInsertTarget.unitId, addInsertTarget.cubbyX, addInsertTarget.cubbyY));
+    if (addDrawerTarget) {
+      const occupied = cubbyMap.get(cubbyKey(addDrawerTarget.unitId, addDrawerTarget.cubbyX, addDrawerTarget.cubbyY));
       if (occupied) {
         toast({
           title: 'Cubby is no longer empty',
@@ -320,15 +320,15 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
       }
     }
 
-    setAddInsertBusy(true);
+    setAddDrawerBusy(true);
     try {
-      await addInsert(newInsertType, newInsertLabel || null, addInsertTarget ?? undefined);
-      setHeldInsertId(null);
-      resetAddInsertDialog();
+      await addDrawer(newDrawerType, newDrawerLabel || null, addDrawerTarget ?? undefined);
+      setHeldDrawerId(null);
+      resetAddDrawerDialog();
     } catch (error: unknown) {
-      setAddInsertBusy(false);
+      setAddDrawerBusy(false);
       toast({
-        title: 'Failed to add insert',
+        title: 'Failed to add drawer',
         description: getErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
@@ -336,73 +336,73 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
   };
 
   const handleCellClick = async (unitId: string, x: number, y: number) => {
-    if (heldInsertPending || unitPendingById[unitId]) return;
+    if (heldDrawerPending || unitPendingById[unitId]) return;
     const occupant = cubbyMap.get(cubbyKey(unitId, x, y)) ?? null;
-    if (occupant && insertPendingById[occupant.id]) return;
+    if (occupant && drawerPendingById[occupant.id]) return;
 
-    if (!heldInsert) {
+    if (!heldDrawer) {
       if (!occupant) {
-        openAddInsertDialog({ unitId, cubbyX: x, cubbyY: y });
+        openAddDrawerDialog({ unitId, cubbyX: x, cubbyY: y });
         return;
       }
       return;
     }
 
-    if (heldInsert.location_kind === 'cubby' && heldInsert.unit_id === unitId && heldInsert.cubby_x === x && heldInsert.cubby_y === y) {
-      setHeldInsertId(null);
+    if (heldDrawer.location_kind === 'cubby' && heldDrawer.unit_id === unitId && heldDrawer.cubby_x === x && heldDrawer.cubby_y === y) {
+      setHeldDrawerId(null);
       return;
     }
 
     try {
-      await moveToCubby(heldInsert.id, unitId, x, y, occupant?.id);
-      setHeldInsertId(null);
+      await moveToCubby(heldDrawer.id, unitId, x, y, occupant?.id);
+      setHeldDrawerId(null);
     } catch (error: unknown) {
       toast({
         title: 'Move failed',
-        description: getErrorMessage(error, 'Unable to place insert.'),
+        description: getErrorMessage(error, 'Unable to place drawer.'),
         variant: 'destructive',
       });
     }
   };
 
   const handleDropHeldToLimbo = async () => {
-    if (!heldInsert || heldInsertPending) return;
+    if (!heldDrawer || heldDrawerPending) return;
     try {
-      if (heldInsert.location_kind === 'cubby') {
-        await moveToLimbo(heldInsert.id);
+      if (heldDrawer.location_kind === 'cubby') {
+        await moveToLimbo(heldDrawer.id);
       }
-      setHeldInsertId(null);
+      setHeldDrawerId(null);
     } catch (error: unknown) {
       toast({
         title: 'Move failed',
-        description: getErrorMessage(error, 'Unable to move insert to limbo.'),
+        description: getErrorMessage(error, 'Unable to move drawer to limbo.'),
         variant: 'destructive',
       });
     }
   };
 
-  const handleSendInsertToLimbo = async (insertId: string) => {
-    if (insertPendingById[insertId]) return;
+  const handleSendDrawerToLimbo = async (drawerId: string) => {
+    if (drawerPendingById[drawerId]) return;
     try {
-      await moveToLimbo(insertId);
-      if (heldInsertId === insertId) setHeldInsertId(null);
+      await moveToLimbo(drawerId);
+      if (heldDrawerId === drawerId) setHeldDrawerId(null);
     } catch (error: unknown) {
       toast({
         title: 'Move Failed',
-        description: getErrorMessage(error, 'Unable to move insert to limbo.'),
+        description: getErrorMessage(error, 'Unable to move drawer to limbo.'),
         variant: 'destructive',
       });
     }
   };
 
-  const handleDeleteInsert = async (insertId: string) => {
-    if (insertPendingById[insertId]) return;
+  const handleDeleteDrawer = async (drawerId: string) => {
+    if (drawerPendingById[drawerId]) return;
     try {
-      await removeInsert(insertId);
-      if (heldInsertId === insertId) setHeldInsertId(null);
+      await removeDrawer(drawerId);
+      if (heldDrawerId === drawerId) setHeldDrawerId(null);
     } catch (error: unknown) {
       toast({
-        title: 'Failed to Delete Insert',
+        title: 'Failed to Delete Drawer',
         description: getErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
@@ -413,17 +413,17 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
     if (!unitPendingDelete) return;
 
     const targetUnit = unitPendingDelete;
-    const hasInserts = pendingUnitHasInserts;
+    const hasDrawers = pendingUnitHasDrawers;
     const selectedDeleteMode = deleteMode;
 
     setUnitPendingDelete(null);
     setDeleteBusy(true);
     try {
-      if (hasInserts) {
+      if (hasDrawers) {
         if (selectedDeleteMode === 'move') {
-          await moveInsertsInUnitToLimbo(targetUnit.id);
+          await moveDrawersInUnitToLimbo(targetUnit.id);
         } else {
-          await deleteInsertsInUnit(targetUnit.id);
+          await deleteDrawersInUnit(targetUnit.id);
         }
       }
 
@@ -448,7 +448,7 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
     window.setTimeout(() => setInviteCodeCopied(false), 2000);
   };
 
-  if (unitsLoading || insertsLoading) {
+  if (unitsLoading || drawersLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner />
@@ -565,13 +565,13 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
                             return Array.from({ length: unit.width }).map((__, colIdx) => {
                               const x = colIdx + 1;
                               const occupant = cubbyMap.get(cubbyKey(unit.id, x, y)) ?? null;
-                              const isHeldOccupant = heldInsertId === occupant?.id;
+                              const isHeldOccupant = heldDrawerId === occupant?.id;
                               const isUnitPending = !!unitPendingById[unit.id];
-                              const isOccupantPending = occupant ? !!insertPendingById[occupant.id] : false;
-                              const isCellBusy = isUnitPending || isOccupantPending || heldInsertPending;
-                              const cellClassName = `aspect-square overflow-hidden rounded-sm border text-[11px] text-center transition ${unitCellVisualClass(unit.frame_color, occupant?.insert_type ?? null)} ${isHeldOccupant ? 'border-[3px] border-warning' : ''}`;
+                              const isOccupantPending = occupant ? !!drawerPendingById[occupant.id] : false;
+                              const isCellBusy = isUnitPending || isOccupantPending || heldDrawerPending;
+                              const cellClassName = `aspect-square overflow-hidden rounded-sm border text-[11px] text-center transition ${unitCellVisualClass(unit.frame_color, occupant?.drawer_type ?? null)} ${isHeldOccupant ? 'border-[3px] border-warning' : ''}`;
 
-                              if (occupant && !heldInsert) {
+                              if (occupant && !heldDrawer) {
                                 return (
                                   <DropdownMenu key={`${unit.id}:${x}:${y}`}>
                                     <DropdownMenuTrigger asChild>
@@ -586,18 +586,18 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
                                       </button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="start" className="bg-popover">
-                                      <DropdownMenuItem disabled={isCellBusy} onClick={() => openEditInsertDialog(occupant)}>
+                                      <DropdownMenuItem disabled={isCellBusy} onClick={() => openEditDrawerDialog(occupant)}>
                                         Edit
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem disabled={isCellBusy} onClick={() => setHeldInsertId(occupant.id)}>
+                                      <DropdownMenuItem disabled={isCellBusy} onClick={() => setHeldDrawerId(occupant.id)}>
                                         Move
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem disabled={isCellBusy} onClick={() => void handleSendInsertToLimbo(occupant.id)}>
+                                      <DropdownMenuItem disabled={isCellBusy} onClick={() => void handleSendDrawerToLimbo(occupant.id)}>
                                         Send to Limbo
                                       </DropdownMenuItem>
                                       <DropdownMenuItem
                                         disabled={isCellBusy}
-                                        onClick={() => void handleDeleteInsert(occupant.id)}
+                                        onClick={() => void handleDeleteDrawer(occupant.id)}
                                         className="text-destructive focus:text-destructive"
                                       >
                                         Delete
@@ -645,38 +645,38 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
               <div className="flex items-center justify-between gap-2">
                 <CardTitle>Limbo</CardTitle>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => openAddInsertDialog(null)} disabled={creatingInsert || heldInsertPending}>
-                    + Add Insert
+                  <Button variant="outline" size="sm" onClick={() => openAddDrawerDialog(null)} disabled={creatingDrawer || heldDrawerPending}>
+                    + Add Drawer
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {limboInserts.map(insert => {
-                  const held = heldInsertId === insert.id;
-                  const isInsertPending = !!insertPendingById[insert.id];
-                  const limboTileClass = `min-h-16 w-28 flex-none rounded-md border text-left text-xs transition ${limboInsertVisualClass(insert.insert_type)} ${held ? 'border-[3px] border-warning' : ''}`;
+                {limboDrawers.map(drawer => {
+                  const held = heldDrawerId === drawer.id;
+                  const isDrawerPending = !!drawerPendingById[drawer.id];
+                  const limboTileClass = `min-h-16 w-28 flex-none rounded-md border text-left text-xs transition ${limboDrawerVisualClass(drawer.drawer_type)} ${held ? 'border-[3px] border-warning' : ''}`;
 
                   return (
-                    <DropdownMenu key={insert.id}>
+                    <DropdownMenu key={drawer.id}>
                       <DropdownMenuTrigger asChild>
-                        <button type="button" className={limboTileClass} disabled={isInsertPending || heldInsertPending}>
+                        <button type="button" className={limboTileClass} disabled={isDrawerPending || heldDrawerPending}>
                           <p className="overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] break-normal font-medium leading-tight">
-                            {insert.label?.trim() || ''}
+                            {drawer.label?.trim() || ''}
                           </p>
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="bg-popover">
-                        <DropdownMenuItem disabled={isInsertPending || heldInsertPending} onClick={() => openEditInsertDialog(insert)}>
+                        <DropdownMenuItem disabled={isDrawerPending || heldDrawerPending} onClick={() => openEditDrawerDialog(drawer)}>
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem disabled={isInsertPending || heldInsertPending} onClick={() => setHeldInsertId(insert.id)}>
+                        <DropdownMenuItem disabled={isDrawerPending || heldDrawerPending} onClick={() => setHeldDrawerId(drawer.id)}>
                           Move
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          disabled={isInsertPending || heldInsertPending}
-                          onClick={() => void handleDeleteInsert(insert.id)}
+                          disabled={isDrawerPending || heldDrawerPending}
+                          onClick={() => void handleDeleteDrawer(drawer.id)}
                           className="text-destructive focus:text-destructive"
                         >
                           Delete
@@ -686,8 +686,8 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
                   );
                 })}
 
-                {limboInserts.length === 0 && (
-                  <p className="text-xs text-muted-foreground">No inserts in limbo.</p>
+                {limboDrawers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No drawers in limbo.</p>
                 )}
               </div>
             </CardContent>
@@ -733,9 +733,9 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Unit</AlertDialogTitle>
-            {pendingUnitHasInserts ? (
+            {pendingUnitHasDrawers ? (
               <AlertDialogDescription>
-                Choose what to do with inserts currently in {unitPendingDelete?.name || 'this unit'}.
+                Choose what to do with drawers currently in {unitPendingDelete?.name || 'this unit'}.
               </AlertDialogDescription>
             ) : (
               <AlertDialogDescription>
@@ -743,7 +743,7 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
               </AlertDialogDescription>
             )}
           </AlertDialogHeader>
-          {pendingUnitHasInserts && (
+          {pendingUnitHasDrawers && (
             <AlertDialogBody className="space-y-2">
               <Button
                 type="button"
@@ -751,7 +751,7 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
                 className="w-full"
                 onClick={() => setDeleteMode('move')}
               >
-                Move Inserts to Limbo
+                Move Drawers to Limbo
               </Button>
               <Button
                 type="button"
@@ -759,7 +759,7 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
                 className="w-full"
                 onClick={() => setDeleteMode('delete')}
               >
-                Delete Inserts
+                Delete Drawers
               </Button>
             </AlertDialogBody>
           )}
@@ -768,7 +768,7 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
             <AlertDialogAction
               onClick={handleDeleteUnit}
               disabled={deleteBusy}
-              className={deleteMode === 'delete' || !pendingUnitHasInserts ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+              className={deleteMode === 'delete' || !pendingUnitHasDrawers ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
             >
               {deleteBusy ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
@@ -852,37 +852,37 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
       </Dialog>
 
       <Dialog
-        open={addInsertDialogOpen}
+        open={addDrawerDialogOpen}
         onOpenChange={open => {
-          if (!open) resetAddInsertDialog();
+          if (!open) resetAddDrawerDialog();
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{addInsertTarget ? 'Add Insert to Cubby' : 'Add Insert to Limbo'}</DialogTitle>
-            {addInsertTarget && (
+            <DialogTitle>{addDrawerTarget ? 'Add Drawer to Cubby' : 'Add Drawer to Limbo'}</DialogTitle>
+            {addDrawerTarget && (
               <DialogDescription>
-                {`Create a new insert for ${addTargetUnit?.name || 'selected unit'} cubby (${addInsertTarget.cubbyX}, ${addInsertTarget.cubbyY}).`}
+                {`Create a new drawer for ${addTargetUnit?.name || 'selected unit'} cubby (${addDrawerTarget.cubbyX}, ${addDrawerTarget.cubbyY}).`}
               </DialogDescription>
             )}
           </DialogHeader>
           <DialogBody>
-            <form id="add-insert-form" onSubmit={handleAddInsert} className="space-y-4">
+            <form id="add-drawer-form" onSubmit={handleAddDrawer} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="modalInsertLabel">Label</Label>
+                <Label htmlFor="modalDrawerLabel">Label</Label>
                 <Input
-                  id="modalInsertLabel"
-                  value={newInsertLabel}
-                  onChange={event => setNewInsertLabel(event.target.value)}
+                  id="modalDrawerLabel"
+                  value={newDrawerLabel}
+                  onChange={event => setNewDrawerLabel(event.target.value)}
                   placeholder="Books"
                   className="h-10 text-sm"
                   autoFocus
                 />
               </div>
               <div className="space-y-1.5">
-                  <Label htmlFor="modalInsertType">Insert Type</Label>
-                <Select value={newInsertType} onValueChange={value => setNewInsertType(value as DrawerInsertType)}>
-                  <SelectTrigger id="modalInsertType" className="h-10 text-sm">
+                  <Label htmlFor="modalDrawerType">Drawer Type</Label>
+                <Select value={newDrawerType} onValueChange={value => setNewDrawerType(value as DrawerType)}>
+                  <SelectTrigger id="modalDrawerType" className="h-10 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -895,43 +895,43 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
             </form>
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" type="button" onClick={resetAddInsertDialog} disabled={addInsertBusy}>
+            <Button variant="outline" type="button" onClick={resetAddDrawerDialog} disabled={addDrawerBusy}>
               Cancel
             </Button>
-            <Button type="submit" form="add-insert-form" disabled={addInsertBusy || creatingInsert}>
-              {addInsertBusy ? 'Saving...' : 'Save Insert'}
+            <Button type="submit" form="add-drawer-form" disabled={addDrawerBusy || creatingDrawer}>
+              {addDrawerBusy ? 'Saving...' : 'Save Drawer'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog
-        open={editInsertDialogOpen}
+        open={editDrawerDialogOpen}
         onOpenChange={open => {
-          if (!open) resetEditInsertDialog();
+          if (!open) resetEditDrawerDialog();
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Insert</DialogTitle>
+            <DialogTitle>Edit Drawer</DialogTitle>
           </DialogHeader>
           <DialogBody>
-            <form id="edit-insert-form" onSubmit={handleSaveEditInsert} className="space-y-4">
+            <form id="edit-drawer-form" onSubmit={handleSaveEditDrawer} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="editInsertLabel">Label</Label>
+                <Label htmlFor="editDrawerLabel">Label</Label>
                 <Input
-                  id="editInsertLabel"
-                  value={editInsertLabel}
-                  onChange={event => setEditInsertLabel(event.target.value)}
+                  id="editDrawerLabel"
+                  value={editDrawerLabel}
+                  onChange={event => setEditDrawerLabel(event.target.value)}
                   placeholder="Books"
                   className="h-10 text-sm"
                   autoFocus
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="editInsertType">Insert Type</Label>
-                <Select value={editInsertType} onValueChange={value => setEditInsertType(value as DrawerInsertType)}>
-                  <SelectTrigger id="editInsertType" className="h-10 text-sm">
+                <Label htmlFor="editDrawerType">Drawer Type</Label>
+                <Select value={editDrawerType} onValueChange={value => setEditDrawerType(value as DrawerType)}>
+                  <SelectTrigger id="editDrawerType" className="h-10 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -944,11 +944,11 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
             </form>
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" type="button" onClick={resetEditInsertDialog} disabled={editInsertBusy}>
+            <Button variant="outline" type="button" onClick={resetEditDrawerDialog} disabled={editDrawerBusy}>
               Cancel
             </Button>
-            <Button type="submit" form="edit-insert-form" disabled={editInsertBusy || !editInsertId}>
-              {editInsertBusy ? 'Saving...' : 'Save Insert'}
+            <Button type="submit" form="edit-drawer-form" disabled={editDrawerBusy || !editDrawerId}>
+              {editDrawerBusy ? 'Saving...' : 'Save Drawer'}
             </Button>
           </DialogFooter>
         </DialogContent>

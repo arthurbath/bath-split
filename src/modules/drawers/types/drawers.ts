@@ -1,4 +1,4 @@
-export type DrawerInsertType = 'black' | 'wicker' | 'blank';
+export type DrawerType = 'black' | 'wicker' | 'blank';
 export type DrawersUnitFrameColor = 'black' | 'brown' | 'white';
 
 export interface DrawersHouseholdMembership {
@@ -24,10 +24,10 @@ export interface DrawersUnit {
   updated_at?: string;
 }
 
-export interface DrawerInsertInstance {
+export interface DrawerInstance {
   id: string;
   household_id: string;
-  insert_type: DrawerInsertType;
+  drawer_type: DrawerType;
   label: string | null;
   location_kind: 'limbo' | 'cubby';
   unit_id: string | null;
