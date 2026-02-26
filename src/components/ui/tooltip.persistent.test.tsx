@@ -25,6 +25,10 @@ function tooltipText() {
   return document.body.querySelector('[role="tooltip"]')?.textContent ?? '';
 }
 
+function tooltipContentElement() {
+  return document.body.querySelector('[data-side][data-align]') as HTMLElement | null;
+}
+
 async function flushUi() {
   await act(async () => {
     await Promise.resolve();
@@ -89,6 +93,29 @@ describe('PersistentTooltipText', () => {
       });
       await flushUi();
       expect(tooltipText()).toBe('');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('applies viewport-aware width clamping to tooltip content', async () => {
+    const { container, root } = mount(
+      <TooltipProvider>
+        <PersistentTooltipText content="A somewhat longer help message">Monthly Settlement</PersistentTooltipText>
+      </TooltipProvider>,
+    );
+    const trigger = container.querySelector('span[role="button"]');
+    expect(trigger).toBeTruthy();
+
+    try {
+      act(() => {
+        trigger?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      });
+      await flushUi();
+      const tooltipContent = tooltipContentElement();
+      expect(tooltipContent).toBeTruthy();
+      expect(tooltipContent?.style.maxWidth).toContain('100vw');
+      expect(tooltipContent?.style.maxWidth).toContain('1rem');
     } finally {
       unmount(root, container);
     }
