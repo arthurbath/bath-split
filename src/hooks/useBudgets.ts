@@ -75,7 +75,17 @@ export function useBudgets(householdId: string) {
   const update = useCallback(async (id: string, name: string) => {
     if (pendingById[id]) return;
 
+    let previousBudget: Budget | null = null;
     setPending(id, true);
+    queryClient.setQueryData<Budget[]>(queryKey, (current) => {
+      const next = (current ?? []).map((budget) => {
+        if (budget.id !== id) return budget;
+        previousBudget = budget;
+        return { ...budget, name };
+      });
+      return sortByName(next);
+    });
+
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'budgets.update' }, async () => {
         const row = await supabaseRequest(async () =>
@@ -93,6 +103,11 @@ export function useBudgets(householdId: string) {
         sortByName((current ?? []).map((budget) => (budget.id === id ? saved : budget))),
       );
     } catch (error: unknown) {
+      if (previousBudget) {
+        queryClient.setQueryData<Budget[]>(queryKey, (current) =>
+          sortByName((current ?? []).map((budget) => (budget.id === id ? previousBudget : budget))),
+        );
+      }
       showMutationError(error);
       throw error;
     } finally {
@@ -103,7 +118,17 @@ export function useBudgets(householdId: string) {
   const updateColor = useCallback(async (id: string, color: string | null) => {
     if (pendingById[id]) return;
 
+    let previousBudget: Budget | null = null;
     setPending(id, true);
+    queryClient.setQueryData<Budget[]>(queryKey, (current) => {
+      const next = (current ?? []).map((budget) => {
+        if (budget.id !== id) return budget;
+        previousBudget = budget;
+        return { ...budget, color };
+      });
+      return sortByName(next);
+    });
+
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'budgets.updateColor' }, async () => {
         const row = await supabaseRequest(async () =>
@@ -121,6 +146,11 @@ export function useBudgets(householdId: string) {
         sortByName((current ?? []).map((budget) => (budget.id === id ? saved : budget))),
       );
     } catch (error: unknown) {
+      if (previousBudget) {
+        queryClient.setQueryData<Budget[]>(queryKey, (current) =>
+          sortByName((current ?? []).map((budget) => (budget.id === id ? previousBudget : budget))),
+        );
+      }
       showMutationError(error);
       throw error;
     } finally {

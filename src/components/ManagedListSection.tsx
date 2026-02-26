@@ -122,8 +122,8 @@ function ColorPicker({
         <button
           ref={triggerRef}
           type="button"
-          className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[hsl(var(--grid-sticky-line))] bg-transparent p-0 focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ backgroundColor: normalizedColor || 'transparent' }}
+          className={`relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[hsl(var(--grid-sticky-line))] bg-transparent p-0 transition-[filter,border-color,background-color,box-shadow] ${normalizedColor ? 'hover:brightness-125 hover:border-foreground/40 hover:shadow-[inset_0_0_0_1px_hsl(var(--foreground)/0.16)]' : 'hover:bg-muted hover:border-foreground/40 hover:shadow-[inset_0_0_0_1px_hsl(var(--foreground)/0.12)]'} focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50`}
+          style={normalizedColor ? { backgroundColor: normalizedColor } : undefined}
           title="Pick color"
           disabled={disabled}
           data-grid-focus-only="true"
@@ -552,7 +552,7 @@ export function ManagedListSection({
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-2">
-            <Label>Reassign to</Label>
+            <Label>Reassign To</Label>
             <Select value={reassignTo} onValueChange={setReassignTo}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -565,7 +565,7 @@ export function ManagedListSection({
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void handleConfirmDelete()}>Delete & Reassign</Button>
+            <Button data-dialog-confirm="true" variant="destructive" onClick={() => void handleConfirmDelete()}>Delete & Reassign</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

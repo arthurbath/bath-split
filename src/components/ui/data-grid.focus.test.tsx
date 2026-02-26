@@ -189,7 +189,7 @@ function AsyncSelectCell({
   );
 }
 
-function AsyncSelectCommitHarness() {
+function AsyncSelectCommitHarness({ saveDelayMs = 80 }: { saveDelayMs?: number }) {
   const [rows, setRows] = React.useState<AsyncSelectRowData[]>([
     { id: "row-a", label: "Alpha", category: "A" },
     { id: "row-b", label: "Bravo", category: "B" },
@@ -215,9 +215,9 @@ function AsyncSelectCommitHarness() {
         delete nextPending[id];
         return nextPending;
       });
-    }, 80);
+    }, saveDelayMs);
     timersRef.current.push(timer);
-  }, []);
+  }, [saveDelayMs]);
 
   const asyncColumnHelper = createColumnHelper<AsyncSelectRowData>();
   const columns = React.useMemo(
@@ -668,6 +668,31 @@ describe("DataGrid focus restore after async commit", () => {
       unmount(root, container);
     }
   });
+
+  it("restores focus even when async save keeps the control disabled for multiple seconds", async () => {
+    const { container, root } = mount(<AsyncSelectCommitHarness saveDelayMs={3500} />);
+    try {
+      const select = container.querySelector<HTMLSelectElement>('select[data-row-id="row-a"][data-col="0"]');
+      expect(select).not.toBeNull();
+      await act(async () => {
+        select!.focus();
+      });
+
+      await act(async () => {
+        select!.value = "C";
+        select!.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      await waitForCondition(() => {
+        const active = document.activeElement as HTMLElement | null;
+        expect(active?.tagName).toBe("SELECT");
+        expect(active?.getAttribute("data-row-id")).toBe("row-a");
+        expect(active?.getAttribute("data-col")).toBe("0");
+      }, 7000);
+    } finally {
+      unmount(root, container);
+    }
+  }, 10000);
 });
 
 describe("DataGrid menu trigger keyboard navigation", () => {

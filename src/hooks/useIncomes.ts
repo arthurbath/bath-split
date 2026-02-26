@@ -87,7 +87,17 @@ export function useIncomes(householdId: string) {
   const update = useCallback(async (id: string, updates: Partial<Omit<Income, 'id' | 'household_id'>>) => {
     if (pendingById[id]) return;
 
+    let previousIncome: Income | null = null;
     setPending(id, true);
+    queryClient.setQueryData<Income[]>(queryKey, (current) => {
+      const next = (current ?? []).map((income) => {
+        if (income.id !== id) return income;
+        previousIncome = income;
+        return { ...income, ...updates };
+      });
+      return sortByCreatedAt(next);
+    });
+
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'incomes.update' }, async () => {
         const row = await supabaseRequest(async () =>
@@ -105,6 +115,11 @@ export function useIncomes(householdId: string) {
         sortByCreatedAt((current ?? []).map((income) => (income.id === id ? saved : income))),
       );
     } catch (error: unknown) {
+      if (previousIncome) {
+        queryClient.setQueryData<Income[]>(queryKey, (current) =>
+          sortByCreatedAt((current ?? []).map((income) => (income.id === id ? previousIncome : income))),
+        );
+      }
       showMutationError(error);
       throw error;
     } finally {

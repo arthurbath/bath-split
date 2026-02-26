@@ -29,7 +29,7 @@ const Checkbox = React.forwardRef<
     <CheckboxPrimitive.Root
       ref={setRef}
       className={cn(
-        "peer inline-flex h-4 w-4 shrink-0 items-center justify-center align-middle rounded-sm border border-primary ring-offset-background data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        "peer inline-flex h-4 w-4 shrink-0 items-center justify-center align-middle rounded-sm border border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       onMouseDown={(event) => {

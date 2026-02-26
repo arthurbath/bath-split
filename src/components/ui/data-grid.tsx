@@ -43,6 +43,7 @@ const GRID_HEADER_CELL_BORDERS_CLASS = '[&>tr>th]:shadow-[inset_0_-1px_0_0_hsl(v
 const GRID_FOOTER_CELL_BORDERS_CLASS = '[&>tr>td]:shadow-[inset_0_1px_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]';
 const GRID_STICKY_FIRST_COLUMN_DIVIDER_CLASS = 'shadow-[inset_-1px_0_0_0_hsl(var(--grid-sticky-line))]';
 const GRID_FOOTER_FIRST_COLUMN_STICKY_CLASS = '[&>tr>td:first-child]:sticky [&>tr>td:first-child]:left-0 [&>tr>td:first-child]:z-30 [&>tr>td:first-child]:shadow-[inset_-1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_1px_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]';
+const PENDING_COMMIT_FOCUS_MAX_ATTEMPTS = 1000;
 
 function scheduleInNextFrame(callback: () => void) {
   if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
@@ -500,7 +501,7 @@ export function DataGrid<TData>({
         pendingCommitFocusRef.current = null;
         return;
       }
-      if (attempts >= 120) {
+      if (attempts >= PENDING_COMMIT_FOCUS_MAX_ATTEMPTS) {
         pendingCommitFocusRef.current = null;
         return;
       }
