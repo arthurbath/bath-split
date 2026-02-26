@@ -30,6 +30,7 @@ interface SummaryTabProps {
 }
 
 function $(v: number) { return `$${Math.round(v)}`; }
+function formatPercent(value: number) { return `${Math.round(value * 100)}%`; }
 
 type BreakdownRow = {
   id: string;
@@ -257,7 +258,7 @@ export function SummaryTab({ incomes, expenses, linkedAccounts, partnerX, partne
           <PersistentTooltipText
             align="end"
             side="top"
-            contentClassName="max-w-[460px] text-xs tabular-nums"
+            contentClassName="[--tooltip-content-max-width:460px] text-xs tabular-nums"
             content={(
               <div className="space-y-1.5 text-left">
                 <div className="font-medium">{partnerX} fair share, step by step:</div>
@@ -269,7 +270,7 @@ export function SummaryTab({ incomes, expenses, linkedAccounts, partnerX, partne
                     {100 - row.original.benefitX}, so this expense is assigned entirely to {beneficiaryLabel}. {partnerX === beneficiaryLabel ? `${partnerX} gets 100% of ${monthly.toFixed(2)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).` : `${partnerX} gets 0% of ${monthly.toFixed(2)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).`}
                   </div>
                 ) : isEvenBenefitSplit ? (
-                  <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Benefit is exactly 50/50, so just multiply the monthly amount by {partnerX}&apos;s income ratio: ${monthly.toFixed(2)} × {(incomeXRatio * 100).toFixed(2)}% = ${value.toFixed(2)} (displayed as ${Math.round(value)}).</div>
+                  <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Benefit is exactly 50/50, so just multiply the monthly amount by {partnerX}&apos;s income ratio: ${monthly.toFixed(2)} × {formatPercent(incomeXRatio)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).</div>
                 ) : (
                   <>
                     <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Calculate {partnerX}&apos;s weight by combining benefit and income share: {(benefitX * 100).toFixed(1)}% × {(incomeXRatio * 100).toFixed(1)}% = {weightX.toFixed(4)}.</div>
@@ -318,7 +319,7 @@ export function SummaryTab({ incomes, expenses, linkedAccounts, partnerX, partne
           <PersistentTooltipText
             align="end"
             side="top"
-            contentClassName="max-w-[460px] text-xs tabular-nums"
+            contentClassName="[--tooltip-content-max-width:460px] text-xs tabular-nums"
             content={(
               <div className="space-y-1.5 text-left">
                 <div className="font-medium">{partnerY} fair share, step by step:</div>
@@ -330,7 +331,7 @@ export function SummaryTab({ incomes, expenses, linkedAccounts, partnerX, partne
                     {100 - row.original.benefitX}, so this expense is assigned entirely to {beneficiaryLabel}. {partnerY === beneficiaryLabel ? `${partnerY} gets 100% of ${monthly.toFixed(2)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).` : `${partnerY} gets 0% of ${monthly.toFixed(2)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).`}
                   </div>
                 ) : isEvenBenefitSplit ? (
-                  <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Benefit is exactly 50/50, so just multiply the monthly amount by {partnerY}&apos;s income ratio: ${monthly.toFixed(2)} × {(incomeYRatio * 100).toFixed(2)}% = ${value.toFixed(2)} (displayed as ${Math.round(value)}).</div>
+                  <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Benefit is exactly 50/50, so just multiply the monthly amount by {partnerY}&apos;s income ratio: ${monthly.toFixed(2)} × {formatPercent(incomeYRatio)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).</div>
                 ) : (
                   <>
                     <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Calculate {partnerY}&apos;s weight by combining benefit and income share: {(benefitY * 100).toFixed(1)}% × {(incomeYRatio * 100).toFixed(1)}% = {weightY.toFixed(4)}.</div>
@@ -420,6 +421,10 @@ export function SummaryTab({ incomes, expenses, linkedAccounts, partnerX, partne
           <CardTitle>Totals</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex items-center justify-between border-b pb-2">
+            <span className="text-sm text-foreground">Monthly Expenses</span>
+            <span className="tabular-nums font-semibold">{$(totalExpenses)}</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[360px] text-sm">
               <thead>
@@ -431,23 +436,28 @@ export function SummaryTab({ incomes, expenses, linkedAccounts, partnerX, partne
               </thead>
               <tbody>
                 <tr className="border-b">
-                  <th className="h-9 px-2 text-left font-medium">Total Paid</th>
+                  <th className="h-9 px-2 text-left font-medium">Portion Paid</th>
                   <td className="h-9 px-2 text-right tabular-nums">{$(paidByX)}</td>
                   <td className="h-9 px-2 text-right tabular-nums">{$(paidByY)}</td>
                 </tr>
                 <tr className="border-b">
-                  <th className="h-9 px-2 text-left font-medium">Fair Share</th>
+                  <th className="h-9 px-2 text-left font-medium">Income Ratio</th>
+                  <td className="h-9 px-2 text-right tabular-nums">{formatPercent(incomeRatioX)}</td>
+                  <td className="h-9 px-2 text-right tabular-nums">{formatPercent(1 - incomeRatioX)}</td>
+                </tr>
+                <tr className="border-b">
+                  <th className="h-9 px-2 text-left font-medium">
+                    <PersistentTooltipText
+                      align="start"
+                      side="top"
+                      contentClassName="text-xs"
+                      content="Fair Share is totaled from each expense using both benefit split and income ratio."
+                    >
+                      Fair Share
+                    </PersistentTooltipText>
+                  </th>
                   <td className="h-9 px-2 text-right tabular-nums">{$(totalFairX)}</td>
                   <td className="h-9 px-2 text-right tabular-nums">{$(totalFairY)}</td>
-                </tr>
-                <tr className="border-b">
-                  <th className="h-9 px-2 text-left font-medium">Income Ratio</th>
-                  <td className="h-9 px-2 text-right tabular-nums">{(incomeRatioX * 100).toFixed(0)}%</td>
-                  <td className="h-9 px-2 text-right tabular-nums">{((1 - incomeRatioX) * 100).toFixed(0)}%</td>
-                </tr>
-                <tr className="border-b">
-                  <th className="h-9 px-2 text-left font-medium">Monthly Expenses</th>
-                  <td colSpan={2} className="h-9 px-2 text-right tabular-nums font-semibold">{$(totalExpenses)}</td>
                 </tr>
                 <tr>
                   <th className="h-9 px-2 text-left font-medium">

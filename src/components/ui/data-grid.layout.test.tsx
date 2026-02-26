@@ -272,10 +272,38 @@ describe("DataGrid layout affordances", () => {
       expect(resizeHandle?.style.right).toBe("-5px");
       expect(spacerHeaderCell.style.width).toBe("40px");
       expect(spacerBodyCell.style.width).toBe("40px");
-      expect(tfoot.className).toContain("[&>tr>td:last-child]:w-[40px]");
+      expect(tfoot.className).toContain("[&>tr>td:last-child]:w-[var(--grid-trailing-spacer-width)]");
       expect(tfoot.className).not.toContain("[&>tr>td:last-child]:sticky");
     } finally {
       unmount(root, container);
+    }
+  });
+
+  it("routes excess table width to the trailing spacer column when row actions are absent", () => {
+    const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        return 820;
+      },
+    });
+
+    const { container, root } = mount(<GridLayoutHarness showRowActions={false} />);
+    try {
+      const nameHeaderCell = container.querySelector("thead th:nth-child(1)") as HTMLElement;
+      const amountHeaderCell = container.querySelector("thead th:nth-child(2)") as HTMLElement;
+      const spacerHeaderCell = container.querySelector("thead th:nth-child(3)") as HTMLElement;
+
+      expect(nameHeaderCell.style.width).toBe("220px");
+      expect(amountHeaderCell.style.width).toBe("140px");
+      expect(spacerHeaderCell.style.width).toBe("460px");
+    } finally {
+      unmount(root, container);
+      if (originalClientWidth) {
+        Object.defineProperty(HTMLElement.prototype, "clientWidth", originalClientWidth);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+      }
     }
   });
 

@@ -46,6 +46,7 @@ const GRID_STICKY_LAST_COLUMN_DIVIDER_CLASS = 'shadow-[inset_1px_0_0_0_hsl(var(-
 const GRID_FOOTER_FIRST_COLUMN_STICKY_CLASS = '[&>tr>td:first-child]:sticky [&>tr>td:first-child]:left-0 [&>tr>td:first-child]:z-20 [&>tr>td:first-child]:shadow-[inset_-1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_1px_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]';
 const GRID_FOOTER_LAST_COLUMN_STICKY_CLASS = '[&>tr>td:last-child]:sticky [&>tr>td:last-child]:right-0 [&>tr>td:last-child]:z-20 [&>tr>td:last-child]:shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_1px_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]';
 const GRID_TRAILING_SPACER_COLUMN_WIDTH = 40;
+const GRID_TRAILING_SPACER_COLUMN_ID = '__grid_trailing_spacer__';
 const PENDING_COMMIT_FOCUS_MAX_ATTEMPTS = 1000;
 
 function scheduleInNextFrame(callback: () => void) {
@@ -388,10 +389,13 @@ export function DataGrid<TData>({
     // Grid standard: if row-level actions are present, the trailing actions column
     // absorbs all excess table width so content columns do not stretch.
     if (showActionsColumn && hasActionsColumn) return GRID_ACTIONS_COLUMN_ID;
+    // When row-level actions are absent, route excess width into the trailing
+    // spacer column so content columns keep their explicit widths.
+    if (showTrailingSpacerColumn) return GRID_TRAILING_SPACER_COLUMN_ID;
     return renderableLeafColumns.length > 0
       ? renderableLeafColumns[renderableLeafColumns.length - 1]?.id ?? null
       : null;
-  }, [hasActionsColumn, renderableLeafColumns, showActionsColumn]);
+  }, [hasActionsColumn, renderableLeafColumns, showActionsColumn, showTrailingSpacerColumn]);
   const contentColumnWidth = React.useMemo(
     () => renderableLeafColumns.reduce((sum, column) => sum + column.getSize(), 0),
     [renderableLeafColumns, columnSizingState],
@@ -403,6 +407,9 @@ export function DataGrid<TData>({
   const trailingExtraWidth = trailingFillColumnId
     ? Math.max(0, availableTableWidth - totalColumnWidth)
     : 0;
+  const trailingSpacerAppliedWidth = GRID_TRAILING_SPACER_COLUMN_WIDTH + (
+    trailingFillColumnId === GRID_TRAILING_SPACER_COLUMN_ID ? trailingExtraWidth : 0
+  );
   const tableWidth = totalColumnWidth + trailingExtraWidth;
   const hasFooter = Boolean(footer);
   const bodyClassName = hasFooter
@@ -644,9 +651,9 @@ export function DataGrid<TData>({
           <td
             className={cn('h-9 px-0 py-0 align-middle font-normal', GRID_READONLY_TEXT_CLASS)}
             style={{
-              width: `${GRID_TRAILING_SPACER_COLUMN_WIDTH}px`,
-              minWidth: `${GRID_TRAILING_SPACER_COLUMN_WIDTH}px`,
-              maxWidth: `${GRID_TRAILING_SPACER_COLUMN_WIDTH}px`,
+              width: `${trailingSpacerAppliedWidth}px`,
+              minWidth: `${trailingSpacerAppliedWidth}px`,
+              maxWidth: `${trailingSpacerAppliedWidth}px`,
             }}
           />
         )}
@@ -769,9 +776,9 @@ export function DataGrid<TData>({
                   <th
                     className={`h-9 px-0 align-middle font-medium ${GRID_READONLY_TEXT_CLASS}`}
                     style={{
-                      width: `${GRID_TRAILING_SPACER_COLUMN_WIDTH}px`,
-                      minWidth: `${GRID_TRAILING_SPACER_COLUMN_WIDTH}px`,
-                      maxWidth: `${GRID_TRAILING_SPACER_COLUMN_WIDTH}px`,
+                      width: `${trailingSpacerAppliedWidth}px`,
+                      minWidth: `${trailingSpacerAppliedWidth}px`,
+                      maxWidth: `${trailingSpacerAppliedWidth}px`,
                     }}
                   />
                 )}
@@ -805,9 +812,13 @@ export function DataGrid<TData>({
             `${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS} font-medium ${GRID_FOOTER_CELL_BORDERS_CLASS}`,
             stickyFirstColumn && GRID_FOOTER_FIRST_COLUMN_STICKY_CLASS,
             showActionsColumn && GRID_FOOTER_LAST_COLUMN_STICKY_CLASS,
-            showTrailingSpacerColumn && '[&>tr>td:last-child]:w-[40px] [&>tr>td:last-child]:min-w-[40px] [&>tr>td:last-child]:max-w-[40px] [&>tr>td:last-child]:px-0',
+            showTrailingSpacerColumn && '[&>tr>td:last-child]:w-[var(--grid-trailing-spacer-width)] [&>tr>td:last-child]:min-w-[var(--grid-trailing-spacer-width)] [&>tr>td:last-child]:max-w-[var(--grid-trailing-spacer-width)] [&>tr>td:last-child]:px-0',
             fullView && 'sticky bottom-0 z-20',
-          )}>
+          )}
+          style={showTrailingSpacerColumn
+            ? ({ '--grid-trailing-spacer-width': `${trailingSpacerAppliedWidth}px` } as React.CSSProperties)
+            : undefined}
+          >
             {footer}
           </tfoot>
         )}

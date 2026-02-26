@@ -109,6 +109,10 @@ function normalizedMonthlyTooltipContent(monthly: number) {
   );
 }
 
+function formatPercent(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
 const createDefaultExpenseDraft = (): NewExpenseDraft => ({
   name: '',
   amount: 0,
@@ -739,7 +743,7 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
           <PersistentTooltipText
             align="end"
             side="top"
-            contentClassName="max-w-[460px] text-xs tabular-nums"
+            contentClassName="[--tooltip-content-max-width:460px] text-xs tabular-nums"
             content={(
               <div className="space-y-1.5 text-left">
                 <div className="font-medium">{partnerX} fair share, step by step:</div>
@@ -751,7 +755,7 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
                     {100 - row.original.exp.benefit_x}, so this expense is assigned entirely to {beneficiaryLabel}. {partnerX === beneficiaryLabel ? `${partnerX} gets 100% of ${monthly.toFixed(2)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).` : `${partnerX} gets 0% of ${monthly.toFixed(2)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).`}
                   </div>
                 ) : isEvenBenefitSplit ? (
-                  <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Benefit is exactly 50/50, so just multiply the monthly amount by {partnerX}&apos;s income ratio: ${monthly.toFixed(2)} × {(incomeXRatio * 100).toFixed(2)}% = ${value.toFixed(2)} (displayed as ${Math.round(value)}).</div>
+                  <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Benefit is exactly 50/50, so just multiply the monthly amount by {partnerX}&apos;s income ratio: ${monthly.toFixed(2)} × {formatPercent(incomeXRatio)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).</div>
                 ) : (
                   <>
                     <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Calculate {partnerX}&apos;s weight by combining benefit and income share: {(benefitX * 100).toFixed(1)}% × {(incomeXRatio * 100).toFixed(1)}% = {weightX.toFixed(4)}.</div>
@@ -800,7 +804,7 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
           <PersistentTooltipText
             align="end"
             side="top"
-            contentClassName="max-w-[460px] text-xs tabular-nums"
+            contentClassName="[--tooltip-content-max-width:460px] text-xs tabular-nums"
             content={(
               <div className="space-y-1.5 text-left">
                 <div className="font-medium">{partnerY} fair share, step by step:</div>
@@ -812,7 +816,7 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
                     {100 - row.original.exp.benefit_x}, so this expense is assigned entirely to {beneficiaryLabel}. {partnerY === beneficiaryLabel ? `${partnerY} gets 100% of ${monthly.toFixed(2)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).` : `${partnerY} gets 0% of ${monthly.toFixed(2)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).`}
                   </div>
                 ) : isEvenBenefitSplit ? (
-                  <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Benefit is exactly 50/50, so just multiply the monthly amount by {partnerY}&apos;s income ratio: ${monthly.toFixed(2)} × {(incomeYRatio * 100).toFixed(2)}% = ${value.toFixed(2)} (displayed as ${Math.round(value)}).</div>
+                  <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Benefit is exactly 50/50, so just multiply the monthly amount by {partnerY}&apos;s income ratio: ${monthly.toFixed(2)} × {formatPercent(incomeYRatio)} = ${value.toFixed(2)} (displayed as ${Math.round(value)}).</div>
                 ) : (
                   <>
                     <div>{stepPrefix(shouldShowNormalizationStep ? 2 : 1)}Calculate {partnerY}&apos;s weight by combining benefit and income share: {(benefitY * 100).toFixed(1)}% × {(incomeYRatio * 100).toFixed(1)}% = {weightY.toFixed(4)}.</div>
