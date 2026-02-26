@@ -19,7 +19,13 @@ export function isLikelyNetworkError(error: unknown): boolean {
     msg.includes('load failed') ||
     msg.includes('failed to fetch') ||
     msg.includes('networkerror') ||
-    msg.includes('network request failed')
+    msg.includes('network request failed') ||
+    msg.includes('fetch error') ||
+    msg.includes('aborted') ||
+    msg.includes('timeout') ||
+    msg.includes('econnrefused') ||
+    msg.includes('econnreset') ||
+    msg.includes('enotfound')
   );
 }
 

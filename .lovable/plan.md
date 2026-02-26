@@ -1,4 +1,20 @@
 
+## Phase 1 — COMPLETED ✅
+
+### What was done
+- Created `src/lib/supabaseRequest.ts`: unified retry helper that handles both thrown fetch errors AND resolved `{ error }` payloads from PostgREST.
+- 4 attempts with jittered exponential backoff (300ms base, 5s cap).
+- Expanded retriable error classifier to cover: load failed, failed to fetch, networkerror, fetch error, aborted, timeout, econnrefused/reset/notfound, HTTP 5xx, PGRST transport errors.
+- Migrated all 7 Budget hooks (useCategories, useExpenses, useIncomes, useBudgets, useLinkedAccounts, useRestorePoints, useHouseholdData) from `retryOnLikelyNetworkError` to `supabaseRequest`.
+- Migrated AppShell RPC calls (reassignCategory, reassignLinkedAccount, restore) — these previously had NO retry at all.
+- Migrated useGridColumnWidths (platform-level).
+- Added `showMutationError` + try/catch to AppShell RPC handlers (previously missing standardized error UX).
+- Updated QueryClient: query retries increased from 2→3, added 30s staleTime.
+- Expanded `isLikelyNetworkError` in networkErrors.ts to match the broader classifier.
+
+### Remaining for later phases
+- Drawers module hooks still use `retryOnLikelyNetworkError` (they have their own queue system; lower priority).
+
 Objective
 - Eliminate “save failed” experiences in Budget (especially Categories) by hardening client↔Supabase communication, not just speeding individual queries.
 - Deliver a system where transient connectivity issues are absorbed automatically and user writes are eventually persisted.

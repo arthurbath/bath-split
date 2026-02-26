@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { Json } from '@/integrations/supabase/types';
-import { retryOnLikelyNetworkError, showMutationError } from '@/lib/networkErrors';
+import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
 
@@ -47,7 +47,7 @@ export function useHouseholdData(user: User | null) {
     if (!userId) return null;
 
     try {
-      const { data: membership, error: membershipError } = await retryOnLikelyNetworkError(async () =>
+      const membership = await supabaseRequest(async () =>
         await supabase
           .from('budget_household_members')
           .select('household_id')
@@ -55,18 +55,17 @@ export function useHouseholdData(user: User | null) {
           .maybeSingle(),
       );
 
-      if (membershipError) throw membershipError;
       if (!membership) return null;
 
-      const [{ data: household, error: householdError }, { data: profile, error: profileError }] = await Promise.all([
-        retryOnLikelyNetworkError(async () =>
+      const [household, profile] = await Promise.all([
+        supabaseRequest(async () =>
           await supabase
             .from('budget_households')
             .select('id, name, invite_code, partner_x_name, partner_y_name')
             .eq('id', membership.household_id)
             .single(),
         ),
-        retryOnLikelyNetworkError(async () =>
+        supabaseRequest(async () =>
           await supabase
             .from('bathos_profiles')
             .select('display_name')
@@ -75,8 +74,6 @@ export function useHouseholdData(user: User | null) {
         ),
       ]);
 
-      if (householdError) throw householdError;
-      if (profileError) throw profileError;
       if (!household) return null;
 
       return {
@@ -104,10 +101,9 @@ export function useHouseholdData(user: User | null) {
 
     try {
       const payload = await withMutationTiming({ module: 'budget', action: 'household.create' }, async () => {
-        const { data, error } = await retryOnLikelyNetworkError(async () =>
+        const data = await supabaseRequest(async () =>
           await supabase.rpc('budget_create_household_for_current_user'),
         );
-        if (error) throw new Error(error.message);
         return data as Json;
       });
 
@@ -123,13 +119,11 @@ export function useHouseholdData(user: User | null) {
 
     try {
       const payload = await withMutationTiming({ module: 'budget', action: 'household.join' }, async () => {
-        const { data, error } = await retryOnLikelyNetworkError(async () =>
+        const data = await supabaseRequest(async () =>
           await supabase.rpc('budget_join_household_for_current_user', {
             _invite_code: inviteCode,
           }),
         );
-
-        if (error) throw new Error(error.message);
         return data as Json;
       });
 
@@ -148,15 +142,13 @@ export function useHouseholdData(user: User | null) {
 
     try {
       const payload = await withMutationTiming({ module: 'budget', action: 'household.updatePartnerNames' }, async () => {
-        const { data, error } = await retryOnLikelyNetworkError(async () =>
+        const data = await supabaseRequest(async () =>
           await supabase.rpc('budget_update_partner_names', {
             _household_id: currentHousehold.householdId,
             _partner_x_name: partnerXName,
             _partner_y_name: partnerYName,
           }),
         );
-
-        if (error) throw new Error(error.message);
         return data as Json;
       });
 

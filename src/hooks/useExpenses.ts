@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { FrequencyType } from '@/types/fairshare';
-import { retryOnLikelyNetworkError, showMutationError } from '@/lib/networkErrors';
+import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
 
@@ -37,15 +37,13 @@ export function useExpenses(householdId: string) {
     queryKey,
     enabled: Boolean(householdId),
     queryFn: async () => {
-      const { data: rows, error } = await retryOnLikelyNetworkError(async () =>
+      const rows = await supabaseRequest(async () =>
         await supabase
           .from('budget_expenses')
           .select('*')
           .eq('household_id', householdId)
           .order('created_at'),
       );
-
-      if (error) throw error;
       return (rows as Expense[]) ?? [];
     },
   });
@@ -67,7 +65,7 @@ export function useExpenses(householdId: string) {
     setPending(id, true);
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'expenses.add' }, async () => {
-        const { data: row, error } = await retryOnLikelyNetworkError(async () =>
+        const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_expenses')
             .insert({
@@ -78,8 +76,6 @@ export function useExpenses(householdId: string) {
             .select('*')
             .single(),
         );
-
-        if (error) throw error;
         return row as Expense;
       });
 
@@ -98,7 +94,7 @@ export function useExpenses(householdId: string) {
     setPending(id, true);
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'expenses.update' }, async () => {
-        const { data: row, error } = await retryOnLikelyNetworkError(async () =>
+        const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_expenses')
             .update(updates)
@@ -106,8 +102,6 @@ export function useExpenses(householdId: string) {
             .select('*')
             .single(),
         );
-
-        if (error) throw error;
         return row as Expense;
       });
 
@@ -128,11 +122,9 @@ export function useExpenses(householdId: string) {
     setPending(id, true);
     try {
       await withMutationTiming({ module: 'budget', action: 'expenses.remove' }, async () => {
-        const { error } = await retryOnLikelyNetworkError(async () =>
+        await supabaseRequest(async () =>
           await supabase.from('budget_expenses').delete().eq('id', id),
         );
-
-        if (error) throw error;
       });
 
       queryClient.setQueryData<Expense[]>(queryKey, (current) => (current ?? []).filter((expense) => expense.id !== id));

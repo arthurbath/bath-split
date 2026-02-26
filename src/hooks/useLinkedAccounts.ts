@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { retryOnLikelyNetworkError, showMutationError } from '@/lib/networkErrors';
+import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
 
@@ -26,15 +26,13 @@ export function useLinkedAccounts(householdId: string) {
     queryKey,
     enabled: Boolean(householdId),
     queryFn: async () => {
-      const { data: rows, error } = await retryOnLikelyNetworkError(async () =>
+      const rows = await supabaseRequest(async () =>
         await supabase
           .from('budget_linked_accounts')
           .select('*')
           .eq('household_id', householdId)
           .order('name'),
       );
-
-      if (error) throw error;
       return (rows as LinkedAccount[]) ?? [];
     },
   });
@@ -60,7 +58,7 @@ export function useLinkedAccounts(householdId: string) {
     setPending(id, true);
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'linkedAccounts.add' }, async () => {
-        const { data: row, error } = await retryOnLikelyNetworkError(async () =>
+        const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_linked_accounts')
             .insert({
@@ -73,8 +71,6 @@ export function useLinkedAccounts(householdId: string) {
             .select('*')
             .single(),
         );
-
-        if (error) throw error;
         return row as LinkedAccount;
       });
 
@@ -93,7 +89,7 @@ export function useLinkedAccounts(householdId: string) {
     setPending(id, true);
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'linkedAccounts.update' }, async () => {
-        const { data: row, error } = await retryOnLikelyNetworkError(async () =>
+        const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_linked_accounts')
             .update(updates)
@@ -101,8 +97,6 @@ export function useLinkedAccounts(householdId: string) {
             .select('*')
             .single(),
         );
-
-        if (error) throw error;
         return row as LinkedAccount;
       });
 
@@ -123,7 +117,7 @@ export function useLinkedAccounts(householdId: string) {
     setPending(id, true);
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'linkedAccounts.updateColor' }, async () => {
-        const { data: row, error } = await retryOnLikelyNetworkError(async () =>
+        const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_linked_accounts')
             .update({ color })
@@ -131,8 +125,6 @@ export function useLinkedAccounts(householdId: string) {
             .select('*')
             .single(),
         );
-
-        if (error) throw error;
         return row as LinkedAccount;
       });
 
@@ -153,11 +145,9 @@ export function useLinkedAccounts(householdId: string) {
     setPending(id, true);
     try {
       await withMutationTiming({ module: 'budget', action: 'linkedAccounts.remove' }, async () => {
-        const { error } = await retryOnLikelyNetworkError(async () =>
+        await supabaseRequest(async () =>
           await supabase.from('budget_linked_accounts').delete().eq('id', id),
         );
-
-        if (error) throw error;
       });
 
       queryClient.setQueryData<LinkedAccount[]>(queryKey, (current) =>
