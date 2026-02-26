@@ -22,7 +22,7 @@ import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
 import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-affix-input';
 import { Plus, Trash2, MoreHorizontal, Filter, FilterX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
+import { toMonthly, frequencyLabels, needsParam, fromMonthly } from '@/lib/frequency';
 import { DataGrid, GridEditableCell, GridCurrencyCell, GridPercentCell, gridMenuTriggerProps, gridNavProps, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import { EXPENSES_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH } from '@/lib/gridColumnWidths';
@@ -96,6 +96,17 @@ function formatFrequencyDescription(type: FrequencyType, param: number | null) {
   const label = frequencyLabels[type];
   if (!needsParam(type) || param == null) return label;
   return label.split('X').join(String(param));
+}
+
+function normalizedMonthlyTooltipContent(monthly: number) {
+  const { daily, weekly, annual } = fromMonthly(monthly);
+  return (
+    <div className="space-y-1 text-left">
+      <div>Daily: ${daily.toFixed(2)}</div>
+      <div>Weekly: ${weekly.toFixed(2)}</div>
+      <div>Annually: ${annual.toFixed(2)}</div>
+    </div>
+  );
 }
 
 const createDefaultExpenseDraft = (): NewExpenseDraft => ({
@@ -616,7 +627,19 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
       size: EXPENSES_GRID_DEFAULT_WIDTHS.monthly,
       minSize: GRID_MIN_COLUMN_WIDTH,
       meta: { headerClassName: 'text-right', cellClassName: `text-right tabular-nums text-xs ${GRID_READONLY_TEXT_CLASS}` },
-      cell: ({ getValue }) => `$${Math.round(getValue())}`,
+      cell: ({ getValue }) => {
+        const monthly = Number(getValue());
+        return (
+          <PersistentTooltipText
+            align="end"
+            side="top"
+            contentClassName="text-xs tabular-nums"
+            content={normalizedMonthlyTooltipContent(monthly)}
+          >
+            {`$${Math.round(monthly)}`}
+          </PersistentTooltipText>
+        );
+      },
     }),
     columnHelper.accessor(r => r.exp.linked_account_id, {
       id: 'payment_method',
@@ -888,7 +911,16 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
       >
         <td className={`${groupRowCellClass} ${groupRowTextCellClass} px-2 sticky left-0 z-30 relative shadow-[inset_0_1px_0_0_hsl(var(--category-group-row-bg)),inset_0_-1px_0_0_hsl(var(--category-group-row-bg))] after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-[hsl(var(--grid-sticky-line))]`}>{getGroupLabel(key)}</td>
         <td colSpan={4} className={groupRowCellClass} />
-        <td className={`${groupRowCellClass} ${groupRowTextCellClass} text-right tabular-nums px-2`}>${Math.round(gMonthly)}</td>
+        <td className={`${groupRowCellClass} ${groupRowTextCellClass} text-right tabular-nums px-2`}>
+          <PersistentTooltipText
+            align="end"
+            side="top"
+            contentClassName="text-xs tabular-nums"
+            content={normalizedMonthlyTooltipContent(gMonthly)}
+          >
+            {`$${Math.round(gMonthly)}`}
+          </PersistentTooltipText>
+        </td>
         <td colSpan={4} className={groupRowCellClass} />
         <td className={`${groupRowCellClass} ${groupRowTextCellClass} text-right tabular-nums px-2`}>${Math.round(gFairX)}</td>
         <td className={`${groupRowCellClass} ${groupRowTextCellClass} text-right tabular-nums px-2`}>${Math.round(gFairY)}</td>
@@ -982,7 +1014,16 @@ export function ExpensesTab({ expenses, categories, linkedAccounts, incomes, par
             <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
               <td className={`h-9 align-middle font-semibold text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>Totals</td>
               <td colSpan={4} className={GRID_HEADER_TONE_CLASS} />
-              <td className={`h-9 align-middle text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>${Math.round(totalMonthly)}</td>
+              <td className={`h-9 align-middle text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>
+                <PersistentTooltipText
+                  align="end"
+                  side="top"
+                  contentClassName="text-xs tabular-nums"
+                  content={normalizedMonthlyTooltipContent(totalMonthly)}
+                >
+                  {`$${Math.round(totalMonthly)}`}
+                </PersistentTooltipText>
+              </td>
               <td colSpan={4} className={GRID_HEADER_TONE_CLASS} />
               <td className={`h-9 align-middle text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>${Math.round(totalFairX)}</td>
               <td className={`h-9 align-middle text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>${Math.round(totalFairY)}</td>

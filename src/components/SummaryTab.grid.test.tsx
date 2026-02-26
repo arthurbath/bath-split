@@ -6,6 +6,7 @@ import { SummaryTab } from '@/components/SummaryTab';
 import type { Income } from '@/hooks/useIncomes';
 import type { Expense } from '@/hooks/useExpenses';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
+import { fromMonthly } from '@/lib/frequency';
 
 function mount(ui: React.ReactElement) {
   const container = document.createElement('div');
@@ -22,6 +23,16 @@ function unmount(root: Root, container: HTMLElement) {
     root.unmount();
   });
   container.remove();
+}
+
+function tooltipText() {
+  return document.body.querySelector('[role="tooltip"]')?.textContent ?? '';
+}
+
+async function flushUi() {
+  await act(async () => {
+    await Promise.resolve();
+  });
 }
 
 describe('SummaryTab DataGrid', () => {
@@ -153,6 +164,66 @@ describe('SummaryTab DataGrid', () => {
     } finally {
       unmount(root, container);
       localStorage.removeItem('summary_sorting');
+    }
+  });
+
+  it('shows normalized cadence details when hovering a monthly value', async () => {
+    const incomes: Income[] = [
+      {
+        id: 'income-x',
+        household_id: 'h-1',
+        name: 'Salary X',
+        amount: 5000,
+        partner_label: 'X',
+        frequency_type: 'monthly',
+        frequency_param: null,
+      },
+    ];
+    const linkedAccounts: LinkedAccount[] = [];
+    const expenses: Expense[] = [
+      {
+        id: 'exp-1',
+        household_id: 'h-1',
+        name: 'Utilities',
+        amount: 300,
+        benefit_x: 50,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        category_id: null,
+        budget_id: null,
+        linked_account_id: null,
+        is_estimate: false,
+      },
+    ];
+
+    const { container, root } = mount(
+      <SummaryTab
+        incomes={incomes}
+        expenses={expenses}
+        linkedAccounts={linkedAccounts}
+        partnerX="Alex"
+        partnerY="Blair"
+        userId="user-1"
+      />,
+    );
+
+    try {
+      const trigger = Array.from(container.querySelectorAll('span[role="button"]'))
+        .find((el) => el.textContent?.trim() === '$300');
+      expect(trigger).toBeTruthy();
+
+      act(() => {
+        trigger?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      });
+      await flushUi();
+
+      const { daily, weekly, annual } = fromMonthly(300);
+      const text = tooltipText();
+      expect(text).toContain(`Daily: $${daily.toFixed(2)}`);
+      expect(text).toContain(`Weekly: $${weekly.toFixed(2)}`);
+      expect(text).toContain(`Annually: $${annual.toFixed(2)}`);
+    } finally {
+      unmount(root, container);
     }
   });
 });

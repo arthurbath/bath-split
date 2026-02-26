@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { DataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
-import { toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
+import { toMonthly, frequencyLabels, needsParam, fromMonthly } from '@/lib/frequency';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import {
   GRID_ACTIONS_COLUMN_ID,
@@ -53,6 +53,17 @@ function formatFrequencyDescription(type: FrequencyType, param: number | null) {
   const label = frequencyLabels[type];
   if (!needsParam(type) || param == null) return label;
   return label.split('X').join(String(param));
+}
+
+function normalizedMonthlyTooltipContent(monthly: number) {
+  const { daily, weekly, annual } = fromMonthly(monthly);
+  return (
+    <div className="space-y-1 text-left">
+      <div>Daily: ${daily.toFixed(2)}</div>
+      <div>Weekly: ${weekly.toFixed(2)}</div>
+      <div>Annually: ${annual.toFixed(2)}</div>
+    </div>
+  );
 }
 
 function formatOverUnder(value: number) {
@@ -187,7 +198,19 @@ export function SummaryTab({ incomes, expenses, linkedAccounts, partnerX, partne
       header: 'Monthly',
       size: SUMMARY_GRID_DEFAULT_WIDTHS.monthly,
       minSize: GRID_MIN_COLUMN_WIDTH,
-      cell: ({ getValue }) => $(getValue()),
+      cell: ({ getValue }) => {
+        const monthly = Number(getValue());
+        return (
+          <PersistentTooltipText
+            align="end"
+            side="top"
+            contentClassName="text-xs tabular-nums"
+            content={normalizedMonthlyTooltipContent(monthly)}
+          >
+            {$(monthly)}
+          </PersistentTooltipText>
+        );
+      },
       meta: { headerClassName: 'text-right', cellClassName: 'text-right tabular-nums text-xs' },
     }),
     breakdownColumnHelper.accessor('payer', {
@@ -470,7 +493,16 @@ export function SummaryTab({ incomes, expenses, linkedAccounts, partnerX, partne
               footer={(
                 <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
                   <td className={`h-9 align-middle font-semibold text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>Total</td>
-                  <td className={`h-9 align-middle text-right font-bold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>{$(totalExpenses)}</td>
+                  <td className={`h-9 align-middle text-right font-bold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>
+                    <PersistentTooltipText
+                      align="end"
+                      side="top"
+                      contentClassName="text-xs tabular-nums"
+                      content={normalizedMonthlyTooltipContent(totalExpenses)}
+                    >
+                      {$(totalExpenses)}
+                    </PersistentTooltipText>
+                  </td>
                   <td colSpan={2} className={GRID_HEADER_TONE_CLASS} />
                   <td className={`h-9 align-middle text-right font-bold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>{$(totalFairX)}</td>
                   <td className={`h-9 align-middle text-right font-bold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>{$(totalFairY)}</td>

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ExpensesTab } from '@/components/ExpensesTab';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { fromMonthly } from '@/lib/frequency';
 import type { Expense } from '@/hooks/useExpenses';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
 
@@ -50,6 +51,16 @@ function unmount(root: Root, container: HTMLElement) {
     root.unmount();
   });
   container.remove();
+}
+
+function tooltipText() {
+  return document.body.querySelector('[role="tooltip"]')?.textContent ?? '';
+}
+
+async function flushUi() {
+  await act(async () => {
+    await Promise.resolve();
+  });
 }
 
 describe('ExpensesTab empty message', () => {
@@ -99,6 +110,42 @@ describe('ExpensesTab empty message', () => {
     try {
       expect(container.textContent).toContain('No expenses match the filter.');
       expect(container.textContent).not.toContain('No expenses yet. Click "Add" to start.');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('shows normalized cadence details when hovering a monthly value', async () => {
+    const expense: Expense = {
+      id: 'expense-1',
+      name: 'Rent',
+      amount: 333,
+      frequency_type: 'monthly',
+      frequency_param: null,
+      benefit_x: 50,
+      category_id: null,
+      household_id: 'household-1',
+      is_estimate: false,
+      budget_id: null,
+      linked_account_id: null,
+    };
+
+    const { container, root } = renderExpensesTab({ expenses: [expense] });
+    try {
+      const trigger = Array.from(container.querySelectorAll('span[role="button"]'))
+        .find((el) => el.textContent?.trim() === '$333');
+      expect(trigger).toBeTruthy();
+
+      act(() => {
+        trigger?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      });
+      await flushUi();
+
+      const { daily, weekly, annual } = fromMonthly(333);
+      const text = tooltipText();
+      expect(text).toContain(`Daily: $${daily.toFixed(2)}`);
+      expect(text).toContain(`Weekly: $${weekly.toFixed(2)}`);
+      expect(text).toContain(`Annually: $${annual.toFixed(2)}`);
     } finally {
       unmount(root, container);
     }
