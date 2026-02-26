@@ -664,12 +664,12 @@ export function DataGrid<TData>({
   return (
     <div
       ref={containerRef}
-      className={cn('overflow-auto', fullView && 'h-full min-h-0', className)}
+      className={cn('overflow-auto data-grid-scroll-hidden', fullView && 'h-full min-h-0', className)}
       style={{ maxHeight: fullView ? 'none' : maxHeight }}
     >
       <table className="min-w-full table-fixed caption-bottom text-xs" style={{ width: `${tableWidth}px` }}>
         <thead className={cn(
-          `z-20 ${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS} shadow-[0_1px_0_0_hsl(var(--border))] [&_tr]:border-b-0`,
+          `z-30 ${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS} shadow-[0_1px_0_0_hsl(var(--border))] [&_tr]:border-b-0`,
           GRID_HEADER_CELL_BORDERS_CLASS,
           fullView && 'sticky top-0',
         )}>
@@ -691,6 +691,7 @@ export function DataGrid<TData>({
                 const canSort = !isActionsColumn && header.column.getCanSort();
                 const canResize = !isActionsColumn && header.column.getCanResize();
                 const isResizing = header.column.getIsResizing();
+                const resizeHandleRight = colIdx === 0 && stickyFirstColumn ? '-4px' : '-5px';
                 return (
                   <th
                     key={header.id}
@@ -700,8 +701,8 @@ export function DataGrid<TData>({
                       canSort && 'cursor-pointer select-none',
                       canSort && !isResizingColumn && 'hover:bg-muted',
                       colIdx === 0 && stickyFirstColumn && GRID_HEADER_TONE_CLASS,
-                      colIdx === 0 && stickyFirstColumn && `sticky left-0 z-20 ${GRID_STICKY_FIRST_COLUMN_DIVIDER_CLASS}`,
-                      isStickyActionsColumn && `${GRID_HEADER_TONE_CLASS} sticky right-0 z-20`,
+                      colIdx === 0 && stickyFirstColumn && `sticky left-0 z-40 bg-border ${GRID_STICKY_FIRST_COLUMN_DIVIDER_CLASS}`,
+                      isStickyActionsColumn && `${GRID_HEADER_TONE_CLASS} sticky right-0 z-30`,
                       meta?.headerClassName,
                     )}
                     onClick={(event) => {
@@ -745,7 +746,7 @@ export function DataGrid<TData>({
                         className={cn(
                           'group absolute top-1/2 z-30 h-6 w-[10px] -translate-y-1/2 !cursor-col-resize touch-none select-none',
                         )}
-                        style={{ right: '-5px' }}
+                        style={{ right: resizeHandleRight }}
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -813,7 +814,7 @@ export function DataGrid<TData>({
             stickyFirstColumn && GRID_FOOTER_FIRST_COLUMN_STICKY_CLASS,
             showActionsColumn && GRID_FOOTER_LAST_COLUMN_STICKY_CLASS,
             showTrailingSpacerColumn && '[&>tr>td:last-child]:w-[var(--grid-trailing-spacer-width)] [&>tr>td:last-child]:min-w-[var(--grid-trailing-spacer-width)] [&>tr>td:last-child]:max-w-[var(--grid-trailing-spacer-width)] [&>tr>td:last-child]:px-0',
-            fullView && 'sticky bottom-0 z-20',
+            fullView && 'sticky bottom-0 z-40',
           )}
           style={showTrailingSpacerColumn
             ? ({ '--grid-trailing-spacer-width': `${trailingSpacerAppliedWidth}px` } as React.CSSProperties)
