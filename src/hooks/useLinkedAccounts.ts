@@ -86,7 +86,17 @@ export function useLinkedAccounts(householdId: string) {
   const update = useCallback(async (id: string, updates: Partial<Pick<LinkedAccount, 'name' | 'owner_partner'>>) => {
     if (pendingById[id]) return;
 
+    let previousAccount: LinkedAccount | null = null;
     setPending(id, true);
+    queryClient.setQueryData<LinkedAccount[]>(queryKey, (current) => {
+      const next = (current ?? []).map((account) => {
+        if (account.id !== id) return account;
+        previousAccount = account;
+        return { ...account, ...updates };
+      });
+      return sortByName(next);
+    });
+
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'linkedAccounts.update' }, async () => {
         const row = await supabaseRequest(async () =>
@@ -104,6 +114,11 @@ export function useLinkedAccounts(householdId: string) {
         sortByName((current ?? []).map((account) => (account.id === id ? saved : account))),
       );
     } catch (error: unknown) {
+      if (previousAccount) {
+        queryClient.setQueryData<LinkedAccount[]>(queryKey, (current) =>
+          sortByName((current ?? []).map((account) => (account.id === id ? previousAccount : account))),
+        );
+      }
       showMutationError(error);
       throw error;
     } finally {
@@ -114,7 +129,17 @@ export function useLinkedAccounts(householdId: string) {
   const updateColor = useCallback(async (id: string, color: string | null) => {
     if (pendingById[id]) return;
 
+    let previousAccount: LinkedAccount | null = null;
     setPending(id, true);
+    queryClient.setQueryData<LinkedAccount[]>(queryKey, (current) => {
+      const next = (current ?? []).map((account) => {
+        if (account.id !== id) return account;
+        previousAccount = account;
+        return { ...account, color };
+      });
+      return sortByName(next);
+    });
+
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'linkedAccounts.updateColor' }, async () => {
         const row = await supabaseRequest(async () =>
@@ -132,6 +157,11 @@ export function useLinkedAccounts(householdId: string) {
         sortByName((current ?? []).map((account) => (account.id === id ? saved : account))),
       );
     } catch (error: unknown) {
+      if (previousAccount) {
+        queryClient.setQueryData<LinkedAccount[]>(queryKey, (current) =>
+          sortByName((current ?? []).map((account) => (account.id === id ? previousAccount : account))),
+        );
+      }
       showMutationError(error);
       throw error;
     } finally {

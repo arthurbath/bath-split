@@ -79,7 +79,17 @@ export function useCategories(householdId: string) {
   const update = useCallback(async (id: string, name: string) => {
     if (pendingById[id]) return;
 
+    let previousCategory: Category | null = null;
     setPending(id, true);
+    queryClient.setQueryData<Category[]>(queryKey, (current) => {
+      const next = (current ?? []).map((category) => {
+        if (category.id !== id) return category;
+        previousCategory = category;
+        return { ...category, name };
+      });
+      return sortByName(next);
+    });
+
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'categories.update' }, async () => {
         const row = await supabaseRequest(async () =>
@@ -97,6 +107,11 @@ export function useCategories(householdId: string) {
         sortByName((current ?? []).map((category) => (category.id === id ? saved : category))),
       );
     } catch (error: unknown) {
+      if (previousCategory) {
+        queryClient.setQueryData<Category[]>(queryKey, (current) =>
+          sortByName((current ?? []).map((category) => (category.id === id ? previousCategory : category))),
+        );
+      }
       showMutationError(error);
       throw error;
     } finally {
@@ -107,7 +122,17 @@ export function useCategories(householdId: string) {
   const updateColor = useCallback(async (id: string, color: string | null) => {
     if (pendingById[id]) return;
 
+    let previousCategory: Category | null = null;
     setPending(id, true);
+    queryClient.setQueryData<Category[]>(queryKey, (current) => {
+      const next = (current ?? []).map((category) => {
+        if (category.id !== id) return category;
+        previousCategory = category;
+        return { ...category, color };
+      });
+      return sortByName(next);
+    });
+
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'categories.updateColor' }, async () => {
         const row = await supabaseRequest(async () =>
@@ -125,6 +150,11 @@ export function useCategories(householdId: string) {
         sortByName((current ?? []).map((category) => (category.id === id ? saved : category))),
       );
     } catch (error: unknown) {
+      if (previousCategory) {
+        queryClient.setQueryData<Category[]>(queryKey, (current) =>
+          sortByName((current ?? []).map((category) => (category.id === id ? previousCategory : category))),
+        );
+      }
       showMutationError(error);
       throw error;
     } finally {

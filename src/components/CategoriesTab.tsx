@@ -179,7 +179,7 @@ export function CategoriesTab({ categories, expenses, onAdd, onUpdate, onRemove,
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-2">
-            <Label>Reassign to</Label>
+            <Label>Reassign To</Label>
             <Select value={reassignTo} onValueChange={setReassignTo}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -192,7 +192,7 @@ export function CategoriesTab({ categories, expenses, onAdd, onUpdate, onRemove,
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>Delete & Reassign</Button>
+            <Button data-dialog-confirm="true" variant="destructive" onClick={handleConfirmDelete}>Delete & Reassign</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

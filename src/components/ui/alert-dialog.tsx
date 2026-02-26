@@ -15,11 +15,26 @@ const MODAL_FOCUSABLE_SELECTOR = [
   '[contenteditable="true"]',
 ].join(", ");
 
+const MODAL_FORM_CONTROL_SELECTOR = [
+  '[autofocus]:not([disabled]):not([aria-disabled="true"]):not([hidden])',
+  'input:not([type="hidden"]):not([disabled])',
+  'textarea:not([disabled])',
+  'select:not([disabled])',
+  '[role="combobox"]:not([aria-disabled="true"])',
+  '[role="checkbox"]:not([aria-disabled="true"])',
+  '[contenteditable="true"]',
+].join(", ");
+
+const MODAL_CONFIRM_SELECTOR = [
+  '[data-dialog-confirm="true"]:not([disabled]):not([aria-disabled="true"])',
+  '[data-alert-dialog-action="true"]:not([disabled]):not([aria-disabled="true"])',
+].join(", ");
+
 const isFocusableVisible = (element: HTMLElement) => {
   if (element.hidden) return false;
   const style = window.getComputedStyle(element);
   if (style.display === "none" || style.visibility === "hidden") return false;
-  return element.getClientRects().length > 0;
+  return true;
 };
 
 const getModalFocusableElements = (container: HTMLElement) =>
@@ -60,13 +75,13 @@ const AlertDialogContent = React.forwardRef<
     const content = event.currentTarget as HTMLElement | null;
     if (!content) return;
 
-    const focusTarget = content.querySelector<HTMLElement>(
-      '[autofocus]:not(button):not(a):not([role="link"]), input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"]):not(button):not(a):not([role="link"])',
-    );
-
     event.preventDefault();
-    if (focusTarget) focusTarget.focus();
-    else content.focus();
+    const focusTarget =
+      content.querySelector<HTMLElement>(MODAL_FORM_CONTROL_SELECTOR) ??
+      content.querySelector<HTMLElement>(MODAL_CONFIRM_SELECTOR) ??
+      getModalFocusableElements(content)[0] ??
+      content;
+    focusTarget.focus();
   };
 
   const handleKeyDown: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>["onKeyDown"] = (event) => {
@@ -86,7 +101,12 @@ const AlertDialogContent = React.forwardRef<
     if (activeIndex < 0) {
       activeIndex = focusables.findIndex((element) => element.contains(active));
     }
-    if (activeIndex < 0) return;
+    if (activeIndex < 0) {
+      event.preventDefault();
+      const fallbackIndex = event.shiftKey ? focusables.length - 1 : 0;
+      focusables[fallbackIndex]?.focus();
+      return;
+    }
 
     event.preventDefault();
     const nextIndex = event.shiftKey
@@ -149,7 +169,13 @@ const AlertDialogAction = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Action>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
 >(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Action ref={ref} className={cn(buttonVariants(), className)} {...props} />
+  <AlertDialogPrimitive.Action
+    ref={ref}
+    data-alert-dialog-action="true"
+    tabIndex={props.tabIndex ?? 0}
+    className={cn(buttonVariants(), className)}
+    {...props}
+  />
 ));
 AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName;
 
@@ -159,6 +185,7 @@ const AlertDialogCancel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Cancel
     ref={ref}
+    tabIndex={props.tabIndex ?? 0}
     className={cn(buttonVariants({ variant: "outline" }), className)}
     {...props}
   />
