@@ -256,7 +256,7 @@ function EstimateCell({ checked, onToggle, disabled = false }: { checked: boolea
   return (
     <Checkbox
       ref={checkboxRef}
-      className={`focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0 hover:border-[hsl(var(--grid-sticky-line))]`}
+      className="hover:border-[hsl(var(--grid-sticky-line))]"
       checked={checked}
       disabled={disabled}
       onCheckedChange={v => {
