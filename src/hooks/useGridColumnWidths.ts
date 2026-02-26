@@ -6,7 +6,7 @@ import type {
   Updater,
 } from '@tanstack/react-table';
 import { supabase } from '@/integrations/supabase/client';
-import { retryOnLikelyNetworkError } from '@/lib/networkErrors';
+import { supabaseRequest } from '@/lib/supabaseRequest';
 import {
   mergeGridColumnWidths,
   sanitizeColumnWidths,
@@ -125,21 +125,23 @@ export function useGridColumnWidths({
 
     void (async () => {
       const cachedAllGridWidthsSerialized = JSON.stringify(cachedAllGridWidths);
-      const { data, error } = await retryOnLikelyNetworkError(async () =>
-        await supabase
-          .from('bathos_user_settings')
-          .select('grid_column_widths')
-          .eq('user_id', userId)
-          .maybeSingle(),
-      );
-
-      if (cancelled) return;
-
-      if (error) {
+      let data: { grid_column_widths: unknown } | null = null;
+      try {
+        data = await supabaseRequest(async () =>
+          await supabase
+            .from('bathos_user_settings')
+            .select('grid_column_widths')
+            .eq('user_id', userId)
+            .maybeSingle(),
+        );
+      } catch (error) {
+        if (cancelled) return;
         console.error('Failed to load grid column widths:', error);
         setLoaded(true);
         return;
       }
+
+      if (cancelled) return;
 
       const rawAllGridWidths =
         data?.grid_column_widths &&
@@ -216,22 +218,21 @@ export function useGridColumnWidths({
           widthsByGridRef.current = mergedGridWidths;
           writeCachedGridColumnWidths(userId, mergedGridWidths);
 
-          const { error } = await retryOnLikelyNetworkError(async () =>
-            await supabase
-              .from('bathos_user_settings')
-              .upsert(
-                [{
-                  user_id: userId,
-                  grid_column_widths: mergedGridWidths as unknown as import('@/integrations/supabase/types').Json,
-                }],
-                { onConflict: 'user_id' },
-              ),
-          );
-
-          if (error) {
+          try {
+            await supabaseRequest(async () =>
+              await supabase
+                .from('bathos_user_settings')
+                .upsert(
+                  [{
+                    user_id: userId,
+                    grid_column_widths: mergedGridWidths as unknown as import('@/integrations/supabase/types').Json,
+                  }],
+                  { onConflict: 'user_id' },
+                ),
+            );
+          } catch (error) {
             console.error('Failed to persist grid column widths:', error);
             lastPersistedWidthsRef.current = '';
-            return;
           }
         })();
       }
