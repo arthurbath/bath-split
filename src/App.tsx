@@ -24,9 +24,10 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: (failureCount, error) => {
-        if (failureCount >= 2) return false;
+        if (failureCount >= 3) return false;
         return isLikelyNetworkError(error);
       },
+      staleTime: 30_000,
     },
   },
 });

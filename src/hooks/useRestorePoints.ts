@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import { retryOnLikelyNetworkError, showMutationError } from '@/lib/networkErrors';
+import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
 
@@ -39,15 +39,13 @@ export function useRestorePoints(householdId: string) {
     queryKey,
     enabled: Boolean(householdId),
     queryFn: async () => {
-      const { data: rows, error } = await retryOnLikelyNetworkError(async () =>
+      const rows = await supabaseRequest(async () =>
         await supabase
           .from('budget_restore_points')
           .select('id, household_id, data, created_at, notes')
           .eq('household_id', householdId)
           .order('created_at', { ascending: false }),
       );
-
-      if (error) throw error;
       const mapped = ((rows as RestorePointRow[]) ?? []).map(mapRow);
       return sortByCreatedAtDesc(mapped);
     },
@@ -71,7 +69,7 @@ export function useRestorePoints(householdId: string) {
     setPending(id, true);
     try {
       const row = await withMutationTiming({ module: 'budget', action: 'restorePoints.save' }, async () => {
-        const { data: savedRow, error } = await retryOnLikelyNetworkError(async () =>
+        const savedRow = await supabaseRequest(async () =>
           await supabase
             .from('budget_restore_points')
             .insert({
@@ -83,7 +81,6 @@ export function useRestorePoints(householdId: string) {
             .select('id, household_id, data, created_at, notes')
             .single(),
         );
-        if (error) throw error;
         return savedRow as RestorePointRow;
       });
 
@@ -102,10 +99,9 @@ export function useRestorePoints(householdId: string) {
     setPending(id, true);
     try {
       await withMutationTiming({ module: 'budget', action: 'restorePoints.remove' }, async () => {
-        const { error } = await retryOnLikelyNetworkError(async () =>
+        await supabaseRequest(async () =>
           await supabase.from('budget_restore_points').delete().eq('id', id),
         );
-        if (error) throw error;
       });
 
       queryClient.setQueryData<RestorePoint[]>(queryKey, (current) => (current ?? []).filter((point) => point.id !== id));
@@ -125,7 +121,7 @@ export function useRestorePoints(householdId: string) {
     setPending(id, true);
     try {
       const updatedRow = await withMutationTiming({ module: 'budget', action: 'restorePoints.updateNotes' }, async () => {
-        const { data: row, error } = await retryOnLikelyNetworkError(async () =>
+        const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_restore_points')
             .update({ notes: normalized || null })
@@ -134,8 +130,6 @@ export function useRestorePoints(householdId: string) {
             .select('id, household_id, data, created_at, notes')
             .single(),
         );
-
-        if (error) throw error;
         return row as RestorePointRow;
       });
 
