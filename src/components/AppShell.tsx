@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PieChart, Settings, Banknote as BanknoteArrowUp, HandCoins } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useModuleBasePath } from '@/platform/hooks/useHostModule';
-import { toast } from '@/hooks/use-toast';
 import type { HouseholdData } from '@/hooks/useHouseholdData';
 import { useIncomes } from '@/hooks/useIncomes';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -23,6 +21,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { getAvailableModules } from '@/platform/modules';
 import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
 import { withMutationTiming } from '@/lib/mutationTiming';
+import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 
 interface AppShellProps {
   household: HouseholdData;
@@ -85,72 +84,90 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
   ] as const;
 
   const handleReassignCategory = async (oldId: string, newId: string | null) => {
-    await withMutationTiming({ module: 'budget', action: 'categories.reassignAndDelete' }, async () => {
-      const { error } = await supabase.rpc('budget_reassign_category_and_delete', {
-        _household_id: household.householdId,
-        _old_category_id: oldId,
-        _new_category_id: newId,
+    try {
+      await withMutationTiming({ module: 'budget', action: 'categories.reassignAndDelete' }, async () => {
+        await supabaseRequest(async () =>
+          await supabase.rpc('budget_reassign_category_and_delete', {
+            _household_id: household.householdId,
+            _old_category_id: oldId,
+            _new_category_id: newId,
+          }),
+        );
       });
-      if (error) throw error;
-    });
 
-    queryClient.setQueryData(
-      budgetQueryKeys.categories(household.householdId),
-      categories.filter((category) => category.id !== oldId),
-    );
-    queryClient.setQueryData(
-      budgetQueryKeys.expenses(household.householdId),
-      expenses.map((expense) =>
-        expense.category_id === oldId ? { ...expense, category_id: newId } : expense,
-      ),
-    );
+      queryClient.setQueryData(
+        budgetQueryKeys.categories(household.householdId),
+        categories.filter((category) => category.id !== oldId),
+      );
+      queryClient.setQueryData(
+        budgetQueryKeys.expenses(household.householdId),
+        expenses.map((expense) =>
+          expense.category_id === oldId ? { ...expense, category_id: newId } : expense,
+        ),
+      );
+    } catch (error: unknown) {
+      showMutationError(error);
+      throw error;
+    }
   };
 
 
   const handleReassignLinkedAccount = async (oldId: string, newId: string | null) => {
-    await withMutationTiming({ module: 'budget', action: 'linkedAccounts.reassignAndDelete' }, async () => {
-      const { error } = await supabase.rpc('budget_reassign_linked_account_and_delete', {
-        _household_id: household.householdId,
-        _old_linked_account_id: oldId,
-        _new_linked_account_id: newId,
+    try {
+      await withMutationTiming({ module: 'budget', action: 'linkedAccounts.reassignAndDelete' }, async () => {
+        await supabaseRequest(async () =>
+          await supabase.rpc('budget_reassign_linked_account_and_delete', {
+            _household_id: household.householdId,
+            _old_linked_account_id: oldId,
+            _new_linked_account_id: newId,
+          }),
+        );
       });
-      if (error) throw error;
-    });
 
-    queryClient.setQueryData(
-      budgetQueryKeys.linkedAccounts(household.householdId),
-      linkedAccounts.filter((linkedAccount) => linkedAccount.id !== oldId),
-    );
-    queryClient.setQueryData(
-      budgetQueryKeys.expenses(household.householdId),
-      expenses.map((expense) =>
-        expense.linked_account_id === oldId ? { ...expense, linked_account_id: newId } : expense,
-      ),
-    );
+      queryClient.setQueryData(
+        budgetQueryKeys.linkedAccounts(household.householdId),
+        linkedAccounts.filter((linkedAccount) => linkedAccount.id !== oldId),
+      );
+      queryClient.setQueryData(
+        budgetQueryKeys.expenses(household.householdId),
+        expenses.map((expense) =>
+          expense.linked_account_id === oldId ? { ...expense, linked_account_id: newId } : expense,
+        ),
+      );
+    } catch (error: unknown) {
+      showMutationError(error);
+      throw error;
+    }
   };
 
   const handleRestore = async (data: Json) => {
-    const restored = await withMutationTiming({ module: 'budget', action: 'restore.apply' }, async () => {
-      const { data: restoredData, error } = await supabase.rpc('budget_restore_household_snapshot', {
-        _household_id: household.householdId,
-        _snapshot: data,
+    try {
+      const restored = await withMutationTiming({ module: 'budget', action: 'restore.apply' }, async () => {
+        const restoredData = await supabaseRequest(async () =>
+          await supabase.rpc('budget_restore_household_snapshot', {
+            _household_id: household.householdId,
+            _snapshot: data,
+          }),
+        );
+        return restoredData as {
+          categories?: unknown[];
+          linkedAccounts?: unknown[];
+          incomes?: unknown[];
+          expenses?: unknown[];
+        };
       });
-      if (error) throw error;
-      return restoredData as {
-        categories?: unknown[];
-        linkedAccounts?: unknown[];
-        incomes?: unknown[];
-        expenses?: unknown[];
-      };
-    });
 
-    queryClient.setQueryData(budgetQueryKeys.categories(household.householdId), restored.categories ?? []);
-    queryClient.setQueryData(
-      budgetQueryKeys.linkedAccounts(household.householdId),
-      restored.linkedAccounts ?? [],
-    );
-    queryClient.setQueryData(budgetQueryKeys.incomes(household.householdId), restored.incomes ?? []);
-    queryClient.setQueryData(budgetQueryKeys.expenses(household.householdId), restored.expenses ?? []);
+      queryClient.setQueryData(budgetQueryKeys.categories(household.householdId), restored.categories ?? []);
+      queryClient.setQueryData(
+        budgetQueryKeys.linkedAccounts(household.householdId),
+        restored.linkedAccounts ?? [],
+      );
+      queryClient.setQueryData(budgetQueryKeys.incomes(household.householdId), restored.incomes ?? []);
+      queryClient.setQueryData(budgetQueryKeys.expenses(household.householdId), restored.expenses ?? []);
+    } catch (error: unknown) {
+      showMutationError(error);
+      throw error;
+    }
   };
 
   return (
