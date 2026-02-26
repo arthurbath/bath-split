@@ -30,6 +30,14 @@ export function toMonthly(amount: number, type: FrequencyType, param?: number): 
   }
 }
 
+export function fromMonthly(monthly: number) {
+  return {
+    daily: monthly / DAYS_PER_MONTH,
+    weekly: monthly / WEEKS_PER_MONTH,
+    annual: monthly * 12,
+  };
+}
+
 export const frequencyLabels: Record<FrequencyType, string> = {
   monthly: 'Monthly',
   twice_monthly: 'Twice Monthly',

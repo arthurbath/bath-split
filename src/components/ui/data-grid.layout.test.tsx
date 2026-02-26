@@ -14,7 +14,15 @@ type RowData = {
 
 const columnHelper = createColumnHelper<RowData>();
 
-function GridLayoutHarness({ fullView = false, showFooter = true }: { fullView?: boolean; showFooter?: boolean }) {
+function GridLayoutHarness({
+  fullView = false,
+  showFooter = true,
+  showRowActions = true,
+}: {
+  fullView?: boolean;
+  showFooter?: boolean;
+  showRowActions?: boolean;
+}) {
   const rows = React.useMemo<RowData[]>(
     () => [
       { id: "row-a", name: "Alpha", amount: 12 },
@@ -43,10 +51,13 @@ function GridLayoutHarness({ fullView = false, showFooter = true }: { fullView?:
         size: GRID_ACTIONS_COLUMN_WIDTH,
         minSize: GRID_ACTIONS_COLUMN_WIDTH,
         maxSize: GRID_ACTIONS_COLUMN_WIDTH,
-        cell: () => <button type="button" aria-label="Row actions">...</button>,
+        meta: showRowActions ? { containsButton: true } : undefined,
+        cell: () => (showRowActions
+          ? <button type="button" aria-label="Row actions">...</button>
+          : null),
       }),
     ],
-    [],
+    [showRowActions],
   );
 
   const table = useReactTable({
@@ -155,6 +166,34 @@ describe("DataGrid layout affordances", () => {
       expect(tbody.className).toContain("[&>tr:last-child>td]:shadow-[inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]");
       expect(tbody.className).toContain("[&>tr:last-child>td:last-child]:shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]");
       expect(lastBodyCell.className).toContain("shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line))]");
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("hides the trailing actions column and adds header resize margin when no row actions exist", () => {
+    const { container, root } = mount(<GridLayoutHarness showRowActions={false} />);
+    try {
+      const headers = container.querySelectorAll("thead th");
+      const bodyCells = container.querySelectorAll("tbody tr:first-child td");
+      const amountHeaderCell = container.querySelector("thead th:nth-child(2)") as HTMLElement;
+      const spacerHeaderCell = container.querySelector("thead th:last-child") as HTMLElement;
+      const lastHeaderRule = amountHeaderCell.querySelector("[data-grid-sticky-right-rule='true']");
+      const resizeHandle = amountHeaderCell.querySelector("button[aria-label='Resize amount column']") as HTMLButtonElement | null;
+      const spacerBodyCell = container.querySelector("tbody tr:first-child td:last-child") as HTMLElement;
+      const tfoot = container.querySelector("tfoot") as HTMLElement;
+
+      expect(headers.length).toBe(3);
+      expect(bodyCells.length).toBe(3);
+      expect(container.querySelector("button[aria-label='Row actions']")).toBeNull();
+      expect(amountHeaderCell.classList.contains("sticky")).toBe(false);
+      expect(amountHeaderCell.classList.contains("right-0")).toBe(false);
+      expect(lastHeaderRule).toBeNull();
+      expect(resizeHandle?.style.right).toBe("-5px");
+      expect(spacerHeaderCell.style.width).toBe("40px");
+      expect(spacerBodyCell.style.width).toBe("40px");
+      expect(tfoot.className).toContain("[&>tr>td:last-child]:w-[40px]");
+      expect(tfoot.className).not.toContain("[&>tr>td:last-child]:sticky");
     } finally {
       unmount(root, container);
     }

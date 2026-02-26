@@ -275,6 +275,7 @@ function MenuTriggerHarness({ onTriggerClick }: { onTriggerClick: () => void }) 
       menuColumnHelper.display({
         id: "actions",
         header: "Actions",
+        meta: { containsButton: true },
         cell: () => {
           const ctx = useDataGrid();
           return (
@@ -329,6 +330,7 @@ function DropdownMenuHarness() {
       menuColumnHelper.display({
         id: "actions",
         header: "Actions",
+        meta: { containsButton: true },
         cell: () => {
           const ctx = useDataGrid();
           return (
