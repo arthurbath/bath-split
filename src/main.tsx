@@ -4,8 +4,6 @@ import App from "./App.tsx";
 import { installClientConsoleMirror } from "./platform/dev/clientConsoleMirror";
 import "./index.css";
 
-document.documentElement.classList.add("dark");
-
 if (import.meta.env.DEV) {
   installClientConsoleMirror();
 }
