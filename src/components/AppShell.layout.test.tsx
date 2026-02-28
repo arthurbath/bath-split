@@ -119,9 +119,20 @@ function renderShell(pathname: string) {
           <AppShell
             household={household}
             userId="user-1"
+            userEmail="user@example.com"
             onSignOut={async () => {}}
-            onHouseholdRefetch={() => {}}
             onUpdatePartnerSettings={async () => {}}
+            householdMembers={[]}
+            householdMembersLoading={false}
+            householdMembersError={null}
+            pendingHouseholdMemberId={null}
+            rotatingHouseholdInviteCode={false}
+            leavingHousehold={false}
+            deletingHousehold={false}
+            onRotateHouseholdInviteCode={async () => {}}
+            onRemoveHouseholdMember={async () => {}}
+            onLeaveHousehold={async () => {}}
+            onDeleteHousehold={async () => {}}
           />
         </MemoryRouter>
       </QueryClientProvider>,

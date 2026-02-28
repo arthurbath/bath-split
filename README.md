@@ -17,6 +17,7 @@ Split shared expenses fairly between two partners. The Budget module calculates 
 - Settlement summary showing who owes whom
 - Backup and restore points for household data
 - Partner invite codes for joining an existing household
+- Household membership controls: view members, rotate invite code, remove members, leave household, and delete household
 
 Accessible at [budget.bath.garden](https://budget.bath.garden).
 
@@ -29,6 +30,7 @@ Plan and label Kallax-style cubby layouts across one or more named units in a sh
 - Limbo staging area for unplaced inserts
 - Click-to-move workflow for placing and relocating inserts
 - Household invite code flow for sharing the same drawer layout
+- Household membership controls: view members, rotate invite code, remove members, leave household, and delete household
 
 Accessible at [drawers.bath.garden](https://drawers.bath.garden).
 

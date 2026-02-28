@@ -23,12 +23,13 @@ import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { handleClientSideLinkNavigation } from '@/lib/navigation';
+import type { HouseholdMember } from '@/platform/households';
 
 interface AppShellProps {
   household: HouseholdData;
   userId: string;
+  userEmail: string;
   onSignOut: () => void;
-  onHouseholdRefetch: () => void;
   onUpdatePartnerSettings: (input: {
     partnerXName: string;
     partnerYName: string;
@@ -36,9 +37,37 @@ interface AppShellProps {
     partnerXWageCentsPerDollar: number | null;
     partnerYWageCentsPerDollar: number | null;
   }) => Promise<void>;
+  householdMembers: HouseholdMember[];
+  householdMembersLoading: boolean;
+  householdMembersError: string | null;
+  pendingHouseholdMemberId: string | null;
+  rotatingHouseholdInviteCode: boolean;
+  leavingHousehold: boolean;
+  deletingHousehold: boolean;
+  onRotateHouseholdInviteCode: () => Promise<void>;
+  onRemoveHouseholdMember: (memberUserId: string) => Promise<void>;
+  onLeaveHousehold: () => Promise<void>;
+  onDeleteHousehold: () => Promise<void>;
 }
 
-export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onUpdatePartnerSettings }: AppShellProps) {
+export function AppShell({
+  household,
+  userId,
+  userEmail,
+  onSignOut,
+  onUpdatePartnerSettings,
+  householdMembers,
+  householdMembersLoading,
+  householdMembersError,
+  pendingHouseholdMemberId,
+  rotatingHouseholdInviteCode,
+  leavingHousehold,
+  deletingHousehold,
+  onRotateHouseholdInviteCode,
+  onRemoveHouseholdMember,
+  onLeaveHousehold,
+  onDeleteHousehold,
+}: AppShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -291,8 +320,20 @@ export function AppShell({ household, userId, onSignOut, onHouseholdRefetch, onU
               wageGapAdjustmentEnabled={household.wageGapAdjustmentEnabled}
               partnerXWageCentsPerDollar={household.partnerXWageCentsPerDollar}
               partnerYWageCentsPerDollar={household.partnerYWageCentsPerDollar}
+              userEmail={userEmail}
               inviteCode={household.inviteCode}
+              householdMembers={householdMembers}
+              householdMembersLoading={householdMembersLoading}
+              householdMembersError={householdMembersError}
+              pendingHouseholdMemberId={pendingHouseholdMemberId}
+              rotatingHouseholdInviteCode={rotatingHouseholdInviteCode}
+              leavingHousehold={leavingHousehold}
+              deletingHousehold={deletingHousehold}
               onUpdatePartnerSettings={onUpdatePartnerSettings}
+              onRotateHouseholdInviteCode={onRotateHouseholdInviteCode}
+              onRemoveHouseholdMember={onRemoveHouseholdMember}
+              onLeaveHousehold={onLeaveHousehold}
+              onDeleteHousehold={onDeleteHousehold}
               onAddCategory={addCategory}
               onUpdateCategory={updateCategory}
               onRemoveCategory={removeCategory}

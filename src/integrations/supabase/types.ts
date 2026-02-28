@@ -271,21 +271,18 @@ export type Database = {
           created_at: string
           household_id: string
           id: string
-          partner_label: string
           user_id: string
         }
         Insert: {
           created_at?: string
           household_id: string
           id?: string
-          partner_label: string
           user_id: string
         }
         Update: {
           created_at?: string
           household_id?: string
           id?: string
-          partner_label?: string
           user_id?: string
         }
         Relationships: [
@@ -877,8 +874,30 @@ export type Database = {
     }
     Functions: {
       budget_create_household_for_current_user: { Args: never; Returns: Json }
+      budget_delete_household: {
+        Args: { _household_id: string }
+        Returns: Json
+      }
       budget_join_household_for_current_user: {
         Args: { _invite_code: string }
+        Returns: Json
+      }
+      budget_leave_household: {
+        Args: { _household_id: string }
+        Returns: Json
+      }
+      budget_list_household_members: {
+        Args: { _household_id: string }
+        Returns: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          is_self: boolean
+          user_id: string
+        }[]
+      }
+      budget_remove_household_member: {
+        Args: { _household_id: string; _member_user_id: string }
         Returns: Json
       }
       budget_reassign_category_and_delete: {
@@ -901,6 +920,10 @@ export type Database = {
         Args: { _household_id: string; _snapshot: Json }
         Returns: Json
       }
+      budget_rotate_household_invite_code: {
+        Args: { _household_id: string }
+        Returns: Json
+      }
       budget_update_partner_names: {
         Args: {
           _household_id: string
@@ -918,6 +941,37 @@ export type Database = {
           _partner_y_wage_cents_per_dollar: number | null
           _wage_gap_adjustment_enabled: boolean
         }
+        Returns: Json
+      }
+      drawers_create_household_for_current_user: { Args: never; Returns: Json }
+      drawers_delete_household: {
+        Args: { _household_id: string }
+        Returns: Json
+      }
+      drawers_join_household_for_current_user: {
+        Args: { _invite_code: string }
+        Returns: Json
+      }
+      drawers_leave_household: {
+        Args: { _household_id: string }
+        Returns: Json
+      }
+      drawers_list_household_members: {
+        Args: { _household_id: string }
+        Returns: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          is_self: boolean
+          user_id: string
+        }[]
+      }
+      drawers_remove_household_member: {
+        Args: { _household_id: string; _member_user_id: string }
+        Returns: Json
+      }
+      drawers_rotate_household_invite_code: {
+        Args: { _household_id: string }
         Returns: Json
       }
       drawers_save_unit: {
@@ -948,11 +1002,11 @@ export type Database = {
       }
       lookup_drawers_household_by_invite_code: {
         Args: { _code: string }
-        Returns: string
+        Returns: string | null
       }
       lookup_household_by_invite_code: {
         Args: { _code: string }
-        Returns: string
+        Returns: string | null
       }
       move_drawers_drawer: {
         Args: {

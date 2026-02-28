@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Copy, LayoutGrid, MoreHorizontal, Plus, Settings } from 'lucide-react';
+import { LayoutGrid, MoreHorizontal, Plus, Settings } from 'lucide-react';
 import { ToplineHeader } from '@/platform/components/ToplineHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,11 +18,24 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useModuleBasePath } from '@/platform/hooks/useHostModule';
 import { MobileBottomNav } from '@/platform/components/MobileBottomNav';
 import { handleClientSideLinkNavigation } from '@/lib/navigation';
+import { HouseholdManagementPanel, type HouseholdMember } from '@/platform/households';
 
 interface DrawersPlannerProps {
   household: DrawersHouseholdData;
   userId: string;
+  userEmail: string;
   onSignOut: () => Promise<void> | void;
+  householdMembers: HouseholdMember[];
+  householdMembersLoading: boolean;
+  householdMembersError: string | null;
+  pendingHouseholdMemberId: string | null;
+  rotatingHouseholdInviteCode: boolean;
+  leavingHousehold: boolean;
+  deletingHousehold: boolean;
+  onRotateHouseholdInviteCode: () => Promise<void>;
+  onRemoveHouseholdMember: (memberUserId: string) => Promise<void>;
+  onLeaveHousehold: () => Promise<void>;
+  onDeleteHousehold: () => Promise<void>;
 }
 
 type DeleteMode = 'move' | 'delete';
@@ -87,7 +100,23 @@ function getDesktopUnitGridWidth(cubbiesWide: number): string {
   return `${clampedWidth * cubbySizePx + (clampedWidth - 1) * cubbyGapPx}px`;
 }
 
-export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerProps) {
+export function DrawersPlanner({
+  household,
+  userId,
+  userEmail,
+  onSignOut,
+  householdMembers,
+  householdMembersLoading,
+  householdMembersError,
+  pendingHouseholdMemberId,
+  rotatingHouseholdInviteCode,
+  leavingHousehold,
+  deletingHousehold,
+  onRotateHouseholdInviteCode,
+  onRemoveHouseholdMember,
+  onLeaveHousehold,
+  onDeleteHousehold,
+}: DrawersPlannerProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const basePath = useModuleBasePath();
@@ -148,7 +177,6 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
   const [addDrawerDialogOpen, setAddDrawerDialogOpen] = useState(false);
   const [addDrawerBusy, setAddDrawerBusy] = useState(false);
   const [addDrawerTarget, setAddDrawerTarget] = useState<AddDrawerTarget>(null);
-  const [inviteCodeCopied, setInviteCodeCopied] = useState(false);
   const [newDrawerType, setNewDrawerType] = useState<DrawerType>('black');
   const [newDrawerLabel, setNewDrawerLabel] = useState('');
 
@@ -446,15 +474,6 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
     }
   };
 
-  const handleCopyInviteCode = async () => {
-    if (!household.inviteCode) return;
-
-    await navigator.clipboard.writeText(household.inviteCode);
-    setInviteCodeCopied(true);
-    toast({ title: 'Invite code copied!' });
-    window.setTimeout(() => setInviteCodeCopied(false), 2000);
-  };
-
   if (unitsLoading || drawersLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -712,23 +731,22 @@ export function DrawersPlanner({ household, userId, onSignOut }: DrawersPlannerP
 
       {isConfigRoute && (
       <main className="mx-auto max-w-5xl px-4 pt-6 pb-24 md:pb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Invite Collaborators</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2">
-              <Input
-                readOnly
-                value={household.inviteCode ?? 'Generating...'}
-                className="font-mono text-lg tracking-widest text-center"
-              />
-              <Button variant="outline" size="icon" onClick={() => void handleCopyInviteCode()} disabled={!household.inviteCode}>
-                {inviteCodeCopied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <HouseholdManagementPanel
+          moduleName="Drawer Planner"
+          userEmail={userEmail}
+          inviteCode={household.inviteCode}
+          members={householdMembers}
+          membersLoading={householdMembersLoading}
+          membersError={householdMembersError}
+          pendingMemberId={pendingHouseholdMemberId}
+          rotatingInviteCode={rotatingHouseholdInviteCode}
+          leavingHousehold={leavingHousehold}
+          deletingHousehold={deletingHousehold}
+          onRotateInviteCode={onRotateHouseholdInviteCode}
+          onRemoveMember={onRemoveHouseholdMember}
+          onLeaveHousehold={onLeaveHousehold}
+          onDeleteHousehold={onDeleteHousehold}
+        />
       </main>
       )}
 

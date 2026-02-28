@@ -6,6 +6,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
+import { budgetHouseholdAdapter, useHouseholdManagement } from '@/platform/households';
 
 const DEFAULT_PARTNER_X_NAME = 'Partner A';
 const DEFAULT_PARTNER_Y_NAME = 'Partner B';
@@ -105,6 +106,22 @@ export function useHouseholdData(user: User | null) {
     queryFn: fetchHousehold,
   });
 
+  const householdManagement = useHouseholdManagement({
+    adapter: budgetHouseholdAdapter,
+    householdId: household?.householdId ?? null,
+    userId,
+    enabled: !!userId,
+    onInviteCodeChanged: (inviteCode) => {
+      queryClient.setQueryData<HouseholdData | null>(queryKey, (current) => {
+        if (!current) return current;
+        return { ...current, inviteCode };
+      });
+    },
+    onExitedHousehold: async () => {
+      queryClient.setQueryData(queryKey, null);
+    },
+  });
+
   const createHousehold = useCallback(async () => {
     if (!userId) throw new Error('Not authenticated');
 
@@ -183,8 +200,19 @@ export function useHouseholdData(user: User | null) {
     createHousehold,
     joinHousehold,
     updatePartnerSettings,
+    householdMembers: householdManagement.members,
+    householdMembersLoading: householdManagement.membersLoading,
+    householdMembersError: householdManagement.membersError,
+    pendingHouseholdMemberId: householdManagement.pendingMemberId,
+    rotatingHouseholdInviteCode: householdManagement.rotatingInviteCode,
+    leavingHousehold: householdManagement.leavingHousehold,
+    deletingHousehold: householdManagement.deletingHousehold,
+    rotateHouseholdInviteCode: householdManagement.rotateInviteCode,
+    removeHouseholdMember: householdManagement.removeMember,
+    leaveHousehold: householdManagement.leaveHousehold,
+    deleteHousehold: householdManagement.deleteHousehold,
     refetch: async () => {
-      await refetch();
+      await Promise.all([refetch(), householdManagement.refetchMembers()]);
     },
   };
 }

@@ -11,7 +11,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { Label } from '@/components/ui/label';
 import { PersistentTooltipText } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
-import { Copy, Check, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import type { Category } from '@/hooks/useCategories';
@@ -22,6 +22,7 @@ import type { Income } from '@/hooks/useIncomes';
 import type { RestorePoint } from '@/hooks/useRestorePoints';
 import type { Json } from '@/integrations/supabase/types';
 import { CONFIG_PAYMENT_METHODS_GRID_DEFAULT_WIDTHS, GRID_ACTIONS_COLUMN_ID, GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH } from '@/lib/gridColumnWidths';
+import { HouseholdManagementPanel, type HouseholdMember } from '@/platform/households';
 
 interface ConfigurationTabProps {
   userId?: string;
@@ -35,7 +36,15 @@ interface ConfigurationTabProps {
   wageGapAdjustmentEnabled: boolean;
   partnerXWageCentsPerDollar: number | null;
   partnerYWageCentsPerDollar: number | null;
+  userEmail: string;
   inviteCode: string | null;
+  householdMembers: HouseholdMember[];
+  householdMembersLoading: boolean;
+  householdMembersError: string | null;
+  pendingHouseholdMemberId: string | null;
+  rotatingHouseholdInviteCode: boolean;
+  leavingHousehold: boolean;
+  deletingHousehold: boolean;
   onUpdatePartnerSettings: (input: {
     partnerXName: string;
     partnerYName: string;
@@ -43,6 +52,10 @@ interface ConfigurationTabProps {
     partnerXWageCentsPerDollar: number | null;
     partnerYWageCentsPerDollar: number | null;
   }) => Promise<void>;
+  onRotateHouseholdInviteCode: () => Promise<void>;
+  onRemoveHouseholdMember: (memberUserId: string) => Promise<void>;
+  onLeaveHousehold: () => Promise<void>;
+  onDeleteHousehold: () => Promise<void>;
   onAddCategory: (name: string) => Promise<void>;
   onUpdateCategory: (id: string, name: string) => Promise<void>;
   onRemoveCategory: (id: string) => Promise<void>;
@@ -228,38 +241,6 @@ function PartnersCard({ partnerX, partnerY, wageGapAdjustmentEnabled, partnerXWa
             {saving ? 'Saving…' : 'Save'}
           </Button>
           </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function InviteCard({ inviteCode }: { inviteCode: string | null }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    if (!inviteCode) return;
-    await navigator.clipboard.writeText(inviteCode);
-    setCopied(true);
-    toast({ title: 'Invite code copied!' });
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Invite Collaborators</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex gap-2">
-          <Input
-            readOnly
-            value={inviteCode ?? 'Generating...'}
-            className="font-mono text-lg tracking-widest text-center"
-          />
-          <Button variant="outline" size="icon" onClick={handleCopy} disabled={!inviteCode}>
-            {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
-          </Button>
         </div>
       </CardContent>
     </Card>
@@ -722,8 +703,11 @@ export function ConfigurationTab({
   categories, linkedAccounts, expenses,
   categoryPendingById = {},
   linkedAccountPendingById = {},
-  partnerX, partnerY, wageGapAdjustmentEnabled, partnerXWageCentsPerDollar, partnerYWageCentsPerDollar, inviteCode,
+  partnerX, partnerY, wageGapAdjustmentEnabled, partnerXWageCentsPerDollar, partnerYWageCentsPerDollar,
+  userEmail, inviteCode,
+  householdMembers, householdMembersLoading, householdMembersError, pendingHouseholdMemberId, rotatingHouseholdInviteCode, leavingHousehold, deletingHousehold,
   onUpdatePartnerSettings,
+  onRotateHouseholdInviteCode, onRemoveHouseholdMember, onLeaveHousehold, onDeleteHousehold,
   onAddCategory, onUpdateCategory, onRemoveCategory, onReassignCategory, onUpdateCategoryColor,
   onAddLinkedAccount, onUpdateLinkedAccount, onRemoveLinkedAccount, onReassignLinkedAccount, onUpdateLinkedAccountColor,
   points, incomes, onSaveRestorePoint, onRemoveRestorePoint, onUpdateRestorePointNotes, onRestore,
@@ -738,7 +722,6 @@ export function ConfigurationTab({
         partnerYWageCentsPerDollar={partnerYWageCentsPerDollar}
         onSave={onUpdatePartnerSettings}
       />
-      <InviteCard inviteCode={inviteCode} />
       <ManagedListSection
         title="Categories"
         description="Organize expenses into categories."
@@ -777,6 +760,22 @@ export function ConfigurationTab({
         onRemove={onRemoveRestorePoint}
         onUpdateNotes={onUpdateRestorePointNotes}
         onRestore={onRestore}
+      />
+      <HouseholdManagementPanel
+        moduleName="Budget"
+        userEmail={userEmail}
+        inviteCode={inviteCode}
+        members={householdMembers}
+        membersLoading={householdMembersLoading}
+        membersError={householdMembersError}
+        pendingMemberId={pendingHouseholdMemberId}
+        rotatingInviteCode={rotatingHouseholdInviteCode}
+        leavingHousehold={leavingHousehold}
+        deletingHousehold={deletingHousehold}
+        onRotateInviteCode={onRotateHouseholdInviteCode}
+        onRemoveMember={onRemoveHouseholdMember}
+        onLeaveHousehold={onLeaveHousehold}
+        onDeleteHousehold={onDeleteHousehold}
       />
     </div>
   );

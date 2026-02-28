@@ -65,6 +65,17 @@ describe('DrawersIndex access', () => {
       displayName: 'User',
       createHousehold: vi.fn(),
       joinHousehold: vi.fn(),
+      householdMembers: [],
+      householdMembersLoading: false,
+      householdMembersError: null,
+      pendingHouseholdMemberId: null,
+      rotatingHouseholdInviteCode: false,
+      leavingHousehold: false,
+      deletingHousehold: false,
+      rotateHouseholdInviteCode: vi.fn(),
+      removeHouseholdMember: vi.fn(),
+      leaveHousehold: vi.fn(),
+      deleteHousehold: vi.fn(),
     });
 
     const { container, root } = renderComponent();
@@ -93,6 +104,17 @@ describe('DrawersIndex access', () => {
       displayName: 'User',
       createHousehold: vi.fn(),
       joinHousehold: vi.fn(),
+      householdMembers: [],
+      householdMembersLoading: false,
+      householdMembersError: null,
+      pendingHouseholdMemberId: null,
+      rotatingHouseholdInviteCode: false,
+      leavingHousehold: false,
+      deletingHousehold: false,
+      rotateHouseholdInviteCode: vi.fn(),
+      removeHouseholdMember: vi.fn(),
+      leaveHousehold: vi.fn(),
+      deleteHousehold: vi.fn(),
     });
 
     const { container, root } = renderComponent();
@@ -116,6 +138,17 @@ describe('DrawersIndex access', () => {
       displayName: 'User',
       createHousehold: vi.fn(),
       joinHousehold: vi.fn(),
+      householdMembers: [],
+      householdMembersLoading: false,
+      householdMembersError: null,
+      pendingHouseholdMemberId: null,
+      rotatingHouseholdInviteCode: false,
+      leavingHousehold: false,
+      deletingHousehold: false,
+      rotateHouseholdInviteCode: vi.fn(),
+      removeHouseholdMember: vi.fn(),
+      leaveHousehold: vi.fn(),
+      deleteHousehold: vi.fn(),
     });
 
     const { container, root } = renderComponent();

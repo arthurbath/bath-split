@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
+import type { Json } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import type { DrawersHouseholdData } from '@/modules/drawers/types/drawers';
+import { drawersHouseholdAdapter, useHouseholdManagement, type HouseholdMember } from '@/platform/households';
+import { showMutationError, supabaseRequest } from '@/lib/supabaseRequest';
+import { withMutationTiming } from '@/lib/mutationTiming';
 
 interface UseDrawersHouseholdDataResult {
   household: DrawersHouseholdData | null;
@@ -9,6 +13,17 @@ interface UseDrawersHouseholdDataResult {
   displayName: string;
   createHousehold: () => Promise<void>;
   joinHousehold: (inviteCode: string) => Promise<void>;
+  householdMembers: HouseholdMember[];
+  householdMembersLoading: boolean;
+  householdMembersError: string | null;
+  pendingHouseholdMemberId: string | null;
+  rotatingHouseholdInviteCode: boolean;
+  leavingHousehold: boolean;
+  deletingHousehold: boolean;
+  rotateHouseholdInviteCode: () => Promise<void>;
+  removeHouseholdMember: (memberUserId: string) => Promise<void>;
+  leaveHousehold: () => Promise<void>;
+  deleteHousehold: () => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -16,30 +31,28 @@ function normalizeInviteCode(code: string): string {
   return code.trim().toLowerCase();
 }
 
+function toRpcHouseholdData(payload: Json): DrawersHouseholdData {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Unexpected household response shape.');
+  }
+
+  const row = payload as Record<string, unknown>;
+  const householdId = typeof row.householdId === 'string' ? row.householdId : '';
+  if (!householdId) throw new Error('Household response missing householdId.');
+
+  return {
+    householdId,
+    householdName: typeof row.householdName === 'string' ? row.householdName : 'My Drawer Household',
+    inviteCode: typeof row.inviteCode === 'string' ? row.inviteCode : null,
+    displayName: typeof row.displayName === 'string' ? row.displayName : 'You',
+  };
+}
+
 export function useDrawersHouseholdData(user: User | null, enabled: boolean): UseDrawersHouseholdDataResult {
   const [household, setHousehold] = useState<DrawersHouseholdData | null>(null);
   const [displayName, setDisplayName] = useState('You');
   const [loading, setLoading] = useState(true);
   const userId = user?.id ?? null;
-
-  const getProfileDisplayName = useCallback(async () => {
-    if (!userId) throw new Error('Not authenticated');
-
-    const { data, error } = await supabase
-      .from('bathos_profiles')
-      .select('display_name')
-      .eq('id', userId)
-      .single();
-
-    if (error) throw new Error(`Profile lookup failed: ${error.message}`);
-
-    const name = data?.display_name?.trim();
-    if (!name) {
-      throw new Error('Please set your display name in Account before creating or joining a drawer household.');
-    }
-
-    return name;
-  }, [userId]);
 
   const fetchHousehold = useCallback(async () => {
     if (!userId || !enabled) {
@@ -51,35 +64,39 @@ export function useDrawersHouseholdData(user: User | null, enabled: boolean): Us
     setLoading(true);
 
     try {
-      const [{ data: profile, error: profileError }, { data: memberships, error: membershipError }] = await Promise.all([
-        supabase.from('bathos_profiles').select('display_name').eq('id', userId).single(),
-        supabase
-          .from('drawers_household_members')
-          .select('household_id')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: true })
-          .limit(1),
+      const [profile, membership] = await Promise.all([
+        supabaseRequest(async () =>
+          await supabase
+            .from('bathos_profiles')
+            .select('display_name')
+            .eq('id', userId)
+            .single(),
+        ),
+        supabaseRequest(async () =>
+          await supabase
+            .from('drawers_household_members')
+            .select('household_id')
+            .eq('user_id', userId)
+            .maybeSingle(),
+        ),
       ]);
-
-      if (profileError) throw new Error(`Profile lookup failed: ${profileError.message}`);
-      if (membershipError) throw new Error(`Membership lookup failed: ${membershipError.message}`);
 
       const nextDisplayName = profile?.display_name?.trim() || user.email || 'You';
       setDisplayName(nextDisplayName);
 
-      const membership = memberships?.[0];
-      if (!membership) {
+      if (!membership?.household_id) {
         setHousehold(null);
         return;
       }
 
-      const { data: hh, error: householdError } = await supabase
-        .from('drawers_households')
-        .select('id, name, invite_code')
-        .eq('id', membership.household_id)
-        .single();
+      const hh = await supabaseRequest(async () =>
+        await supabase
+          .from('drawers_households')
+          .select('id, name, invite_code')
+          .eq('id', membership.household_id)
+          .single(),
+      );
 
-      if (householdError) throw new Error(`Household lookup failed: ${householdError.message}`);
       if (!hh) {
         setHousehold(null);
         return;
@@ -103,67 +120,67 @@ export function useDrawersHouseholdData(user: User | null, enabled: boolean): Us
     void fetchHousehold();
   }, [fetchHousehold]);
 
+  const householdManagement = useHouseholdManagement({
+    adapter: drawersHouseholdAdapter,
+    householdId: household?.householdId ?? null,
+    userId,
+    enabled: !!userId && enabled,
+    onInviteCodeChanged: (inviteCode) => {
+      setHousehold((current) => {
+        if (!current) return current;
+        return { ...current, inviteCode };
+      });
+    },
+    onExitedHousehold: async () => {
+      setHousehold(null);
+      await fetchHousehold();
+    },
+  });
+
   const createHousehold = useCallback(async () => {
     if (!userId) throw new Error('Not authenticated');
 
-    const profileDisplayName = await getProfileDisplayName();
-    const householdId = crypto.randomUUID();
-    const { error: createError } = await supabase
-      .from('drawers_households')
-      .insert({ id: householdId });
+    try {
+      const payload = await withMutationTiming({ module: 'drawers', action: 'household.create' }, async () => {
+        const data = await supabaseRequest(async () =>
+          await supabase.rpc('drawers_create_household_for_current_user'),
+        );
+        return data as Json;
+      });
 
-    if (createError) {
-      throw new Error(createError?.message || 'Failed to create drawer household.');
+      const nextHousehold = toRpcHouseholdData(payload);
+      setDisplayName(nextHousehold.displayName);
+      setHousehold(nextHousehold);
+    } catch (error: unknown) {
+      showMutationError(error);
+      throw error;
     }
+  }, [userId]);
 
-    const { error: memberError } = await supabase.from('drawers_household_members').insert({
-      household_id: householdId,
-      user_id: userId,
-    });
+  const joinHousehold = useCallback(async (inviteCode: string) => {
+    if (!userId) throw new Error('Not authenticated');
 
-    if (memberError) throw new Error(`Failed to join created household: ${memberError.message}`);
+    const normalizedCode = normalizeInviteCode(inviteCode);
+    if (!normalizedCode) throw new Error('Invite code is required.');
 
-    setDisplayName(profileDisplayName);
-    await fetchHousehold();
-  }, [fetchHousehold, getProfileDisplayName, userId]);
-
-  const joinHousehold = useCallback(
-    async (inviteCode: string) => {
-      if (!userId) throw new Error('Not authenticated');
-
-      const normalizedCode = normalizeInviteCode(inviteCode);
-      if (!normalizedCode) throw new Error('Invite code is required.');
-
-      await getProfileDisplayName();
-
-      const { data: householdId, error: lookupError } = await supabase.rpc('lookup_drawers_household_by_invite_code', {
-        _code: normalizedCode,
+    try {
+      const payload = await withMutationTiming({ module: 'drawers', action: 'household.join' }, async () => {
+        const data = await supabaseRequest(async () =>
+          await supabase.rpc('drawers_join_household_for_current_user', {
+            _invite_code: normalizedCode,
+          }),
+        );
+        return data as Json;
       });
 
-      if (lookupError) throw new Error(`Lookup failed: ${lookupError.message}`);
-      if (!householdId) throw new Error('Invalid invite code.');
-
-      const { data: existingMembership, error: existingError } = await supabase
-        .from('drawers_household_members')
-        .select('id')
-        .eq('household_id', householdId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (existingError) throw new Error(`Membership check failed: ${existingError.message}`);
-      if (existingMembership) throw new Error('You are already a member of this drawer household.');
-
-      const { error: joinError } = await supabase.from('drawers_household_members').insert({
-        household_id: householdId,
-        user_id: userId,
-      });
-
-      if (joinError) throw new Error(`Join failed: ${joinError.message}`);
-
-      await fetchHousehold();
-    },
-    [fetchHousehold, getProfileDisplayName, userId],
-  );
+      const nextHousehold = toRpcHouseholdData(payload);
+      setDisplayName(nextHousehold.displayName);
+      setHousehold(nextHousehold);
+    } catch (error: unknown) {
+      showMutationError(error);
+      throw error;
+    }
+  }, [userId]);
 
   return {
     household,
@@ -171,6 +188,19 @@ export function useDrawersHouseholdData(user: User | null, enabled: boolean): Us
     displayName,
     createHousehold,
     joinHousehold,
-    refetch: fetchHousehold,
+    householdMembers: householdManagement.members,
+    householdMembersLoading: householdManagement.membersLoading,
+    householdMembersError: householdManagement.membersError,
+    pendingHouseholdMemberId: householdManagement.pendingMemberId,
+    rotatingHouseholdInviteCode: householdManagement.rotatingInviteCode,
+    leavingHousehold: householdManagement.leavingHousehold,
+    deletingHousehold: householdManagement.deletingHousehold,
+    rotateHouseholdInviteCode: householdManagement.rotateInviteCode,
+    removeHouseholdMember: householdManagement.removeMember,
+    leaveHousehold: householdManagement.leaveHousehold,
+    deleteHousehold: householdManagement.deleteHousehold,
+    refetch: async () => {
+      await Promise.all([fetchHousehold(), householdManagement.refetchMembers()]);
+    },
   };
 }
