@@ -100,7 +100,7 @@ function BackupResizeHarness() {
     startSize: null,
     deltaOffset: null,
     deltaPercentage: null,
-    isResizingColumn: false,
+    isResizingColumn: false as string | false,
     columnSizingStart: [],
   });
 
