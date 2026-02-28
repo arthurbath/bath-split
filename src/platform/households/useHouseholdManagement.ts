@@ -114,12 +114,12 @@ export function useHouseholdManagement({
     setMembersLoading(true);
     try {
       const rows = await supabaseRequest(async () =>
-        await supabase.rpc(adapter.rpc.listMembers as never, {
+        await supabase.rpc(adapter.rpc.listMembers as any, {
           _household_id: householdId,
         }),
       );
 
-      const nextMembers = Array.isArray(rows) ? rows.map(toMember) : [];
+      const nextMembers = Array.isArray(rows) ? (rows as unknown[]).map(toMember) : [];
       setMembers(nextMembers);
       setMembersError(null);
     } catch (error) {
@@ -144,7 +144,7 @@ export function useHouseholdManagement({
     try {
       const payload = await withMutationTiming({ module: adapter.module, action: 'household.rotateInviteCode' }, async () => {
         const data = await supabaseRequest(async () =>
-          await supabase.rpc(adapter.rpc.rotateInviteCode as never, {
+          await supabase.rpc(adapter.rpc.rotateInviteCode as any, {
             _household_id: householdId,
           }),
         );
@@ -169,7 +169,7 @@ export function useHouseholdManagement({
     try {
       const payload = await withMutationTiming({ module: adapter.module, action: 'household.removeMember' }, async () => {
         const data = await supabaseRequest(async () =>
-          await supabase.rpc(adapter.rpc.removeMember as never, {
+          await supabase.rpc(adapter.rpc.removeMember as any, {
             _household_id: householdId,
             _member_user_id: memberUserId,
           }),
@@ -196,7 +196,7 @@ export function useHouseholdManagement({
     try {
       await withMutationTiming({ module: adapter.module, action: 'household.leave' }, async () => {
         await supabaseRequest(async () =>
-          await supabase.rpc(adapter.rpc.leaveHousehold as never, {
+          await supabase.rpc(adapter.rpc.leaveHousehold as any, {
             _household_id: householdId,
           }),
         );
@@ -221,7 +221,7 @@ export function useHouseholdManagement({
     try {
       await withMutationTiming({ module: adapter.module, action: 'household.delete' }, async () => {
         await supabaseRequest(async () =>
-          await supabase.rpc(adapter.rpc.deleteHousehold as never, {
+          await supabase.rpc(adapter.rpc.deleteHousehold as any, {
             _household_id: householdId,
           }),
         );
