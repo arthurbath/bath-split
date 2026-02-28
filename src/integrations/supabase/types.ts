@@ -301,12 +301,12 @@ export type Database = {
           id: string
           invite_code: string | null
           name: string
-          partner_x_wage_cents_per_dollar: number | null
           partner_x_color: string | null
           partner_x_name: string
-          partner_y_wage_cents_per_dollar: number | null
+          partner_x_wage_cents_per_dollar: number | null
           partner_y_color: string | null
           partner_y_name: string
+          partner_y_wage_cents_per_dollar: number | null
           wage_gap_adjustment_enabled: boolean
         }
         Insert: {
@@ -314,12 +314,12 @@ export type Database = {
           id?: string
           invite_code?: string | null
           name?: string
-          partner_x_wage_cents_per_dollar?: number | null
           partner_x_color?: string | null
           partner_x_name?: string
-          partner_y_wage_cents_per_dollar?: number | null
+          partner_x_wage_cents_per_dollar?: number | null
           partner_y_color?: string | null
           partner_y_name?: string
+          partner_y_wage_cents_per_dollar?: number | null
           wage_gap_adjustment_enabled?: boolean
         }
         Update: {
@@ -327,12 +327,12 @@ export type Database = {
           id?: string
           invite_code?: string | null
           name?: string
-          partner_x_wage_cents_per_dollar?: number | null
           partner_x_color?: string | null
           partner_x_name?: string
-          partner_y_wage_cents_per_dollar?: number | null
+          partner_x_wage_cents_per_dollar?: number | null
           partner_y_color?: string | null
           partner_y_name?: string
+          partner_y_wage_cents_per_dollar?: number | null
           wage_gap_adjustment_enabled?: boolean
         }
         Relationships: []
@@ -882,23 +882,16 @@ export type Database = {
         Args: { _invite_code: string }
         Returns: Json
       }
-      budget_leave_household: {
-        Args: { _household_id: string }
-        Returns: Json
-      }
+      budget_leave_household: { Args: { _household_id: string }; Returns: Json }
       budget_list_household_members: {
         Args: { _household_id: string }
         Returns: {
           created_at: string
-          display_name: string | null
-          email: string | null
+          display_name: string
+          email: string
           is_self: boolean
           user_id: string
         }[]
-      }
-      budget_remove_household_member: {
-        Args: { _household_id: string; _member_user_id: string }
-        Returns: Json
       }
       budget_reassign_category_and_delete: {
         Args: {
@@ -914,6 +907,10 @@ export type Database = {
           _new_linked_account_id: string
           _old_linked_account_id: string
         }
+        Returns: Json
+      }
+      budget_remove_household_member: {
+        Args: { _household_id: string; _member_user_id: string }
         Returns: Json
       }
       budget_restore_household_snapshot: {
@@ -936,9 +933,9 @@ export type Database = {
         Args: {
           _household_id: string
           _partner_x_name: string
-          _partner_x_wage_cents_per_dollar: number | null
+          _partner_x_wage_cents_per_dollar: number
           _partner_y_name: string
-          _partner_y_wage_cents_per_dollar: number | null
+          _partner_y_wage_cents_per_dollar: number
           _wage_gap_adjustment_enabled: boolean
         }
         Returns: Json
@@ -960,8 +957,8 @@ export type Database = {
         Args: { _household_id: string }
         Returns: {
           created_at: string
-          display_name: string | null
-          email: string | null
+          display_name: string
+          email: string
           is_self: boolean
           user_id: string
         }[]
@@ -1002,11 +999,11 @@ export type Database = {
       }
       lookup_drawers_household_by_invite_code: {
         Args: { _code: string }
-        Returns: string | null
+        Returns: string
       }
       lookup_household_by_invite_code: {
         Args: { _code: string }
-        Returns: string | null
+        Returns: string
       }
       move_drawers_drawer: {
         Args: {
