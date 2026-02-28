@@ -13,6 +13,17 @@ export default function DrawersIndex() {
     displayName,
     createHousehold,
     joinHousehold,
+    householdMembers,
+    householdMembersLoading,
+    householdMembersError,
+    pendingHouseholdMemberId,
+    rotatingHouseholdInviteCode,
+    leavingHousehold,
+    deletingHousehold,
+    rotateHouseholdInviteCode,
+    removeHouseholdMember,
+    leaveHousehold,
+    deleteHousehold,
   } = useDrawersHouseholdData(user, !!user);
 
   if (authLoading || householdLoading || isSigningOut) {
@@ -39,5 +50,23 @@ export default function DrawersIndex() {
     );
   }
 
-  return <DrawersPlanner household={household} userId={user.id} onSignOut={signOut} />;
+  return (
+    <DrawersPlanner
+      household={household}
+      userId={user.id}
+      userEmail={user.email ?? ''}
+      onSignOut={signOut}
+      householdMembers={householdMembers}
+      householdMembersLoading={householdMembersLoading}
+      householdMembersError={householdMembersError}
+      pendingHouseholdMemberId={pendingHouseholdMemberId}
+      rotatingHouseholdInviteCode={rotatingHouseholdInviteCode}
+      leavingHousehold={leavingHousehold}
+      deletingHousehold={deletingHousehold}
+      onRotateHouseholdInviteCode={rotateHouseholdInviteCode}
+      onRemoveHouseholdMember={removeHouseholdMember}
+      onLeaveHousehold={leaveHousehold}
+      onDeleteHousehold={deleteHousehold}
+    />
+  );
 }

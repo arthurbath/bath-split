@@ -7,7 +7,24 @@ import AuthPage from '@/platform/components/AuthPage';
 
 const Index = () => {
   const { user, loading: authLoading, isSigningOut, signOut } = useAuth();
-  const { household, loading: hhLoading, createHousehold, joinHousehold, updatePartnerSettings, refetch } = useHouseholdData(user);
+  const {
+    household,
+    loading: hhLoading,
+    createHousehold,
+    joinHousehold,
+    updatePartnerSettings,
+    householdMembers,
+    householdMembersLoading,
+    householdMembersError,
+    pendingHouseholdMemberId,
+    rotatingHouseholdInviteCode,
+    leavingHousehold,
+    deletingHousehold,
+    rotateHouseholdInviteCode,
+    removeHouseholdMember,
+    leaveHousehold,
+    deleteHousehold,
+  } = useHouseholdData(user);
   const setupDisplayName = (user?.user_metadata?.display_name as string | undefined)?.trim() || user?.email || 'You';
 
   if (authLoading || hhLoading || isSigningOut) {
@@ -34,9 +51,20 @@ const Index = () => {
         <AppShell
           household={household}
           userId={user.id}
+          userEmail={user.email ?? ''}
           onSignOut={signOut}
-          onHouseholdRefetch={refetch}
           onUpdatePartnerSettings={updatePartnerSettings}
+          householdMembers={householdMembers}
+          householdMembersLoading={householdMembersLoading}
+          householdMembersError={householdMembersError}
+          pendingHouseholdMemberId={pendingHouseholdMemberId}
+          rotatingHouseholdInviteCode={rotatingHouseholdInviteCode}
+          leavingHousehold={leavingHousehold}
+          deletingHousehold={deletingHousehold}
+          onRotateHouseholdInviteCode={rotateHouseholdInviteCode}
+          onRemoveHouseholdMember={removeHouseholdMember}
+          onLeaveHousehold={leaveHousehold}
+          onDeleteHousehold={deleteHousehold}
         />
       )}
     </>

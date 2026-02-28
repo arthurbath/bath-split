@@ -8,7 +8,7 @@ export interface DrawersHouseholdMembership {
 export interface DrawersHouseholdData {
   householdId: string;
   householdName: string;
-  inviteCode: string;
+  inviteCode: string | null;
   displayName: string;
 }
 
