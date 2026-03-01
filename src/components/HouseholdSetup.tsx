@@ -13,6 +13,7 @@ export function HouseholdSetup({ userId, displayName, onSignOut, onComplete, onJ
   return (
     <HouseholdSetupCard
       moduleTitle="Budget"
+      moduleId="budget"
       userId={userId}
       displayName={displayName}
       onSignOut={onSignOut}

@@ -148,8 +148,14 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 );
 DialogHeader.displayName = "DialogHeader";
 
-const DialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("-mx-6 border-y border-border px-6 pt-2 pb-[25px]", className)} {...props} />
+const DialogBody = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn("-mx-6 border-y border-border px-6 pt-2 pb-[25px]", className)}
+      {...props}
+    />
+  ),
 );
 DialogBody.displayName = "DialogBody";
 

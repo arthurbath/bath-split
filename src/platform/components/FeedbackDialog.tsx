@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { Megaphone, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,6 +20,7 @@ const ACCEPT_STRING = '.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt';
 
 interface FeedbackDialogProps {
   userId: string;
+  trigger?: ReactNode;
 }
 
 export function getFeedbackContext(moduleId: ModuleId, pathname: string): string {
@@ -29,7 +30,7 @@ export function getFeedbackContext(moduleId: ModuleId, pathname: string): string
   return 'in_app_switcher';
 }
 
-export function FeedbackDialog({ userId }: FeedbackDialogProps) {
+export function FeedbackDialog({ userId, trigger }: FeedbackDialogProps) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -109,9 +110,11 @@ export function FeedbackDialog({ userId }: FeedbackDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogTrigger asChild>
-        <Button variant="clear" size="sm" className="h-9 w-9 p-0" title="Send feedback">
-          <Megaphone className="h-4 w-4" />
-        </Button>
+        {trigger ?? (
+          <Button variant="clear" size="sm" className="h-9 w-9 p-0" title="Send feedback">
+            <Megaphone className="h-4 w-4" />
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent
         className="sm:max-w-md"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTi
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, CalendarIcon } from 'lucide-react';
+import { Pencil, Trash2, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -15,10 +15,8 @@ import type { GarageUserSettings, GarageVehicle } from '@/modules/garage/types/g
 
 interface GarageConfigViewProps {
   vehicles: GarageVehicle[];
-  activeVehicleId: string | null;
   settings: GarageUserSettings | null;
   autoOpenAddVehicle?: boolean;
-  onSetActiveVehicle: (vehicleId: string) => void;
   onAddVehicle: (input: {
     name: string;
     make?: string | null;
@@ -44,6 +42,8 @@ interface VehicleFormState {
   is_active: boolean;
 }
 
+const DAYS_PER_MONTH = 30;
+
 function emptyVehicleState(): VehicleFormState {
   return {
     id: null,
@@ -65,6 +65,11 @@ function toNumberOrNull(value: string): number | null {
   return Math.round(parsed);
 }
 
+function formatDaysAsMonths(days: number): string {
+  const months = days / DAYS_PER_MONTH;
+  return Number.isInteger(months) ? String(months) : months.toFixed(1).replace(/\.0$/, '');
+}
+
 function parseDateInputValue(value: string): Date | undefined {
   if (!value) return undefined;
   const parsed = new Date(`${value}T00:00:00`);
@@ -76,34 +81,60 @@ function toDateInputValue(date: Date): string {
   return format(date, 'yyyy-MM-dd');
 }
 
+function getCalendarMonthForDateInput(value: string): Date {
+  const parsed = parseDateInputValue(value);
+  if (parsed) return new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), 1);
+}
+
+function formatVehicleLabel(vehicle: GarageVehicle): string {
+  const year = vehicle.model_year ? String(vehicle.model_year) : 'Unknown year';
+  const make = vehicle.make?.trim() || 'Unknown make';
+  const model = vehicle.model?.trim() || 'Unknown model';
+  return `${year} ${make} ${model}`;
+}
+
+function formatVehicleMileage(miles: number): string {
+  if (miles >= 10_000) {
+    const thousands = miles / 1_000;
+    const compact = Number.isInteger(thousands) ? String(thousands) : thousands.toFixed(1).replace(/\.0$/, '');
+    return `${compact}k miles`;
+  }
+  return `${miles.toLocaleString()} miles`;
+}
+
 export function GarageConfigView({
   vehicles,
-  activeVehicleId,
   settings,
   autoOpenAddVehicle = false,
-  onSetActiveVehicle,
   onAddVehicle,
   onUpdateVehicle,
   onRemoveVehicle,
   onUpdateSettings,
 }: GarageConfigViewProps) {
-  const [settingsMiles, setSettingsMiles] = useState(String(settings?.upcoming_miles_default ?? 1000));
-  const [settingsDays, setSettingsDays] = useState(String(settings?.upcoming_days_default ?? 60));
+  const initialMiles = Math.max(0, settings?.upcoming_miles_default ?? 1000);
+  const initialDays = Math.max(0, settings?.upcoming_days_default ?? 60);
+
+  const [settingsMiles, setSettingsMiles] = useState(String(initialMiles));
+  const [settingsMonths, setSettingsMonths] = useState(formatDaysAsMonths(initialDays));
+  const [initialThresholds, setInitialThresholds] = useState(() => ({
+    miles: initialMiles,
+    days: initialDays,
+  }));
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formBusy, setFormBusy] = useState(false);
   const [vehicleForm, setVehicleForm] = useState<VehicleFormState>(emptyVehicleState());
   const [inServicePickerOpen, setInServicePickerOpen] = useState(false);
+  const [inServicePickerMonth, setInServicePickerMonth] = useState<Date>(
+    () => getCalendarMonthForDateInput(''),
+  );
   const [hasAutoOpenedModal, setHasAutoOpenedModal] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<GarageVehicle | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-
-  const activeVehicleName = useMemo(
-    () => vehicles.find((vehicle) => vehicle.id === activeVehicleId)?.name ?? 'None',
-    [activeVehicleId, vehicles],
-  );
 
   const openAddVehicle = useCallback(() => {
     setVehicleForm(emptyVehicleState());
@@ -168,12 +199,18 @@ export function GarageConfigView({
   };
 
   const saveSettings = async () => {
+    const nextMiles = Math.max(0, Number(settingsMiles) || 0);
+    const nextDays = Math.max(0, Math.round((Number(settingsMonths) || 0) * DAYS_PER_MONTH));
+
     setSettingsSaving(true);
     try {
       await onUpdateSettings({
-        upcoming_miles_default: Math.max(0, Number(settingsMiles) || 0),
-        upcoming_days_default: Math.max(0, Number(settingsDays) || 0),
+        upcoming_miles_default: nextMiles,
+        upcoming_days_default: nextDays,
       });
+      setInitialThresholds({ miles: nextMiles, days: nextDays });
+      setSettingsMiles(String(nextMiles));
+      setSettingsMonths(formatDaysAsMonths(nextDays));
       toast({ title: 'Settings updated' });
     } catch (error) {
       toast({
@@ -193,6 +230,12 @@ export function GarageConfigView({
   }, [vehicles.length]);
 
   useEffect(() => {
+    setInitialThresholds({ miles: initialMiles, days: initialDays });
+    setSettingsMiles(String(initialMiles));
+    setSettingsMonths(formatDaysAsMonths(initialDays));
+  }, [initialDays, initialMiles]);
+
+  useEffect(() => {
     if (!autoOpenAddVehicle) return;
     if (vehicles.length !== 0) return;
     if (formOpen) return;
@@ -202,37 +245,44 @@ export function GarageConfigView({
     setHasAutoOpenedModal(true);
   }, [autoOpenAddVehicle, formOpen, hasAutoOpenedModal, openAddVehicle, vehicles.length]);
 
+  const thresholdsMiles = Math.max(0, Number(settingsMiles) || 0);
+  const thresholdsDays = Math.max(0, Math.round((Number(settingsMonths) || 0) * DAYS_PER_MONTH));
+  const thresholdsChanged = thresholdsMiles !== initialThresholds.miles || thresholdsDays !== initialThresholds.days;
+
   return (
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>Due Thresholds</CardTitle>
+          <CardTitle>Thresholds for <em>Upcoming</em></CardTitle>
+          <p className="text-sm text-muted-foreground">
+            The mileage and time windows used to mark services as upcoming.
+          </p>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="garage-upcoming-miles">Upcoming Miles</Label>
+              <Label htmlFor="garage-upcoming-miles">Miles</Label>
               <Input id="garage-upcoming-miles" type="number" value={settingsMiles} onChange={(event) => setSettingsMiles(event.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="garage-upcoming-days">Upcoming Days</Label>
-              <Input id="garage-upcoming-days" type="number" value={settingsDays} onChange={(event) => setSettingsDays(event.target.value)} />
+              <Label htmlFor="garage-upcoming-months">Months</Label>
+              <Input id="garage-upcoming-months" type="number" value={settingsMonths} onChange={(event) => setSettingsMonths(event.target.value)} />
             </div>
           </div>
-          <Button type="button" onClick={() => { void saveSettings(); }} disabled={settingsSaving}>{settingsSaving ? 'Saving…' : 'Save Thresholds'}</Button>
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => { void saveSettings(); }} disabled={settingsSaving || !thresholdsChanged}>{settingsSaving ? 'Saving…' : 'Save'}</Button>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <CardTitle>Vehicles</CardTitle>
-          <Button type="button" onClick={openAddVehicle}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Vehicle
+          <Button type="button" variant="outline-success" size="sm" className="h-8 w-8 p-0" aria-label="Add vehicle" onClick={openAddVehicle}>
+            +
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Active vehicle: {activeVehicleName}</p>
           {vehicles.length === 0 ? (
             <p className="text-sm text-muted-foreground">No vehicles yet.</p>
           ) : (
@@ -242,22 +292,15 @@ export function GarageConfigView({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{vehicle.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {(vehicle.make ?? 'Unknown make')} {(vehicle.model ?? 'Unknown model')} {vehicle.model_year ? `(${vehicle.model_year})` : ''}
+                      {formatVehicleLabel(vehicle)}
                     </p>
-                    <p className="text-xs text-muted-foreground">Mileage: {vehicle.current_odometer_miles.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{formatVehicleMileage(vehicle.current_odometer_miles)}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant={vehicle.id === activeVehicleId ? 'default' : 'outline'}
-                      onClick={() => onSetActiveVehicle(vehicle.id)}
-                    >
-                      {vehicle.id === activeVehicleId ? 'Active' : 'Set Active'}
-                    </Button>
-                    <Button type="button" size="icon" variant="outline" onClick={() => openEditVehicle(vehicle)}>
+                    <Button type="button" size="sm" variant="outline" onClick={() => openEditVehicle(vehicle)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button type="button" size="icon" variant="outline-destructive" onClick={() => setDeleteTarget(vehicle)}>
+                    <Button type="button" size="sm" variant="outline-destructive" onClick={() => setDeleteTarget(vehicle)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -301,27 +344,37 @@ export function GarageConfigView({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-vehicle-date">In-service Date</Label>
-                <Popover open={inServicePickerOpen} onOpenChange={setInServicePickerOpen}>
+                <Popover
+                  open={inServicePickerOpen}
+                  onOpenChange={(nextOpen) => {
+                    setInServicePickerOpen(nextOpen);
+                    if (nextOpen) {
+                      setInServicePickerMonth(getCalendarMonthForDateInput(vehicleForm.in_service_date));
+                    }
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       id="garage-vehicle-date"
                       type="button"
                       variant="outline"
                       className={cn(
-                        'w-full justify-start text-left font-normal',
+                        'h-10 w-full justify-start rounded-md border-[hsl(var(--grid-sticky-line))] bg-background px-3 py-2 text-left text-base font-normal text-foreground hover:bg-background hover:text-foreground md:text-sm',
                         !vehicleForm.in_service_date && 'text-muted-foreground',
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {vehicleForm.in_service_date
+                      <span className="truncate">{vehicleForm.in_service_date
                         ? format(parseDateInputValue(vehicleForm.in_service_date) ?? new Date(`${vehicleForm.in_service_date}T00:00:00`), 'MMMM d, yyyy')
-                        : 'Pick a date'}
+                        : 'Pick a date'}</span>
+                      <CalendarIcon className="ml-auto h-4 w-4 shrink-0" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={parseDateInputValue(vehicleForm.in_service_date)}
+                      month={inServicePickerMonth}
+                      onMonthChange={setInServicePickerMonth}
                       onSelect={(date) => {
                         setVehicleForm((prev) => ({ ...prev, in_service_date: date ? toDateInputValue(date) : '' }));
                         setInServicePickerOpen(false);

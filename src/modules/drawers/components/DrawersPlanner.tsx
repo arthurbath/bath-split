@@ -484,7 +484,14 @@ export function DrawersPlanner({
 
   return (
     <div className="min-h-screen bg-background">
-      <ToplineHeader title="Drawer Planner" userId={userId} displayName={household.displayName} onSignOut={onSignOut} showAppSwitcher />
+      <ToplineHeader
+        title="Drawer Planner"
+        moduleId="drawers"
+        userId={userId}
+        displayName={household.displayName}
+        onSignOut={onSignOut}
+        showAppSwitcher
+      />
 
       <div className="mx-auto hidden max-w-5xl px-4 pt-6 md:block">
         <nav className="hidden w-full grid-cols-2 gap-0.5 rounded-lg border border-[hsl(var(--grid-sticky-line))] bg-[hsl(var(--switch-off))] p-1 text-muted-foreground md:grid">

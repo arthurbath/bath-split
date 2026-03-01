@@ -1,18 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DataGrid, GridEditableCell, gridMenuTriggerProps, useDataGrid } from '@/components/ui/data-grid';
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DataGrid, GridEditableCell, gridMenuTriggerProps, gridNavProps, useDataGrid } from '@/components/ui/data-grid';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { MoreHorizontal, Plus, FileText, Trash2, Pencil } from 'lucide-react';
+import { MoreHorizontal, Plus, FileText, Trash2, Pencil, CalendarIcon, CircleMinus } from 'lucide-react';
+import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import { GARAGE_SERVICINGS_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS } from '@/lib/gridColumnWidths';
+import { cn } from '@/lib/utils';
+import { getGarageServiceTypeLabel } from '@/modules/garage/lib/serviceTypes';
 import type {
   GarageService,
   GarageServiceStatus,
@@ -22,8 +27,14 @@ import type {
 const columnHelper = createColumnHelper<GarageServicingWithRelations>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 const SERVICING_ACTIONS_NAV_COL = 6;
+const OUTCOME_BADGE_BASE_CLASS = 'inline-flex min-w-[1.75rem] items-center justify-center rounded-full py-0.5 text-xs font-semibold tabular-nums tracking-tight leading-none';
+const SERVICE_OUTCOME_OPTIONS: Array<{ value: GarageServiceStatus; label: string }> = [
+  { value: 'performed', label: 'Performed' },
+  { value: 'not_needed_yet', label: 'Not Needed Yet' },
+  { value: 'declined', label: 'Declined' },
+];
 
-type OutcomeDraftValue = GarageServiceStatus | 'none';
+type OutcomeDraftValue = GarageServiceStatus;
 
 interface ServicingFormState {
   id: string | null;
@@ -33,13 +44,15 @@ interface ServicingFormState {
   notes: string;
   outcomes: Record<string, OutcomeDraftValue>;
   newFiles: File[];
+  deletedReceipts: Array<{ id: string; storagePath: string }>;
 }
 
 function buildDefaultOutcomeMap(services: GarageService[], servicing?: GarageServicingWithRelations | null): Record<string, OutcomeDraftValue> {
   const map: Record<string, OutcomeDraftValue> = {};
-  for (const service of services) {
-    const matched = servicing?.outcomes.find((outcome) => outcome.service_id === service.id);
-    map[service.id] = matched?.status ?? 'none';
+  for (const outcome of servicing?.outcomes ?? []) {
+    const exists = services.some((service) => service.id === outcome.service_id);
+    if (!exists) continue;
+    map[outcome.service_id] = outcome.status;
   }
   return map;
 }
@@ -48,6 +61,119 @@ function normalizeMileage(raw: string): number {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
   return Math.round(parsed);
+}
+
+function parseDateInputValue(value: string): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return parsed;
+}
+
+function toDateInputValue(date: Date): string {
+  return format(date, 'yyyy-MM-dd');
+}
+
+function getCalendarMonthForDateInput(value: string): Date {
+  const parsed = parseDateInputValue(value);
+  if (parsed) return new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), 1);
+}
+
+function getOutcomeBadgeClass(
+  value: number,
+  variant: 'success' | 'warning' | 'danger',
+): string {
+  if (value === 0) return `${OUTCOME_BADGE_BASE_CLASS} bg-muted text-black`;
+  if (variant === 'success') return `${OUTCOME_BADGE_BASE_CLASS} bg-success text-success-foreground`;
+  if (variant === 'warning') return `${OUTCOME_BADGE_BASE_CLASS} bg-warning text-warning-foreground`;
+  return `${OUTCOME_BADGE_BASE_CLASS} bg-destructive text-destructive-foreground`;
+}
+
+function ServiceOutcomeOptionSwatch({ status }: { status: GarageServiceStatus }) {
+  const swatchClass = status === 'performed'
+    ? 'bg-success'
+    : status === 'not_needed_yet'
+      ? 'bg-warning'
+      : 'bg-destructive';
+
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('h-3 w-3 rounded-sm border border-white/20', swatchClass)}
+    />
+  );
+}
+
+function ServicingDateCell({
+  value,
+  navCol,
+  onChange,
+}: {
+  value: string;
+  navCol: number;
+  onChange: (value: string) => void | Promise<unknown>;
+}) {
+  const ctx = useDataGrid();
+  const [open, setOpen] = useState(false);
+  const parsedDate = parseDateInputValue(value);
+  const [visibleMonth, setVisibleMonth] = useState<Date>(() => getCalendarMonthForDateInput(value));
+
+  useEffect(() => {
+    if (!open) return;
+    setVisibleMonth(getCalendarMonthForDateInput(value));
+  }, [open, value]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-grid-focus-only="true"
+          {...gridNavProps(ctx, navCol)}
+          onKeyDown={(event) => {
+            if (ctx?.onCellKeyDown(event)) return;
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            setOpen(true);
+          }}
+          className={cn(
+            'inline-flex h-7 w-full items-center justify-start gap-1 rounded-md border border-transparent bg-transparent px-1 text-left text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))]',
+            GRID_CONTROL_FOCUS_CLASS,
+            !value && 'text-muted-foreground',
+          )}
+        >
+          <span className="truncate">
+            {parsedDate ? format(parsedDate, 'MMM d, yyyy') : (value || 'Pick a date')}
+          </span>
+          <CalendarIcon className="ml-auto h-3.5 w-3.5 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-auto p-0"
+        align="start"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        <Calendar
+          mode="single"
+          selected={parsedDate}
+          month={visibleMonth}
+          onMonthChange={setVisibleMonth}
+          onSelect={(date) => {
+            if (!date) return;
+            const nextValue = toDateInputValue(date);
+            if (nextValue !== value) {
+              ctx?.onCellCommit(navCol);
+              void onChange(nextValue);
+            }
+            setOpen(false);
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function ServicingActionsCell({
@@ -131,10 +257,10 @@ interface GarageServicingsGridProps {
     notes?: string | null;
     outcomes: Array<{ service_id: string; status: GarageServiceStatus }>;
     receipt_files?: File[];
+    receipt_deletes?: Array<{ id: string; storagePath: string }>;
   }) => Promise<void>;
   onDeleteServicing: (id: string) => Promise<void>;
   onOpenReceipt: (storagePath: string) => Promise<void>;
-  onDeleteReceipt: (receiptId: string, storagePath: string) => Promise<void>;
 }
 
 export function GarageServicingsGrid({
@@ -148,7 +274,6 @@ export function GarageServicingsGrid({
   onUpdateServicing,
   onDeleteServicing,
   onOpenReceipt,
-  onDeleteReceipt,
 }: GarageServicingsGridProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'service_date', desc: true }]);
   const {
@@ -165,6 +290,10 @@ export function GarageServicingsGrid({
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogBusy, setDialogBusy] = useState(false);
+  const [serviceDatePickerOpen, setServiceDatePickerOpen] = useState(false);
+  const [servicePickerOpen, setServicePickerOpen] = useState(false);
+  const [servicePickerQuery, setServicePickerQuery] = useState('');
+  const [receiptDropActive, setReceiptDropActive] = useState(false);
   const [formState, setFormState] = useState<ServicingFormState>({
     id: null,
     service_date: new Date().toISOString().slice(0, 10),
@@ -173,12 +302,24 @@ export function GarageServicingsGrid({
     notes: '',
     outcomes: buildDefaultOutcomeMap(services),
     newFiles: [],
+    deletedReceipts: [],
   });
+  const [serviceDatePickerMonth, setServiceDatePickerMonth] = useState<Date>(
+    () => getCalendarMonthForDateInput(new Date().toISOString().slice(0, 10)),
+  );
+  const servicePickerSearchRef = useRef<HTMLInputElement | null>(null);
+  const servicePickerItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const receiptInputRef = useRef<HTMLInputElement | null>(null);
+  const dialogBodyRef = useRef<HTMLDivElement | null>(null);
+  const dialogBodyScrollTopRef = useRef(0);
 
   const [editingServicing, setEditingServicing] = useState<GarageServicingWithRelations | null>(null);
 
   const resetForm = () => {
     setEditingServicing(null);
+    setServiceDatePickerOpen(false);
+    setServicePickerOpen(false);
+    setServicePickerQuery('');
     setFormState({
       id: null,
       service_date: new Date().toISOString().slice(0, 10),
@@ -187,15 +328,21 @@ export function GarageServicingsGrid({
       notes: '',
       outcomes: buildDefaultOutcomeMap(services),
       newFiles: [],
+      deletedReceipts: [],
     });
   };
 
   const openCreateDialog = () => {
+    dialogBodyScrollTopRef.current = 0;
     resetForm();
     setDialogOpen(true);
   };
 
-  const openEditDialog = (servicing: GarageServicingWithRelations) => {
+  const openEditDialog = useCallback((servicing: GarageServicingWithRelations) => {
+    dialogBodyScrollTopRef.current = 0;
+    setServiceDatePickerOpen(false);
+    setServicePickerOpen(false);
+    setServicePickerQuery('');
     setEditingServicing(servicing);
     setFormState({
       id: servicing.id,
@@ -205,16 +352,122 @@ export function GarageServicingsGrid({
       notes: servicing.notes ?? '',
       outcomes: buildDefaultOutcomeMap(services, servicing),
       newFiles: [],
+      deletedReceipts: [],
     });
     setDialogOpen(true);
-  };
+  }, [services]);
+
+  const servicesById = useMemo(() => {
+    const map = new Map<string, GarageService>();
+    for (const service of services) {
+      map.set(service.id, service);
+    }
+    return map;
+  }, [services]);
+
+  const selectedServiceRows = useMemo(() => (
+    Object.entries(formState.outcomes)
+      .map(([serviceId, status]) => ({
+        serviceId,
+        service: servicesById.get(serviceId),
+        status,
+      }))
+      .filter((row): row is { serviceId: string; service: GarageService; status: OutcomeDraftValue } => Boolean(row.service))
+      .sort((a, b) => a.service.name.localeCompare(b.service.name, undefined, { sensitivity: 'base', numeric: true }))
+  ), [formState.outcomes, servicesById]);
+
+  const selectedServiceIdSet = useMemo(
+    () => new Set(Object.keys(formState.outcomes)),
+    [formState.outcomes],
+  );
+
+  const addableServices = useMemo(() => (
+    services
+      .filter((service) => !selectedServiceIdSet.has(service.id))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
+  ), [selectedServiceIdSet, services]);
+
+  const filteredAddableServices = useMemo(() => {
+    const query = servicePickerQuery.trim().toLowerCase();
+    if (!query) return addableServices;
+    return addableServices.filter((service) => {
+      const haystack = `${service.name} ${service.type} ${getGarageServiceTypeLabel(service.type)}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [addableServices, servicePickerQuery]);
+
+  const addServiceOutcome = useCallback((serviceId: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      outcomes: {
+        ...prev.outcomes,
+        [serviceId]: 'performed',
+      },
+    }));
+    setServicePickerOpen(false);
+    setServicePickerQuery('');
+  }, []);
+
+  const removeServiceOutcome = useCallback((serviceId: string) => {
+    setFormState((prev) => {
+      if (!(serviceId in prev.outcomes)) return prev;
+      const nextOutcomes = { ...prev.outcomes };
+      delete nextOutcomes[serviceId];
+      return {
+        ...prev,
+        outcomes: nextOutcomes,
+      };
+    });
+  }, []);
+
+  const restoreDialogBodyScroll = useCallback(() => {
+    const body = dialogBodyRef.current;
+    if (!body) return;
+    if (Math.abs(body.scrollTop - dialogBodyScrollTopRef.current) <= 1) return;
+    body.scrollTop = dialogBodyScrollTopRef.current;
+  }, []);
+
+  const addReceiptFiles = useCallback((files: File[]) => {
+    if (files.length === 0) return;
+    setFormState((prev) => ({
+      ...prev,
+      newFiles: [...prev.newFiles, ...files],
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (!servicePickerOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      servicePickerSearchRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [servicePickerOpen]);
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+
+    const handleWindowFocus = () => {
+      window.requestAnimationFrame(() => {
+        restoreDialogBodyScroll();
+      });
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [dialogOpen, restoreDialogBodyScroll]);
+
+  useLayoutEffect(() => {
+    if (!dialogOpen) return;
+    restoreDialogBodyScroll();
+  });
 
   const buildOutcomePayload = () =>
     Object.entries(formState.outcomes)
-      .filter(([, status]) => status !== 'none')
       .map(([serviceId, status]) => ({
         service_id: serviceId,
-        status: status as GarageServiceStatus,
+        status,
       }));
 
   const submit = async () => {
@@ -232,6 +485,7 @@ export function GarageServicingsGrid({
         notes: formState.notes.trim() || null,
         outcomes: buildOutcomePayload(),
         receipt_files: formState.newFiles,
+        receipt_deletes: formState.deletedReceipts,
       };
 
       if (formState.id) {
@@ -262,12 +516,11 @@ export function GarageServicingsGrid({
         minSize: 105,
         meta: { containsEditableInput: true },
         cell: ({ row }) => (
-          <GridEditableCell
+          <ServicingDateCell
             value={row.original.service_date}
-            type="date"
             navCol={0}
             onChange={(value) => {
-              void onUpdateServicing(row.original.id, {
+              return onUpdateServicing(row.original.id, {
                 service_date: value,
                 odometer_miles: row.original.odometer_miles,
                 shop_name: row.original.shop_name,
@@ -290,7 +543,7 @@ export function GarageServicingsGrid({
             type="number"
             navCol={1}
             onChange={(value) => {
-              void onUpdateServicing(row.original.id, {
+              return onUpdateServicing(row.original.id, {
                 service_date: row.original.service_date,
                 odometer_miles: normalizeMileage(value),
                 shop_name: row.original.shop_name,
@@ -312,7 +565,7 @@ export function GarageServicingsGrid({
             value={row.original.shop_name ?? ''}
             navCol={2}
             onChange={(value) => {
-              void onUpdateServicing(row.original.id, {
+              return onUpdateServicing(row.original.id, {
                 service_date: row.original.service_date,
                 odometer_miles: row.original.odometer_miles,
                 shop_name: value.trim() || null,
@@ -334,9 +587,16 @@ export function GarageServicingsGrid({
           const notNeeded = row.original.outcomes.filter((outcome) => outcome.status === 'not_needed_yet').length;
           const declined = row.original.outcomes.filter((outcome) => outcome.status === 'declined').length;
           return (
-            <span className="text-xs text-foreground">
-              P:{performed} N:{notNeeded} D:{declined}
-            </span>
+            <button
+              type="button"
+              className="flex h-full w-full items-center gap-1.5 text-left"
+              onClick={() => openEditDialog(row.original)}
+              aria-label={`Open servicing detail for ${row.original.service_date}`}
+            >
+              <span className={getOutcomeBadgeClass(performed, 'success')} title="Performed services">{performed}</span>
+              <span className={getOutcomeBadgeClass(notNeeded, 'warning')} title="Services not needed">{notNeeded}</span>
+              <span className={getOutcomeBadgeClass(declined, 'danger')} title="Declined services">{declined}</span>
+            </button>
           );
         },
       }),
@@ -346,7 +606,14 @@ export function GarageServicingsGrid({
         size: 90,
         minSize: 75,
         cell: ({ row }) => (
-          <span className="text-xs text-foreground">{row.original.receipts.length}</span>
+          <button
+            type="button"
+            className="h-full w-full text-left text-xs text-foreground"
+            onClick={() => openEditDialog(row.original)}
+            aria-label={`Open servicing detail for ${row.original.service_date}`}
+          >
+            {row.original.receipts.length}
+          </button>
         ),
       }),
       columnHelper.accessor('notes', {
@@ -359,7 +626,7 @@ export function GarageServicingsGrid({
             value={row.original.notes ?? ''}
             navCol={5}
             onChange={(value) => {
-              void onUpdateServicing(row.original.id, {
+              return onUpdateServicing(row.original.id, {
                 service_date: row.original.service_date,
                 odometer_miles: row.original.odometer_miles,
                 shop_name: row.original.shop_name,
@@ -434,18 +701,71 @@ export function GarageServicingsGrid({
         />
       </CardContent>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => !dialogBusy && setDialogOpen(open)}>
-        <DialogContent className="max-w-3xl rounded-lg">
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        if (dialogBusy) return;
+        setDialogOpen(open);
+        if (!open) setServiceDatePickerOpen(false);
+      }}>
+        <DialogContent className="max-h-[85vh] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg">
           <DialogHeader>
-            <DialogTitle>{formState.id ? 'Edit Servicing' : 'Add Servicing'}</DialogTitle>
-            <DialogDescription>Record services performed or marked not needed for this visit.</DialogDescription>
+            <DialogTitle>{formState.id ? 'Servicing Detail' : 'Add Servicing'}</DialogTitle>
           </DialogHeader>
 
-          <DialogBody className="space-y-4">
+          <DialogBody
+            ref={dialogBodyRef}
+            className="space-y-4 overflow-y-auto"
+            onScroll={(event) => {
+              dialogBodyScrollTopRef.current = event.currentTarget.scrollTop;
+            }}
+            onFocusCapture={() => {
+              if (!dialogOpen) return;
+              window.requestAnimationFrame(() => {
+                restoreDialogBodyScroll();
+              });
+            }}
+          >
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="garage-servicing-date">Date</Label>
-                <Input id="garage-servicing-date" type="date" value={formState.service_date} onChange={(event) => setFormState((prev) => ({ ...prev, service_date: event.target.value }))} />
+                <Popover
+                  open={serviceDatePickerOpen}
+                  onOpenChange={(nextOpen) => {
+                    setServiceDatePickerOpen(nextOpen);
+                    if (nextOpen) {
+                      setServiceDatePickerMonth(getCalendarMonthForDateInput(formState.service_date));
+                    }
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="garage-servicing-date"
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        'h-10 w-full justify-start rounded-md border-[hsl(var(--grid-sticky-line))] bg-background px-3 py-2 text-left text-base font-normal text-foreground hover:bg-background hover:text-foreground md:text-sm',
+                        !formState.service_date && 'text-muted-foreground',
+                      )}
+                    >
+                      <span className="truncate">{formState.service_date
+                        ? format(parseDateInputValue(formState.service_date) ?? new Date(`${formState.service_date}T00:00:00`), 'MMM d, yyyy')
+                        : 'Pick a date'}</span>
+                      <CalendarIcon className="ml-auto h-4 w-4 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={parseDateInputValue(formState.service_date)}
+                      month={serviceDatePickerMonth}
+                      onMonthChange={setServiceDatePickerMonth}
+                      onSelect={(date) => {
+                        setFormState((prev) => ({ ...prev, service_date: date ? toDateInputValue(date) : '' }));
+                        setServiceDatePickerOpen(false);
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-servicing-mileage">Mileage</Label>
@@ -463,35 +783,140 @@ export function GarageServicingsGrid({
             </div>
 
             <div className="space-y-2">
-              <Label>Service Outcomes</Label>
-              <div className="max-h-64 overflow-y-auto rounded-md border">
-                <div className="divide-y">
-                  {services.map((service) => (
-                    <div key={service.id} className="grid items-center gap-3 px-3 py-2 sm:grid-cols-[1fr_180px]">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{service.name}</p>
-                        <p className="text-xs text-muted-foreground">{service.type}</p>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Service Outcomes</Label>
+                <Popover
+                  open={servicePickerOpen}
+                  onOpenChange={(nextOpen) => {
+                    setServicePickerOpen(nextOpen);
+                    if (!nextOpen) setServicePickerQuery('');
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline-success"
+                      className="h-8 w-8 p-0"
+                      disabled={addableServices.length === 0}
+                      aria-label="Add service outcome"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[min(480px,calc(100vw-2rem))] p-0"
+                    align="end"
+                    onOpenAutoFocus={(event) => event.preventDefault()}
+                  >
+                    <div className="max-h-72 overflow-y-auto">
+                      <div className="sticky top-0 z-10 rounded-tl-md rounded-tr-md border-b bg-popover p-2">
+                        <Input
+                          ref={servicePickerSearchRef}
+                          value={servicePickerQuery}
+                          onChange={(event) => setServicePickerQuery(event.target.value)}
+                          placeholder="Type to find a service..."
+                          onKeyDown={(event) => {
+                            if (event.key !== 'ArrowDown') return;
+                            if (filteredAddableServices.length === 0) return;
+                            event.preventDefault();
+                            servicePickerItemRefs.current[0]?.focus();
+                          }}
+                        />
                       </div>
-                      <Select
-                        value={formState.outcomes[service.id] ?? 'none'}
-                        onValueChange={(value) => {
-                          setFormState((prev) => ({
-                            ...prev,
-                            outcomes: {
-                              ...prev.outcomes,
-                              [service.id]: value as OutcomeDraftValue,
-                            },
-                          }));
-                        }}
-                      >
-                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Not logged</SelectItem>
-                          <SelectItem value="performed">Performed</SelectItem>
-                          <SelectItem value="not_needed_yet">Not Needed Yet</SelectItem>
-                          <SelectItem value="declined">Declined</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      {filteredAddableServices.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted-foreground">No matching services.</p>
+                      ) : (
+                        <div className="py-1">
+                          {filteredAddableServices.map((service, index) => (
+                            <button
+                              key={service.id}
+                              ref={(element) => {
+                                servicePickerItemRefs.current[index] = element;
+                              }}
+                              type="button"
+                              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                              onClick={() => addServiceOutcome(service.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'ArrowDown') {
+                                  event.preventDefault();
+                                  const nextIndex = Math.min(index + 1, filteredAddableServices.length - 1);
+                                  servicePickerItemRefs.current[nextIndex]?.focus();
+                                  return;
+                                }
+                                if (event.key === 'ArrowUp') {
+                                  event.preventDefault();
+                                  if (index === 0) {
+                                    servicePickerSearchRef.current?.focus();
+                                    return;
+                                  }
+                                  servicePickerItemRefs.current[index - 1]?.focus();
+                                  return;
+                                }
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  addServiceOutcome(service.id);
+                                }
+                              }}
+                            >
+                              <span className="truncate font-medium">{service.name}</span>
+                              <span className="shrink-0 text-xs text-muted-foreground">{getGarageServiceTypeLabel(service.type)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="rounded-md border">
+                <div className="divide-y">
+                  {selectedServiceRows.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">No service outcomes added.</p>
+                  )}
+                  {selectedServiceRows.map((row) => (
+                    <div key={row.serviceId} className="space-y-1.5 px-2 py-1.5">
+                      <div className="flex min-w-0 items-center justify-between gap-2">
+                        <p className="truncate text-sm font-medium">{row.service.name}</p>
+                        <p className="shrink-0 text-xs text-muted-foreground">{getGarageServiceTypeLabel(row.service.type)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={row.status}
+                          onValueChange={(value) => {
+                            setFormState((prev) => ({
+                              ...prev,
+                              outcomes: {
+                                ...prev.outcomes,
+                                [row.serviceId]: value as OutcomeDraftValue,
+                              },
+                            }));
+                          }}
+                        >
+                          <SelectTrigger className="h-7 w-[180px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {SERVICE_OUTCOME_OPTIONS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                                rightAdornment={<ServiceOutcomeOptionSwatch status={option.value} />}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline-warning"
+                          className="ml-auto h-7 w-7 p-0"
+                          onClick={() => removeServiceOutcome(row.serviceId)}
+                          aria-label={`Remove ${row.service.name} outcome`}
+                        >
+                          <CircleMinus className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -499,24 +924,8 @@ export function GarageServicingsGrid({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="garage-servicing-receipts">Add Receipts</Label>
-              <Input
-                id="garage-servicing-receipts"
-                type="file"
-                multiple
-                onChange={(event) => {
-                  const files = Array.from(event.target.files ?? []);
-                  setFormState((prev) => ({ ...prev, newFiles: files }));
-                }}
-              />
-              {formState.newFiles.length > 0 && (
-                <p className="text-xs text-muted-foreground">{formState.newFiles.length} file(s) ready to upload</p>
-              )}
-            </div>
-
-            {editingServicing && editingServicing.receipts.length > 0 && (
-              <div className="space-y-2">
-                <Label>Existing Receipts</Label>
+              <Label>Receipts</Label>
+              {editingServicing && editingServicing.receipts.length > 0 && (
                 <div className="space-y-2">
                   {editingServicing.receipts.map((receipt) => (
                     <div key={receipt.id} className="flex items-center justify-between rounded-md border px-3 py-2">
@@ -532,10 +941,18 @@ export function GarageServicingsGrid({
                       </button>
                       <Button
                         type="button"
-                        size="sm"
+                        size="icon"
                         variant="outline-destructive"
+                        className="h-7 w-7 p-0"
                         onClick={() => {
-                          void onDeleteReceipt(receipt.id, receipt.storage_object_path);
+                          setFormState((prev) => (
+                            prev.deletedReceipts.some((row) => row.id === receipt.id)
+                              ? prev
+                              : {
+                                  ...prev,
+                                  deletedReceipts: [...prev.deletedReceipts, { id: receipt.id, storagePath: receipt.storage_object_path }],
+                                }
+                          ));
                           setEditingServicing((prev) => prev
                             ? {
                                 ...prev,
@@ -544,13 +961,62 @@ export function GarageServicingsGrid({
                             : prev);
                         }}
                       >
-                        Delete
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full flex-col items-center justify-center rounded-md border border-dashed px-3 py-5 text-sm',
+                  receiptDropActive ? 'border-primary bg-muted/40' : 'border-[hsl(var(--grid-sticky-line))]',
+                )}
+                onClick={() => receiptInputRef.current?.click()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    receiptInputRef.current?.click();
+                  }
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (!receiptDropActive) setReceiptDropActive(true);
+                }}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  setReceiptDropActive(false);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setReceiptDropActive(false);
+                  const files = Array.from(event.dataTransfer.files ?? []);
+                  addReceiptFiles(files);
+                }}
+                aria-label="Add receipts"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="font-medium">Add</span>
+              </button>
+              <Input
+                ref={receiptInputRef}
+                id="garage-servicing-receipts"
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  addReceiptFiles(files);
+                  event.currentTarget.value = '';
+                }}
+              />
+              {formState.newFiles.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {formState.newFiles.length} new file{formState.newFiles.length === 1 ? '' : 's'} pending upload
+                </p>
+              )}
+            </div>
           </DialogBody>
 
           <DialogFooter>

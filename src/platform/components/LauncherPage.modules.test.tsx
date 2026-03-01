@@ -57,20 +57,21 @@ describe('LauncherPage modules', () => {
     mockIsAdmin.mockReset();
   });
 
-  it('shows Budget and Drawer Planner for signed-in users', () => {
+  it('shows Budget, Drawer Planner, and Garage for signed-in users', () => {
     mockAuthContext.mockReturnValue({
       user: { id: 'user-1' },
       loading: false,
       signOut: vi.fn(),
     });
-    mockIsAdmin.mockReturnValue({ isAdmin: false, loading: false });
+    mockIsAdmin.mockReturnValue({ isAdmin: false, loading: false, resolved: true });
 
     const { container, root } = renderLauncher();
 
     try {
       expect(container.textContent).toContain('Budget');
       expect(container.textContent).toContain('Drawer Planner');
-      expect(container.textContent).not.toContain('Garage');
+      expect(container.textContent).toContain('Garage');
+      expect(container.textContent).not.toContain('Administration');
       expect(mockNavigate).not.toHaveBeenCalledWith('/budget/summary', { replace: true });
     } finally {
       cleanup(root, container);
@@ -83,12 +84,13 @@ describe('LauncherPage modules', () => {
       loading: false,
       signOut: vi.fn(),
     });
-    mockIsAdmin.mockReturnValue({ isAdmin: true, loading: false });
+    mockIsAdmin.mockReturnValue({ isAdmin: true, loading: false, resolved: true });
 
     const { container, root } = renderLauncher();
 
     try {
       expect(container.textContent).toContain('Garage');
+      expect(container.textContent).toContain('Administration');
       expect(container.textContent).toContain('Admin');
     } finally {
       cleanup(root, container);
@@ -101,7 +103,7 @@ describe('LauncherPage modules', () => {
       loading: false,
       signOut: vi.fn(),
     });
-    mockIsAdmin.mockReturnValue({ isAdmin: false, loading: false });
+    mockIsAdmin.mockReturnValue({ isAdmin: false, loading: false, resolved: true });
 
     const { container, root } = renderLauncher();
 

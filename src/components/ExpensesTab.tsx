@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -23,7 +23,7 @@ import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-af
 import { Plus, Trash2, MoreHorizontal, Filter, FilterX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { toMonthly, frequencyLabels, needsParam, fromMonthly } from '@/lib/frequency';
-import { DataGrid, GridEditableCell, GridCurrencyCell, GridPercentCell, gridMenuTriggerProps, gridNavProps, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
+import { DataGrid, GridCheckboxCell, GridEditableCell, GridCurrencyCell, GridPercentCell, gridMenuTriggerProps, gridNavProps, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import { EXPENSES_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH } from '@/lib/gridColumnWidths';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -264,38 +264,14 @@ function PaymentMethodCell({ exp, linkedAccounts, partnerX, partnerY, onChange, 
   );
 }
 
-function EstimateCell({ checked, onToggle, disabled = false }: { checked: boolean; onToggle: (v: boolean) => void; disabled?: boolean }) {
-  const ctx = useDataGrid();
-  const checkboxRef = useRef<HTMLButtonElement>(null);
-
-  const focusCheckbox = () => {
-    requestAnimationFrame(() => checkboxRef.current?.focus());
-  };
-
+function EstimateCell({ checked, onToggle, disabled = false }: { checked: boolean; onToggle: (v: boolean) => void | Promise<unknown>; disabled?: boolean }) {
   return (
-    <Checkbox
-      ref={checkboxRef}
-      className="hover:border-[hsl(var(--grid-sticky-line))]"
+    <GridCheckboxCell
       checked={checked}
+      onChange={onToggle}
+      navCol={3}
       disabled={disabled}
-      onCheckedChange={v => {
-        ctx?.onCellCommit(3);
-        onToggle(!!v);
-        focusCheckbox();
-      }}
-      data-row={ctx?.rowIndex}
-      data-row-id={ctx?.rowId}
-      data-col={3}
-      onMouseDown={ctx?.onCellMouseDown}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onToggle(!checked);
-          focusCheckbox();
-          return;
-        }
-        if (ctx) ctx.onCellKeyDown(e);
-      }}
+      className="ml-1 hover:border-[hsl(var(--grid-sticky-line))]"
     />
   );
 }
@@ -536,8 +512,9 @@ export function ExpensesTab({
   };
 
   const handleToggleEstimate = (id: string, checked: boolean) => {
-    onUpdate(id, { is_estimate: checked }).catch((e: any) => {
+    return onUpdate(id, { is_estimate: checked }).catch((e: any) => {
       toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
+      throw e;
     });
   };
 

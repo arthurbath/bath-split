@@ -30,6 +30,7 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
   const { data, isLoading, refetch } = useQuery({
     queryKey,
     enabled: !!userId && !!vehicleId,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const servicings = await supabaseRequest(async () =>
         await supabase
@@ -149,6 +150,31 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
     }
   }, [userId, vehicleId]);
 
+  const deleteReceipts = useCallback(async (receipts: Array<{ id: string; storagePath: string }>) => {
+    if (!userId || !vehicleId) throw new Error('No active vehicle selected.');
+    if (receipts.length === 0) return;
+
+    const paths = Array.from(new Set(receipts.map((receipt) => receipt.storagePath)));
+    if (paths.length > 0) {
+      const deleteResult = await supabase.storage.from('garage-receipts').remove(paths);
+      if (deleteResult.error) {
+        throw new Error(`Failed to delete receipt files: ${deleteResult.error.message}`);
+      }
+    }
+
+    const receiptIds = Array.from(new Set(receipts.map((receipt) => receipt.id)));
+    if (receiptIds.length > 0) {
+      await supabaseRequest(async () =>
+        await supabase
+          .from('garage_servicing_receipts')
+          .delete()
+          .in('id', receiptIds)
+          .eq('user_id', userId)
+          .eq('vehicle_id', vehicleId),
+      );
+    }
+  }, [userId, vehicleId]);
+
   const addServicing = useCallback(async (input: {
     service_date: string;
     odometer_miles: number;
@@ -194,10 +220,13 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
     notes?: string | null;
     outcomes: OutcomeInput[];
     receipt_files?: File[];
+    receipt_deletes?: Array<{ id: string; storagePath: string }>;
   }) => {
     if (!userId || !vehicleId) throw new Error('No active vehicle selected.');
 
     try {
+      const updatedAt = new Date().toISOString();
+
       await supabaseRequest(async () =>
         await supabase
           .from('garage_servicings')
@@ -206,7 +235,7 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
             odometer_miles: input.odometer_miles,
             shop_name: input.shop_name ?? null,
             notes: input.notes ?? null,
-            updated_at: new Date().toISOString(),
+            updated_at: updatedAt,
           })
           .eq('id', servicingId)
           .eq('user_id', userId)
@@ -219,12 +248,16 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
         await uploadReceipts({ servicingId, files: input.receipt_files ?? [] });
       }
 
+      if ((input.receipt_deletes ?? []).length > 0) {
+        await deleteReceipts(input.receipt_deletes ?? []);
+      }
+
       await refetch();
     } catch (error) {
       showMutationError(error);
       throw error;
     }
-  }, [refetch, saveOutcomes, uploadReceipts, userId, vehicleId]);
+  }, [deleteReceipts, refetch, saveOutcomes, uploadReceipts, userId, vehicleId]);
 
   const removeServicing = useCallback(async (servicingId: string) => {
     if (!userId || !vehicleId) throw new Error('No active vehicle selected.');
@@ -239,12 +272,15 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
           .eq('servicing_id', servicingId),
       );
 
-      const paths = (receipts ?? []).map((row: { storage_object_path: string }) => row.storage_object_path);
-      if (paths.length > 0) {
-        const deleteResult = await supabase.storage.from('garage-receipts').remove(paths);
-        if (deleteResult.error) {
-          throw new Error(`Failed to delete receipt files: ${deleteResult.error.message}`);
-        }
+      const receiptRows = (receipts ?? []) as Array<{ id: string; storage_object_path: string }>;
+
+      if (receiptRows.length > 0) {
+        await deleteReceipts(
+          receiptRows.map((row) => ({
+            id: row.id,
+            storagePath: row.storage_object_path,
+          })),
+        );
       }
 
       await supabaseRequest(async () =>
@@ -261,32 +297,7 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
       showMutationError(error);
       throw error;
     }
-  }, [refetch, userId, vehicleId]);
-
-  const removeReceipt = useCallback(async (receiptId: string, storagePath: string) => {
-    if (!userId || !vehicleId) throw new Error('No active vehicle selected.');
-
-    try {
-      const deleteResult = await supabase.storage.from('garage-receipts').remove([storagePath]);
-      if (deleteResult.error) {
-        throw new Error(`Failed to delete receipt file: ${deleteResult.error.message}`);
-      }
-
-      await supabaseRequest(async () =>
-        await supabase
-          .from('garage_servicing_receipts')
-          .delete()
-          .eq('id', receiptId)
-          .eq('user_id', userId)
-          .eq('vehicle_id', vehicleId),
-      );
-
-      await refetch();
-    } catch (error) {
-      showMutationError(error);
-      throw error;
-    }
-  }, [refetch, userId, vehicleId]);
+  }, [deleteReceipts, refetch, userId, vehicleId]);
 
   const createReceiptSignedUrl = useCallback(async (storagePath: string) => {
     const { data, error } = await supabase.storage
@@ -304,7 +315,6 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
     addServicing,
     updateServicing,
     removeServicing,
-    removeReceipt,
     createReceiptSignedUrl,
     refetch: async () => {
       await queryClient.invalidateQueries({ queryKey: ['garage', 'servicings', userId, vehicleId] });

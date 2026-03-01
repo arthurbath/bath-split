@@ -11,7 +11,7 @@ export default function GarageIndex() {
   const { isAdmin, loading: roleLoading } = useIsAdmin(user?.id);
   const displayName = useProfileDisplayName(user?.id, user?.email ?? undefined);
 
-  if (authLoading || roleLoading || isSigningOut) {
+  if (authLoading || isSigningOut) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner />
@@ -20,7 +20,6 @@ export default function GarageIndex() {
   }
 
   if (!user) return <AuthPage />;
-  if (!isAdmin) return <Navigate to="/" replace />;
 
   return <GarageShell userId={user.id} displayName={displayName} onSignOut={signOut} />;
 }

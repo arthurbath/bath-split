@@ -208,7 +208,14 @@ export function AppShell({
 
   return (
     <div className={`relative isolate bg-background ${isFullViewGridRoute ? 'h-dvh overflow-y-hidden overflow-x-visible flex flex-col' : 'min-h-screen'}`}>
-      <ToplineHeader title="Budget" userId={userId} displayName={household.displayName} onSignOut={onSignOut} showAppSwitcher={showAppSwitcher} />
+      <ToplineHeader
+        title="Budget"
+        moduleId="budget"
+        userId={userId}
+        displayName={household.displayName}
+        onSignOut={onSignOut}
+        showAppSwitcher={showAppSwitcher}
+      />
 
       <div className="mx-auto hidden w-full max-w-5xl px-4 pt-6 md:block">
         <nav className="hidden w-full grid-cols-4 gap-0.5 rounded-lg border border-[hsl(var(--grid-sticky-line))] bg-[hsl(var(--switch-off))] p-1 text-muted-foreground md:grid">

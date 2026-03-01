@@ -21,13 +21,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const isSigningOutRef = useRef(false);
+  const hasSeenAuthenticatedSessionRef = useRef(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (isSigningOutRef.current && event !== 'SIGNED_OUT') return;
+        const isSigningOut = isSigningOutRef.current;
+        if (isSigningOut && event !== 'SIGNED_OUT') return;
+
+        // During HMR and refresh churn, Supabase can emit TOKEN_REFRESHED with null
+        // before auth state settles. Ignore this transient event to prevent route jumps.
+        if (event === 'TOKEN_REFRESHED' && !session) return;
+
+        if (event === 'SIGNED_OUT') {
+          const hadAuthenticatedSession = hasSeenAuthenticatedSessionRef.current;
+          hasSeenAuthenticatedSessionRef.current = false;
+
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          isSigningOutRef.current = false;
+          setIsSigningOut(false);
+
+          // Ignore startup SIGNED_OUT events when no authenticated session has been observed.
+          if (isSigningOut || hadAuthenticatedSession) {
+            window.location.href = '/';
+          }
+          return;
+        }
 
         setSession(session);
+        if (session?.user) {
+          hasSeenAuthenticatedSessionRef.current = true;
+        }
         // Only update user state if the identity actually changed,
         // preventing a full re-render cascade on routine token refreshes.
         setUser(prev => {
@@ -36,12 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return next;
         });
         setLoading(false);
-
-        if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
-          isSigningOutRef.current = false;
-          setIsSigningOut(false);
-          window.location.href = '/';
-        }
       }
     );
 
@@ -49,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isSigningOutRef.current) return;
       setSession(session);
       setUser(session?.user ?? null);
+      hasSeenAuthenticatedSessionRef.current = !!session?.user;
       setLoading(false);
     });
 
