@@ -66,9 +66,14 @@ Deno.serve(async (req) => {
     // Pretty-format the context for display
     const contextLabels: Record<string, string> = {
       terms_update: "Terms Update",
-      in_app_feedback_bug: "In-app Feedback/Bug",
+      in_app_switcher: "In-app Module Switcher",
+      in_app_account: "In-app Account",
+      in_app_feedback_bug: "In-app Budget",
     };
-    const prettyContext = contextLabels[context] || context || "General";
+    const prettyContext = contextLabels[context] ||
+      (typeof context === "string" && context.startsWith("in_app_")
+        ? `In-app ${context.slice("in_app_".length).replaceAll("_", " ")}`
+        : context || "General");
 
     // If a file path was provided, generate a signed URL using the service role client
     let attachmentUrl: string | undefined;

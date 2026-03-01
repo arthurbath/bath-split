@@ -145,7 +145,6 @@ export function CategoriesTab({ categories, expenses, onAdd, onUpdate, onRemove,
                                 if (e.key === 'Enter') commitEdit();
                                 if (e.key === 'Escape') setEditingId(null);
                               }}
-                              className="h-8"
                             />
                           ) : (
                             <span className="font-medium">{cat.name}</span>
@@ -153,10 +152,10 @@ export function CategoriesTab({ categories, expenses, onAdd, onUpdate, onRemove,
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">{count}</TableCell>
                         <TableCell className="text-right space-x-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(cat)}>
+                          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => startEdit(cat)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost-destructive" size="icon" className="h-7 w-7" onClick={() => handleDeleteClick(cat)}>
+                          <Button variant="outline-destructive" size="icon" className="h-7 w-7" onClick={() => handleDeleteClick(cat)}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
                         </TableCell>

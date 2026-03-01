@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAuthContext } from '@/platform/contexts/AuthContext';
@@ -8,8 +8,8 @@ import { ToplineHeader } from '@/platform/components/ToplineHeader';
 import { getAvailableModules } from '@/platform/modules';
 import { useIsAdmin } from '@/platform/hooks/useIsAdmin';
 import { Badge } from '@/components/ui/badge';
-import { getUserDisplayName } from '@/platform/lib/getUserDisplayName';
 import { handleClientSideLinkNavigation } from '@/lib/navigation';
+import { supabase } from '@/integrations/supabase/client';
 import AuthPage from './AuthPage';
 
 export default function LauncherPage() {
@@ -17,7 +17,35 @@ export default function LauncherPage() {
   const { isAdmin, loading: roleLoading } = useIsAdmin(user?.id);
   const navigate = useNavigate();
   const modules = getAvailableModules({ isAdmin });
-  const displayName = getUserDisplayName(user);
+  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
+  const displayName = profileDisplayName ?? user?.email ?? 'You';
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) {
+      setProfileDisplayName(null);
+      return;
+    }
+
+    let cancelled = false;
+    void supabase
+      .from('bathos_profiles')
+      .select('display_name')
+      .eq('id', userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        const nextDisplayName = data?.display_name?.trim() || null;
+        setProfileDisplayName(nextDisplayName);
+      })
+      .catch(() => {
+        // Fallback keeps email-based display name.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     // If there's only one module, skip the launcher and go straight to it

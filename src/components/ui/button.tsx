@@ -24,6 +24,7 @@ const buttonVariants = cva(
         admin: "bg-admin text-admin-foreground hover:bg-admin/90",
         "outline-admin": "border border-admin bg-background text-admin hover:bg-admin/10",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        clear: "border border-transparent bg-transparent text-white hover:bg-primary/10 hover:text-primary",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         "ghost-destructive": "hover:bg-destructive/10 hover:text-destructive",
         link: "text-primary underline-offset-4 hover:underline",

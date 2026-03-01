@@ -234,7 +234,6 @@ export function HouseholdManagementPanel({
                         type="button"
                         variant="outline-warning"
                         size="sm"
-                        className="h-8"
                         disabled={isBusy || deletingHousehold || leavingHousehold || rotatingInviteCode}
                         onClick={() => setRemoveTarget(member)}
                       >
@@ -246,7 +245,6 @@ export function HouseholdManagementPanel({
                         type="button"
                         variant="outline-warning"
                         size="sm"
-                        className="h-8"
                         disabled={leavingHousehold || deletingHousehold || rotatingInviteCode}
                         onClick={() => setLeaveOpen(true)}
                       >

@@ -29,7 +29,7 @@ export default function TermsPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-4xl px-4 py-8 md:py-10">
-        <Button variant="ghost" size="sm" className="mb-4 -ml-2 text-muted-foreground" onClick={handleBack}>
+        <Button variant="outline" className="mb-4 text-muted-foreground" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back
         </Button>

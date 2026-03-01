@@ -1,12 +1,15 @@
+import { useEffect, useState } from 'react';
 import { HouseholdSetup } from '@/components/HouseholdSetup';
 import { AppShell } from '@/components/AppShell';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAuth } from '@/hooks/useAuth';
 import { useHouseholdData } from '@/hooks/useHouseholdData';
+import { supabase } from '@/integrations/supabase/client';
 import AuthPage from '@/platform/components/AuthPage';
 
 const Index = () => {
   const { user, loading: authLoading, isSigningOut, signOut } = useAuth();
+  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
   const {
     household,
     loading: hhLoading,
@@ -25,7 +28,33 @@ const Index = () => {
     leaveHousehold,
     deleteHousehold,
   } = useHouseholdData(user);
-  const setupDisplayName = (user?.user_metadata?.display_name as string | undefined)?.trim() || user?.email || 'You';
+  const setupDisplayName = profileDisplayName ?? user?.email ?? 'You';
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) {
+      setProfileDisplayName(null);
+      return;
+    }
+
+    let cancelled = false;
+    void supabase
+      .from('bathos_profiles')
+      .select('display_name')
+      .eq('id', userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        setProfileDisplayName(data?.display_name?.trim() || null);
+      })
+      .catch(() => {
+        // Fallback keeps email-based display name.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   if (authLoading || hhLoading || isSigningOut) {
     return (

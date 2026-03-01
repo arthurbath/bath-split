@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuthContext } from '@/platform/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useIsAdmin } from '@/platform/hooks/useIsAdmin';
@@ -10,21 +10,38 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { AlertDialog, AlertDialogAction, AlertDialogBody, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Pencil } from 'lucide-react';
 import { isWeakOrLeakedPasswordError, WEAK_PASSWORD_MESSAGE } from '@/lib/authErrors';
 import { isPasswordValid } from '@/lib/passwordValidation';
 import { PasswordRequirements } from '@/components/PasswordRequirements';
+import { ToplineHeader } from '@/platform/components/ToplineHeader';
+import { getUserDisplayName } from '@/platform/lib/getUserDisplayName';
+import { useLocation } from 'react-router-dom';
+
+interface AccountPageLocationState {
+  fromPath?: string;
+}
+
+function resolveBackHref(state: AccountPageLocationState | null): string {
+  if (!state?.fromPath || !state.fromPath.startsWith('/')) return '/';
+  if (state.fromPath === '/account' || state.fromPath.startsWith('/account?') || state.fromPath.startsWith('/account#')) {
+    return '/';
+  }
+  return state.fromPath;
+}
 
 export default function AccountPage() {
   const { user, isSigningOut, signOut } = useAuthContext();
   const { isAdmin } = useIsAdmin(user?.id);
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const location = useLocation();
 
   const [displayName, setDisplayName] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
+  const displayNameInputRef = useRef<HTMLInputElement>(null);
+  const displayNameCancelButtonRef = useRef<HTMLButtonElement>(null);
+  const displayNameSaveButtonRef = useRef<HTMLButtonElement>(null);
 
   const [userEmail, setUserEmail] = useState('');
   const [showChangeEmail, setShowChangeEmail] = useState(false);
@@ -72,6 +89,26 @@ export default function AccountPage() {
       setEditingName(false);
     }
     setSavingName(false);
+  };
+
+  const handleDisplayNameEditorTab = (event: React.KeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
+    if (event.key !== 'Tab') return;
+
+    const focusableElements = [
+      displayNameInputRef.current,
+      displayNameCancelButtonRef.current,
+      displayNameSaveButtonRef.current,
+    ].filter((element): element is HTMLInputElement | HTMLButtonElement => !!element && !element.disabled);
+
+    if (focusableElements.length === 0) return;
+
+    const currentIndex = focusableElements.indexOf(event.currentTarget);
+    if (currentIndex === -1) return;
+
+    event.preventDefault();
+    const direction = event.shiftKey ? -1 : 1;
+    const nextIndex = (currentIndex + direction + focusableElements.length) % focusableElements.length;
+    focusableElements[nextIndex].focus();
   };
 
   const handleChangeEmail = async (e: React.FormEvent) => {
@@ -158,102 +195,130 @@ export default function AccountPage() {
   }
 
   if (!user) return null;
+  const backHref = resolveBackHref(location.state as AccountPageLocationState | null);
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card px-4 py-3">
-        <div className="mx-auto flex max-w-lg items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-lg font-bold tracking-tight">Account</h1>
-        </div>
-      </header>
+      <ToplineHeader
+        title="BathOS"
+        userId={user.id}
+        displayName={displayName || getUserDisplayName(user)}
+        onSignOut={signOut}
+        backHref={backHref}
+        maxWidthClassName="max-w-lg"
+      />
 
-      <main className="mx-auto max-w-lg px-4 py-6 space-y-4">
-        {/* Admin badge */}
-        {isAdmin && (
-          <Badge className="bg-admin text-admin-foreground">Admin</Badge>
-        )}
-
-        {/* Display name */}
+      <main className="mx-auto max-w-lg px-4 py-6">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Display Name</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {editingName ? (
-              <div className="flex gap-2">
-                <Input value={displayName} onChange={e => setDisplayName(e.target.value)} autoFocus />
-                <Button onClick={handleSaveName} disabled={savingName || !displayName.trim()} size="sm">
-                  {savingName ? 'Saving...' : 'Save'}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setEditingName(false)}>Cancel</Button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <span>{displayName}</span>
-                <Button variant="ghost" size="sm" onClick={() => setEditingName(true)}>Edit</Button>
-              </div>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <CardTitle>Account</CardTitle>
+            {isAdmin && (
+              <Badge className="bg-admin text-admin-foreground">Admin</Badge>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Email */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Email</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
+          <CardContent className="space-y-6">
+            <section className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Display Name</p>
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={displayNameInputRef}
+                    value={displayName}
+                    onChange={e => setDisplayName(e.target.value)}
+                    onKeyDown={handleDisplayNameEditorTab}
+                    autoFocus
+                    className="min-w-0 flex-1"
+                  />
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      ref={displayNameCancelButtonRef}
+                      variant="outline"
+                      onClick={() => setEditingName(false)}
+                      onKeyDown={handleDisplayNameEditorTab}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      ref={displayNameSaveButtonRef}
+                      onClick={handleSaveName}
+                      onKeyDown={handleDisplayNameEditorTab}
+                      disabled={savingName || !displayName.trim()}
+                    >
+                      {savingName ? 'Saving...' : 'Save'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-sm leading-none">
+                  <span>{displayName}</span>
+                  <Pencil
+                    className="h-3.5 w-3.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Edit display name"
+                    onClick={() => setEditingName(true)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setEditingName(true);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-2 border-t pt-4">
+              <p className="text-sm font-medium text-muted-foreground">Email</p>
               <span className="text-sm">{userEmail}</span>
-              <Button variant="ghost" size="sm" onClick={() => setShowChangeEmail(true)}>Change</Button>
-            </div>
+            </section>
+
+            <section className="space-y-2 border-t pt-4">
+              <Button variant="outline" className="w-full" onClick={signOut} disabled={isSigningOut}>
+                Sign Out
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => setShowChangePassword(true)}>
+                Change Password
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => setShowChangeEmail(true)}>
+                Change Email
+              </Button>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline-destructive" className="w-full">
+                    Delete Account
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Account</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. All your data will be permanently removed. Type your email address to confirm.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogBody>
+                    <Input
+                      value={deleteConfirmText}
+                      onChange={e => setDeleteConfirmText(e.target.value)}
+                      placeholder={userEmail}
+                    />
+                  </AlertDialogBody>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDeleteAccount}
+                      disabled={deleteConfirmText.toLowerCase() !== userEmail.toLowerCase() || isDeleting}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete Account'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </section>
           </CardContent>
         </Card>
-
-        {/* Actions */}
-        <div className="space-y-2 pt-2">
-          <Button variant="outline" className="w-full" onClick={() => setShowChangePassword(true)}>
-            Change Password
-          </Button>
-          <Button variant="outline" className="w-full" onClick={signOut} disabled={isSigningOut}>
-            Sign Out
-          </Button>
-
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" className="w-full text-destructive hover:text-destructive" size="sm">
-                Delete Account
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Account</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. All your data will be permanently removed. Type your email address to confirm.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogBody>
-                <Input
-                  value={deleteConfirmText}
-                  onChange={e => setDeleteConfirmText(e.target.value)}
-                  placeholder={userEmail}
-                />
-              </AlertDialogBody>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteAccount}
-                  disabled={deleteConfirmText.toLowerCase() !== userEmail.toLowerCase() || isDeleting}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete Account'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
       </main>
 
       {/* Change Email Dialog */}
