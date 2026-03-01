@@ -226,7 +226,7 @@ export function GarageConfigView({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <CardTitle>Vehicles</CardTitle>
-          <Button type="button" size="sm" onClick={openAddVehicle}>
+          <Button type="button" onClick={openAddVehicle}>
             <Plus className="mr-2 h-4 w-4" />
             Add Vehicle
           </Button>
@@ -249,7 +249,6 @@ export function GarageConfigView({
                   <div className="flex items-center gap-2">
                     <Button
                       type="button"
-                      size="sm"
                       variant={vehicle.id === activeVehicleId ? 'default' : 'outline'}
                       onClick={() => onSetActiveVehicle(vehicle.id)}
                     >

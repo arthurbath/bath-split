@@ -116,7 +116,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card px-4 py-3">
         <div className="mx-auto flex max-w-5xl items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="clear" size="sm" className="h-9 w-9 p-0" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-lg font-bold tracking-tight text-foreground">Administration</h1>
@@ -180,36 +180,36 @@ export default function AdminPage() {
             <div className="space-y-3 border-t pt-4">
               <p className="text-sm font-medium">Button Variants</p>
               <div className="flex flex-wrap gap-2">
-                <Button variant="default" size="sm">Normal Filled</Button>
-                <Button variant="success" size="sm">Success Filled</Button>
-                <Button variant="destructive" size="sm">Danger Filled</Button>
-                <Button variant="warning" size="sm">Warning Filled</Button>
-                <Button variant="info" size="sm">Info Filled</Button>
-                <Button variant="admin" size="sm">Admin Filled</Button>
+                <Button variant="default">Normal Filled</Button>
+                <Button variant="success">Success Filled</Button>
+                <Button variant="destructive">Danger Filled</Button>
+                <Button variant="warning">Warning Filled</Button>
+                <Button variant="info">Info Filled</Button>
+                <Button variant="admin">Admin Filled</Button>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm">Normal Outline</Button>
-                <Button variant="outline-success" size="sm">Success Outline</Button>
-                <Button variant="outline-destructive" size="sm">Danger Outline</Button>
-                <Button variant="outline-warning" size="sm">Warning Outline</Button>
-                <Button variant="outline-info" size="sm">Info Outline</Button>
-                <Button variant="outline-admin" size="sm">Admin Outline</Button>
+                <Button variant="outline">Normal Outline</Button>
+                <Button variant="outline-success">Success Outline</Button>
+                <Button variant="outline-destructive">Danger Outline</Button>
+                <Button variant="outline-warning">Warning Outline</Button>
+                <Button variant="outline-info">Info Outline</Button>
+                <Button variant="outline-admin">Admin Outline</Button>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="default" size="sm" disabled>Normal Filled Disabled</Button>
-                <Button variant="success" size="sm" disabled>Success Filled Disabled</Button>
-                <Button variant="destructive" size="sm" disabled>Danger Filled Disabled</Button>
-                <Button variant="warning" size="sm" disabled>Warning Filled Disabled</Button>
-                <Button variant="info" size="sm" disabled>Info Filled Disabled</Button>
-                <Button variant="admin" size="sm" disabled>Admin Filled Disabled</Button>
+                <Button variant="default" disabled>Normal Filled Disabled</Button>
+                <Button variant="success" disabled>Success Filled Disabled</Button>
+                <Button variant="destructive" disabled>Danger Filled Disabled</Button>
+                <Button variant="warning" disabled>Warning Filled Disabled</Button>
+                <Button variant="info" disabled>Info Filled Disabled</Button>
+                <Button variant="admin" disabled>Admin Filled Disabled</Button>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" disabled>Normal Outline Disabled</Button>
-                <Button variant="outline-success" size="sm" disabled>Success Outline Disabled</Button>
-                <Button variant="outline-destructive" size="sm" disabled>Danger Outline Disabled</Button>
-                <Button variant="outline-warning" size="sm" disabled>Warning Outline Disabled</Button>
-                <Button variant="outline-info" size="sm" disabled>Info Outline Disabled</Button>
-                <Button variant="outline-admin" size="sm" disabled>Admin Outline Disabled</Button>
+                <Button variant="outline" disabled>Normal Outline Disabled</Button>
+                <Button variant="outline-success" disabled>Success Outline Disabled</Button>
+                <Button variant="outline-destructive" disabled>Danger Outline Disabled</Button>
+                <Button variant="outline-warning" disabled>Warning Outline Disabled</Button>
+                <Button variant="outline-info" disabled>Info Outline Disabled</Button>
+                <Button variant="outline-admin" disabled>Admin Outline Disabled</Button>
               </div>
             </div>
           </CardContent>

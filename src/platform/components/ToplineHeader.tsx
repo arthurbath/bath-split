@@ -1,10 +1,10 @@
-import { LogOut, Shield, User } from 'lucide-react';
+import { ArrowLeft, LogOut, Shield, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FeedbackDialog } from '@/platform/components/FeedbackDialog';
 import { useIsAdmin } from '@/platform/hooks/useIsAdmin';
-import { handleClientSideLinkNavigation } from '@/lib/navigation';
+import { handleClientSideLinkNavigation, shouldHandleWithBrowser } from '@/lib/navigation';
 
 interface ToplineHeaderProps {
   title: string;
@@ -12,6 +12,7 @@ interface ToplineHeaderProps {
   displayName: string;
   onSignOut: () => Promise<void> | void;
   showAppSwitcher?: boolean;
+  backHref?: string;
   maxWidthClassName?: string;
 }
 
@@ -21,6 +22,7 @@ export function ToplineHeader({
   displayName,
   onSignOut,
   showAppSwitcher = false,
+  backHref,
   maxWidthClassName = 'max-w-5xl',
 }: ToplineHeaderProps) {
   const navigate = useNavigate();
@@ -30,8 +32,14 @@ export function ToplineHeader({
     <header className="sticky top-0 z-[45] isolate border-b border-[hsl(var(--grid-sticky-line))] bg-card">
       <div className={`mx-auto flex ${maxWidthClassName} items-center justify-between px-4 py-3`}>
         <div className="flex items-center gap-2">
-          {showAppSwitcher && (
-            <Button asChild variant="ghost" size="icon" title="All apps">
+          {backHref ? (
+            <Button asChild variant="clear" size="sm" className="h-9 w-9 p-0" title="Back">
+              <a href={backHref} onClick={(event) => handleClientSideLinkNavigation(event, navigate, backHref)}>
+                <ArrowLeft className="h-4 w-4" />
+              </a>
+            </Button>
+          ) : showAppSwitcher && (
+            <Button asChild variant="clear" size="sm" className="h-9 w-9 p-0" title="All apps">
               <a href="/" onClick={(event) => handleClientSideLinkNavigation(event, navigate, '/')}>
                 <span className="grid h-4 w-4 grid-cols-3 gap-[2px]" aria-hidden="true">
                   {Array.from({ length: 9 }).map((_, idx) => (
@@ -45,7 +53,7 @@ export function ToplineHeader({
         </div>
         <div className="flex items-center gap-1">
           {isAdmin && (
-            <Button asChild variant="ghost" size="icon" title="Administration">
+            <Button asChild variant="clear" size="sm" className="h-9 w-9 p-0" title="Administration">
               <a href="/admin" onClick={(event) => handleClientSideLinkNavigation(event, navigate, '/admin')}>
                 <Shield className="h-4 w-4" />
               </a>
@@ -54,16 +62,24 @@ export function ToplineHeader({
           <FeedbackDialog userId={userId} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-1.5">
+              <Button variant="clear" size="sm" className="gap-1.5">
                 <User className="h-4 w-4" />
                 <span className="text-sm">{displayName}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-popover">
               <DropdownMenuItem asChild>
-                <a href="/account" onClick={(event) => handleClientSideLinkNavigation(event, navigate, '/account')}>
+                <a
+                  href="/account"
+                  onClick={(event) => {
+                    if (shouldHandleWithBrowser(event)) return;
+                    event.preventDefault();
+                    const fromPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+                    navigate('/account', { state: { fromPath } });
+                  }}
+                >
                   <User className="h-4 w-4 mr-2" />
-                  Profile
+                  Account
                 </a>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => { void onSignOut(); }}>

@@ -521,7 +521,7 @@ export function DrawersPlanner({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-semibold leading-none tracking-tight">Units</h2>
-              <Button variant="outline-success" size="sm" className="gap-1.5" onClick={openCreateUnitDialog} disabled={creatingUnit}>
+              <Button variant="outline-success" className="gap-1.5" onClick={openCreateUnitDialog} disabled={creatingUnit}>
                 <Plus className="h-4 w-4" />
                 Unit
               </Button>
@@ -678,7 +678,7 @@ export function DrawersPlanner({
               <div className="flex items-center justify-between gap-2">
                 <CardTitle>Unassigned Drawers</CardTitle>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline-success" size="sm" onClick={() => openAddDrawerDialog(null)} disabled={creatingDrawer || heldDrawerPending}>
+                  <Button variant="outline-success" onClick={() => openAddDrawerDialog(null)} disabled={creatingDrawer || heldDrawerPending}>
                     + Drawer
                   </Button>
                 </div>
