@@ -34,11 +34,23 @@ Plan and label Kallax-style cubby layouts across one or more named units in a sh
 
 Accessible at [drawers.bath.garden](https://drawers.bath.garden).
 
+### Garage
+
+Track vehicle maintenance schedules and service history for each user account. Features include:
+
+- Vehicle profiles with odometer and in-service date tracking
+- Configurable recurring maintenance services by miles and/or months
+- Due and upcoming service views based on mileage and time intervals
+- Service visit logging with outcomes and notes
+- Receipt attachment support for service records
+
+Accessible at [garage.bath.garden](https://garage.bath.garden).
+
 ## Development notes
 
 - Built with React, TypeScript, Vite, Tailwind CSS, and Supabase
 - Modules are isolated under `src/modules/[name]/` — removing one should not break another
-- Database tables use namespace prefixes (`budget_`, `bathos_`) for clarity
+- Database tables use namespace prefixes (`bathos_`, `budget_`, `drawers_`, `garage_`) for clarity
 - Subdomain routing is handled client-side; path-based fallback (`/budget/...`) is used in development
 - See `docs/ARCHITECTURE.md` for structure, `docs/MODULE_GUIDE.md` for adding modules, and `docs/STYLE_GUIDE.md` for design conventions
 

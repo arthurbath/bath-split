@@ -33,6 +33,7 @@ Never use colors purely for decoration. Every color must carry meaning.
 - No exclamation points, even for destructive actions
 - No marketing language in the UI
 - Helper text is used sparingly — prefer self-evident UI
+- Subtext beneath page, section, card, and modal headings is off by default. Add heading subtext only when explicitly requested.
 
 ## Label Casing
 
@@ -140,6 +141,12 @@ For dotted-underline tooltip text triggers, use the persistent interaction model
 - Shadows: Only for elevated elements (dropdowns, modals, active tabs)
 - No decorative box shadows on cards or sections
 
-## Dark Mode
+## Theme Mode
 
-Full dark mode support via CSS variables. All semantic tokens have light and dark variants defined in `index.css`.
+BathOS is a dark app. Do not design or implement a light theme, and do not introduce runtime theme switching.
+
+Dark-surface rules:
+
+- Backgrounds and surfaces stay dark by default.
+- Text, icons, and borders are light for contrast.
+- Keep using semantic tokens from `index.css`; they should resolve to the dark palette.

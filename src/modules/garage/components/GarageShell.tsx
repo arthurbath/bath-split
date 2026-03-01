@@ -101,7 +101,6 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
     addServicing,
     updateServicing,
     removeServicing,
-    removeReceipt,
     createReceiptSignedUrl,
   } = useGarageServicings(userId, selectedVehicle?.id);
 
@@ -132,8 +131,20 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
   }, [basePath, isConfigRoute, navigate, vehicles.length, vehiclesLoading]);
 
   const handleOpenReceipt = async (storagePath: string) => {
-    const signedUrl = await createReceiptSignedUrl(storagePath);
-    window.open(signedUrl, '_blank', 'noopener,noreferrer');
+    const newTab = window.open('', '_blank');
+    try {
+      const signedUrl = await createReceiptSignedUrl(storagePath);
+
+      if (newTab) {
+        newTab.location.href = signedUrl;
+        return;
+      }
+
+      window.open(signedUrl, '_blank');
+    } catch (error) {
+      newTab?.close();
+      throw error;
+    }
   };
 
   const handleSetActiveVehicle = async (vehicleId: string) => {
@@ -165,10 +176,32 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
     <div className={`relative isolate bg-background ${isFullViewGridRoute ? 'h-dvh overflow-y-hidden overflow-x-visible flex flex-col' : 'min-h-screen pb-24 md:pb-4'}`}>
       <ToplineHeader
         title="Garage"
+        moduleId="garage"
         userId={userId}
         displayName={displayName}
         onSignOut={onSignOut}
         showAppSwitcher
+        titleAccessory={
+          vehicles.length > 1 ? (
+            <div className="min-w-0 w-full max-w-[200px] flex-1">
+              <Select
+                value={selectedVehicle?.id ?? ''}
+                onValueChange={(value) => {
+                  void handleSetActiveVehicle(value);
+                }}
+              >
+                <SelectTrigger aria-label="Active vehicle" className="h-8 w-full min-w-[100px]">
+                  <SelectValue placeholder="Select vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>{vehicle.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null
+        }
       />
 
       <div className="mx-auto hidden w-full max-w-5xl px-4 pt-6 md:block">
@@ -192,40 +225,6 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
       </div>
 
       <main className={isFullViewGridRoute ? 'flex w-full flex-1 min-h-0 flex-col gap-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+3.75rem)] md:pt-6 md:pb-0' : 'mx-auto max-w-5xl space-y-4 px-4 py-4 md:py-6'}>
-        {vehicles.length > 1 && (
-          <div className={isFullViewGridRoute ? 'mx-auto w-full max-w-5xl px-4' : ''}>
-            <Card>
-              <CardContent className="flex flex-wrap items-center gap-3 pt-6">
-                <Select
-                  value={selectedVehicle?.id ?? ''}
-                  onValueChange={(value) => {
-                    void handleSetActiveVehicle(value);
-                  }}
-                >
-                  <SelectTrigger className="w-full md:w-[320px]">
-                    <SelectValue placeholder="Select vehicle" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicles.map((vehicle) => (
-                      <SelectItem key={vehicle.id} value={vehicle.id}>{vehicle.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!isConfigRoute && (
-                  <Button asChild type="button" variant="outline">
-                    <a
-                      href={`${basePath}/config`}
-                      onClick={(event) => handleClientSideLinkNavigation(event, navigate, `${basePath}/config`)}
-                    >
-                      Configure
-                    </a>
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
         {!selectedVehicle && !isConfigRoute ? (
           <div className={isFullViewGridRoute ? 'mx-auto w-full max-w-5xl px-4' : ''}>
             <Card>
@@ -244,7 +243,14 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
           </div>
         ) : (
           <>
-            {isDueRoute && selectedVehicle && <GarageDueView grouped={grouped} />}
+            {isDueRoute && selectedVehicle && (
+              <GarageDueView
+                grouped={grouped}
+                onUpdateServiceMonitoring={async (serviceId, monitoring) => {
+                  await updateService(serviceId, { monitoring });
+                }}
+              />
+            )}
             {isServicesRoute && selectedVehicle && (
               <div className="flex-1 min-h-0">
                 <GarageServicesGrid
@@ -273,19 +279,14 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
                   onUpdateServicing={updateServicing}
                   onDeleteServicing={removeServicing}
                   onOpenReceipt={handleOpenReceipt}
-                  onDeleteReceipt={removeReceipt}
                 />
               </div>
             )}
             {isConfigRoute && (
               <GarageConfigView
                 vehicles={vehicles}
-                activeVehicleId={selectedVehicle?.id ?? null}
                 settings={settings}
                 autoOpenAddVehicle={vehicles.length === 0}
-                onSetActiveVehicle={(vehicleId) => {
-                  void handleSetActiveVehicle(vehicleId);
-                }}
                 onAddVehicle={addVehicle}
                 onUpdateVehicle={updateVehicle}
                 onRemoveVehicle={removeVehicle}

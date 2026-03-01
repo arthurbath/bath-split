@@ -3,13 +3,12 @@ import { createColumnHelper, getCoreRowModel, getSortedRowModel, type Row, type 
 import { format, parseISO } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DataGrid, GridEditableCell, gridMenuTriggerProps, useDataGrid } from '@/components/ui/data-grid';
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DataGrid, GridCheckboxCell, GridEditableCell, gridMenuTriggerProps, useDataGrid } from '@/components/ui/data-grid';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Ban, CheckCheck, Filter, FilterX, MoreHorizontal, Plus, SkipForward, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
@@ -17,6 +16,7 @@ import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import { GARAGE_SERVICES_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS } from '@/lib/gridColumnWidths';
 import type { GarageService, GarageServiceStatus, GarageServiceType, GarageServicingWithRelations } from '@/modules/garage/types/garage';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { GARAGE_SERVICE_TYPE_OPTIONS, getGarageServiceTypeLabel } from '@/modules/garage/lib/serviceTypes';
 
 const columnHelper = createColumnHelper<GarageService>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
@@ -24,19 +24,16 @@ const SERVICE_ACTIONS_NAV_COL = 7;
 type GroupByOption = 'none' | 'type';
 type CadenceFilterOption = 'all' | 'recurring' | 'one_off';
 
-const SERVICE_TYPE_OPTIONS: Array<{ value: GarageServiceType; label: string }> = [
-  { value: 'replacement', label: 'Replacement' },
-  { value: 'clean_lube', label: 'Clean/Lube' },
-  { value: 'adjustment', label: 'Adjustment' },
-  { value: 'check', label: 'Check' },
-];
-
 function normalizePositiveInt(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return Math.round(parsed);
+}
+
+function formatMileageInThousands(value: number): string {
+  return `${Math.round(value / 1000)}k`;
 }
 
 function ServiceTypeCell({
@@ -71,7 +68,7 @@ function ServiceTypeCell({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {SERVICE_TYPE_OPTIONS.map((option) => (
+        {GARAGE_SERVICE_TYPE_OPTIONS.map((option) => (
           <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
         ))}
       </SelectContent>
@@ -85,23 +82,14 @@ function MonitoringCell({
   navCol,
 }: {
   value: boolean;
-  onChange: (next: boolean) => void;
+  onChange: (next: boolean) => void | Promise<unknown>;
   navCol: number;
 }) {
-  const ctx = useDataGrid();
-
   return (
-    <Checkbox
+    <GridCheckboxCell
       checked={value}
-      onCheckedChange={(checked) => {
-        ctx?.onCellCommit(navCol);
-        onChange(checked === true);
-      }}
-      data-row={ctx?.rowIndex}
-      data-row-id={ctx?.rowId}
-      data-col={navCol}
-      onMouseDown={ctx?.onCellMouseDown}
-      onKeyDown={ctx?.onCellKeyDown}
+      onChange={onChange}
+      navCol={navCol}
       className="ml-1"
     />
   );
@@ -198,7 +186,6 @@ export function GarageServicesGrid({
   const [addType, setAddType] = useState<GarageServiceType>('replacement');
   const [addMiles, setAddMiles] = useState('');
   const [addMonths, setAddMonths] = useState('');
-  const [addMonitoring, setAddMonitoring] = useState(false);
   const [addNotes, setAddNotes] = useState('');
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [cadenceFilter, setCadenceFilter] = useState<CadenceFilterOption>(() => (localStorage.getItem('garage_services_cadenceFilter') as CadenceFilterOption) || 'all');
@@ -226,7 +213,6 @@ export function GarageServicesGrid({
       setAddType('replacement');
       setAddMiles('');
       setAddMonths('');
-      setAddMonitoring(false);
       setAddNotes('');
     }
   }, [addOpen]);
@@ -237,8 +223,7 @@ export function GarageServicesGrid({
     localStorage.setItem('garage_services_cadenceFilter', cadenceFilter);
   }, [cadenceFilter]);
 
-  const getTypeLabel = (value: GarageServiceType) =>
-    SERVICE_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? value;
+  const getTypeLabel = (value: GarageServiceType) => getGarageServiceTypeLabel(value);
 
   const getGroupKey = (service: GarageService) => {
     if (groupBy === 'type') return getTypeLabel(service.type);
@@ -279,7 +264,7 @@ export function GarageServicesGrid({
   }, [cadenceFilter, services]);
 
   const latestOutcomeByServiceId = useMemo(() => {
-    const byService = new Map<string, { status: GarageServiceStatus; serviceDate: string; createdAt: string }>();
+    const byService = new Map<string, { status: GarageServiceStatus; serviceDate: string; mileage: number; createdAt: string }>();
 
     for (const servicing of servicings) {
       for (const outcome of servicing.outcomes) {
@@ -288,6 +273,7 @@ export function GarageServicesGrid({
           byService.set(outcome.service_id, {
             status: outcome.status,
             serviceDate: servicing.service_date,
+            mileage: servicing.odometer_miles,
             createdAt: servicing.created_at,
           });
           continue;
@@ -297,6 +283,7 @@ export function GarageServicesGrid({
           byService.set(outcome.service_id, {
             status: outcome.status,
             serviceDate: servicing.service_date,
+            mileage: servicing.odometer_miles,
             createdAt: servicing.created_at,
           });
         }
@@ -317,7 +304,7 @@ export function GarageServicesGrid({
           <GridEditableCell
             value={row.original.name}
             onChange={(value) => {
-              void onUpdateService(row.original.id, { name: value.trim() || row.original.name });
+              return onUpdateService(row.original.id, { name: value.trim() || row.original.name });
             }}
             navCol={0}
           />
@@ -346,7 +333,7 @@ export function GarageServicesGrid({
           <GridEditableCell
             value={row.original.every_miles ?? ''}
             onChange={(value) => {
-              void onUpdateService(row.original.id, { every_miles: normalizePositiveInt(value) });
+              return onUpdateService(row.original.id, { every_miles: normalizePositiveInt(value) });
             }}
             type="number"
             navCol={2}
@@ -362,7 +349,7 @@ export function GarageServicesGrid({
           <GridEditableCell
             value={row.original.every_months ?? ''}
             onChange={(value) => {
-              void onUpdateService(row.original.id, { every_months: normalizePositiveInt(value) });
+              return onUpdateService(row.original.id, { every_months: normalizePositiveInt(value) });
             }}
             type="number"
             navCol={3}
@@ -379,11 +366,12 @@ export function GarageServicesGrid({
           if (!latest) return <span className="text-muted-foreground">-</span>;
 
           const formattedDate = format(parseISO(latest.serviceDate), 'MMMM d, yyyy');
+          const formattedMileage = `${formatMileageInThousands(latest.mileage)} mi`;
           if (latest.status === 'not_needed_yet') {
             return (
               <span className="inline-flex items-center gap-1.5">
                 <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>{formattedDate}</span>
+                <span>{formattedDate} - {formattedMileage}</span>
               </span>
             );
           }
@@ -391,7 +379,7 @@ export function GarageServicesGrid({
             return (
               <span className="inline-flex items-center gap-1.5">
                 <Ban className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>{formattedDate}</span>
+                <span>{formattedDate} - {formattedMileage}</span>
               </span>
             );
           }
@@ -399,7 +387,7 @@ export function GarageServicesGrid({
           return (
             <span className="inline-flex items-center gap-1.5">
               <CheckCheck className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{formattedDate}</span>
+              <span>{formattedDate} - {formattedMileage}</span>
             </span>
           );
         },
@@ -413,7 +401,7 @@ export function GarageServicesGrid({
           <MonitoringCell
             value={row.original.monitoring}
             onChange={(value) => {
-              void onUpdateService(row.original.id, { monitoring: value });
+              return onUpdateService(row.original.id, { monitoring: value });
             }}
             navCol={5}
           />
@@ -428,7 +416,7 @@ export function GarageServicesGrid({
           <GridEditableCell
             value={row.original.notes ?? ''}
             onChange={(value) => {
-              void onUpdateService(row.original.id, { notes: value.trim() || null });
+              return onUpdateService(row.original.id, { notes: value.trim() || null });
             }}
             navCol={6}
           />
@@ -484,7 +472,6 @@ export function GarageServicesGrid({
         type: addType,
         every_miles: normalizePositiveInt(addMiles),
         every_months: normalizePositiveInt(addMonths),
-        monitoring: addMonitoring,
         notes: addNotes.trim() || null,
       });
       setAddOpen(false);
@@ -631,7 +618,6 @@ export function GarageServicesGrid({
         <DialogContent className="max-w-lg rounded-lg">
           <DialogHeader>
             <DialogTitle>Add Service</DialogTitle>
-            <DialogDescription>Create a maintenance service definition for this vehicle.</DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-2">
@@ -643,7 +629,7 @@ export function GarageServicesGrid({
               <Select value={addType} onValueChange={(value) => setAddType(value as GarageServiceType)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {SERVICE_TYPE_OPTIONS.map((option) => (
+                  {GARAGE_SERVICE_TYPE_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -652,16 +638,12 @@ export function GarageServicesGrid({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="garage-service-miles">Every (Miles)</Label>
-                <Input id="garage-service-miles" type="number" value={addMiles} onChange={(event) => setAddMiles(event.target.value)} placeholder="e.g. 10000" />
+                <Input id="garage-service-miles" type="number" value={addMiles} onChange={(event) => setAddMiles(event.target.value)} placeholder="10,000" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-service-months">Every (Months)</Label>
-                <Input id="garage-service-months" type="number" value={addMonths} onChange={(event) => setAddMonths(event.target.value)} placeholder="e.g. 12" />
+                <Input id="garage-service-months" type="number" value={addMonths} onChange={(event) => setAddMonths(event.target.value)} placeholder="12" />
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox id="garage-service-monitoring" checked={addMonitoring} onCheckedChange={(checked) => setAddMonitoring(checked === true)} />
-              <Label htmlFor="garage-service-monitoring" className="font-normal">Monitoring only</Label>
             </div>
             <div className="space-y-2">
               <Label htmlFor="garage-service-notes">Notes</Label>

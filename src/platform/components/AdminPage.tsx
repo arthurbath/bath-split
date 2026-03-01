@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { AlertDialog, AlertDialogAction, AlertDialogBody, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Shield } from 'lucide-react';
 import * as Sentry from '@sentry/react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,7 +15,7 @@ import NotFound from '@/pages/NotFound';
 
 export default function AdminPage() {
   const { user, loading } = useAuthContext();
-  const { isAdmin, loading: roleLoading } = useIsAdmin(user?.id);
+  const { isAdmin, loading: roleLoading, resolved: roleResolved } = useIsAdmin(user?.id);
   const navigate = useNavigate();
   const hasSentryDsn = Boolean(import.meta.env.VITE_SENTRY_DSN);
   const [targetEmail, setTargetEmail] = useState('');
@@ -102,7 +102,7 @@ export default function AdminPage() {
     }
   };
 
-  if (loading || roleLoading) {
+  if (loading || (!!user && (!roleResolved || roleLoading))) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner />
@@ -119,7 +119,10 @@ export default function AdminPage() {
           <Button variant="clear" size="sm" className="h-9 w-9 p-0" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-lg font-bold tracking-tight text-foreground">Administration</h1>
+          <h1 className="inline-flex items-center gap-1.5 text-lg font-bold tracking-tight text-foreground">
+            <Shield className="h-4 w-4" aria-hidden="true" />
+            <span>Administration</span>
+          </h1>
         </div>
       </header>
 

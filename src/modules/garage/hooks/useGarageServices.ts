@@ -72,16 +72,18 @@ export function useGarageServices(userId: string | undefined, vehicleId: string 
     if (!userId || !vehicleId) throw new Error('No active vehicle selected.');
 
     try {
-      const current = (data ?? []).find((service) => service.id === id);
+      const current = (queryClient.getQueryData<GarageService[]>(queryKey) ?? []).find((service) => service.id === id);
       const nextEveryMiles = updates.every_miles ?? current?.every_miles ?? null;
       const nextEveryMonths = updates.every_months ?? current?.every_months ?? null;
+      const updatedAt = new Date().toISOString();
+
       await supabaseRequest(async () =>
         await supabase
           .from('garage_services')
           .update({
             ...updates,
             cadence_type: deriveCadenceType(nextEveryMiles, nextEveryMonths),
-            updated_at: new Date().toISOString(),
+            updated_at: updatedAt,
           })
           .eq('id', id)
           .eq('user_id', userId)
@@ -92,7 +94,7 @@ export function useGarageServices(userId: string | undefined, vehicleId: string 
       showMutationError(error);
       throw error;
     }
-  }, [data, refetch, userId, vehicleId]);
+  }, [queryClient, queryKey, refetch, userId, vehicleId]);
 
   const removeService = useCallback(async (serviceId: string) => {
     if (!userId || !vehicleId) throw new Error('No active vehicle selected.');

@@ -29,7 +29,7 @@ Split shared expenses fairly between two partners. Combines per-expense benefit 
 - **Voice**: Pragmatic and neutral. No exclamation points. No marketing language. Prefer self-evident UI over helper text.
 - **Layout**: Mobile-first. `max-w-5xl` for data views, `max-w-lg` for forms.
 - **Theming**: All colors via CSS custom properties in `index.css` with HSL values. Use Tailwind semantic tokens, never raw color values in components.
-- **Dark mode**: Fully supported via CSS variable variants.
+- **Theme mode**: BathOS is dark-only. Do not introduce light-mode variants or runtime theme switching.
 - **Form modal keyboard policy**: For all form-style modals, support full Tab/Shift+Tab traversal through all controls; inputs edit directly on focus; focused Select triggers open with Space/Enter and are fully keyboard selectable; checkboxes retain focus after toggle so tab navigation continues naturally.
 - **DataGrid resize policy**: All DataGrids (card and full-view) must resize columns in 20px increments and must persist column widths through the shared localStorage + `bathos_user_settings.grid_column_widths` mechanism (`useGridColumnWidths`). The trailing actions/ellipsis column is a fixed-width special case: `40px`.
 - **DataGrid add-button policy**: Use the Budget-style compact green outline icon button for adding grid rows (`variant="outline-success"`, `size="sm"`, `className="h-8 w-8 p-0"`, plus icon, and an `aria-label`), opening a modal form.

@@ -208,6 +208,7 @@ function PartnersCard({ partnerX, partnerY, wageGapAdjustmentEnabled, partnerXWa
                     min={0}
                     max={100}
                     step="0.01"
+                    placeholder="100"
                     value={xCents}
                     onChange={(event) => setXCents(event.target.value)}
                     className="pr-[4.75rem] text-right"
@@ -225,6 +226,7 @@ function PartnersCard({ partnerX, partnerY, wageGapAdjustmentEnabled, partnerXWa
                     min={0}
                     max={100}
                     step="0.01"
+                    placeholder="100"
                     value={yCents}
                     onChange={(event) => setYCents(event.target.value)}
                     className="pr-[4.75rem] text-right"

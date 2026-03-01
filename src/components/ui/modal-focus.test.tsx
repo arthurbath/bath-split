@@ -140,6 +140,22 @@ function DialogWithSettingsHarness() {
   );
 }
 
+function DialogBodyRefHarness({ onReady }: { onReady: (node: HTMLDivElement | null) => void }) {
+  return (
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Dialog Body Ref</DialogTitle>
+          <DialogDescription>Dialog body ref forwarding test</DialogDescription>
+        </DialogHeader>
+        <DialogBody ref={onReady}>
+          <div>Body content</div>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 describe("Modal focus conventions", () => {
   it("focuses confirm action when alert dialog has no inputs", async () => {
     const { container, root } = mount(<AlertDialogNoInputHarness />);
@@ -207,6 +223,24 @@ describe("Modal focus conventions", () => {
       await waitForCondition(() => {
         const active = document.activeElement as HTMLElement | null;
         expect(active?.getAttribute("data-testid")).toBe("notes-input");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("forwards refs to dialog body elements", async () => {
+    let bodyNode: HTMLDivElement | null = null;
+    const { container, root } = mount(
+      <DialogBodyRefHarness
+        onReady={(node) => {
+          bodyNode = node;
+        }}
+      />,
+    );
+    try {
+      await waitForCondition(() => {
+        expect(bodyNode).toBeInstanceOf(HTMLDivElement);
       });
     } finally {
       unmount(root, container);

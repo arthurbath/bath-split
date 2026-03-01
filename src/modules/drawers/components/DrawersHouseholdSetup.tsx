@@ -19,6 +19,7 @@ export function DrawersHouseholdSetup({
   return (
     <HouseholdSetupCard
       moduleTitle="Drawer Planner"
+      moduleId="drawers"
       userId={userId}
       displayName={displayName}
       onSignOut={onSignOut}

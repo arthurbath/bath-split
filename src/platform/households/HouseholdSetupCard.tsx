@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button';
 import { UserPlus, Users } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ToplineHeader } from '@/platform/components/ToplineHeader';
+import type { PlatformModuleId } from '@/platform/modules';
 
 interface HouseholdSetupCardProps {
   moduleTitle: string;
+  moduleId?: PlatformModuleId;
   userId: string;
   displayName: string;
   onSignOut: () => Promise<void> | void;
@@ -34,6 +36,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 export function HouseholdSetupCard({
   moduleTitle,
+  moduleId,
   userId,
   displayName,
   onSignOut,
@@ -91,6 +94,7 @@ export function HouseholdSetupCard({
     <div className="min-h-screen bg-background">
       <ToplineHeader
         title={moduleTitle}
+        moduleId={moduleId}
         userId={userId}
         displayName={displayName}
         onSignOut={onSignOut}

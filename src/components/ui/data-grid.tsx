@@ -6,6 +6,7 @@ import {
   type Row,
 } from '@tanstack/react-table';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GRID_ACTIONS_COLUMN_ID } from '@/lib/gridColumnWidths';
@@ -26,7 +27,8 @@ interface DataGridContextValue {
   rowIndex: number;
   rowId: string;
   onCellKeyDown: (e: React.KeyboardEvent<HTMLElement>) => boolean;
-  onCellMouseDown: (e: React.MouseEvent<HTMLElement>) => void;
+  onCellMouseDown: () => void;
+  onCellPointerDown: () => void;
   onCellCommit: (col: number) => void;
 }
 
@@ -69,6 +71,7 @@ export function gridNavProps(ctx: DataGridContextValue | null, navCol: number): 
     'data-col': navCol,
     onKeyDown: ctx?.onCellKeyDown,
     onMouseDown: ctx?.onCellMouseDown,
+    onPointerDown: ctx?.onCellPointerDown,
   };
 }
 
@@ -83,6 +86,7 @@ export function gridMenuTriggerProps(
     'data-col': navCol,
     'data-grid-focus-only': 'true',
     onMouseDown: ctx?.onCellMouseDown,
+    onPointerDown: ctx?.onCellPointerDown,
     onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
       if (
         event.key === 'Tab' ||
@@ -310,7 +314,11 @@ function useGridNav(
     return false;
   }, [findNextCol, findPrevCol, findTargetBeforeSort, focusWithRetry, getMaxRow, onNavigateTarget, resolveColInRow]);
 
-  const onCellMouseDown = useCallback((_e: React.MouseEvent<HTMLElement>) => {
+  const onCellMouseDown = useCallback(() => {
+    pointerInitiatedFocusRef.current = true;
+  }, []);
+
+  const onCellPointerDown = useCallback(() => {
     pointerInitiatedFocusRef.current = true;
   }, []);
 
@@ -320,7 +328,7 @@ function useGridNav(
     return wasPointerInitiated;
   }, []);
 
-  return { onCellKeyDown, onCellMouseDown, scrollCellIntoView, focusCellByRowId, consumePointerInitiatedFocus };
+  return { onCellKeyDown, onCellMouseDown, onCellPointerDown, scrollCellIntoView, focusCellByRowId, consumePointerInitiatedFocus };
 }
 
 // ─── DataGrid ───
@@ -359,7 +367,7 @@ export function DataGrid<TData>({
   const clearHighlightTimerRef = useRef<number | null>(null);
   const wasResizingRef = useRef(false);
   const suppressSortClickUntilRef = useRef(0);
-  const { onCellKeyDown, onCellMouseDown, scrollCellIntoView, focusCellByRowId, consumePointerInitiatedFocus } = useGridNav(
+  const { onCellKeyDown, onCellMouseDown, onCellPointerDown, scrollCellIntoView, focusCellByRowId, consumePointerInitiatedFocus } = useGridNav(
     containerRef,
     useCallback((target) => {
       if (!target.rowId) return;
@@ -642,7 +650,7 @@ export function DataGrid<TData>({
                 maxWidth: `${appliedColumnWidth}px`,
               }}
             >
-              <DataGridCtx.Provider value={{ rowIndex: currentRow, rowId: row.id, onCellKeyDown, onCellMouseDown, onCellCommit: (col) => markRowCommitted(row.id, col) }}>
+              <DataGridCtx.Provider value={{ rowIndex: currentRow, rowId: row.id, onCellKeyDown, onCellMouseDown, onCellPointerDown, onCellCommit: (col) => markRowCommitted(row.id, col) }}>
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
               </DataGridCtx.Provider>
             </td>
@@ -840,6 +848,19 @@ function isNumberEntryKey(e: React.KeyboardEvent<HTMLInputElement>) {
   return isPrintableEntryKey(e) && /^[0-9.-]$/.test(e.key);
 }
 
+function formatGridNumberDisplay(rawValue: string): string {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return '';
+
+  const normalized = trimmed.replaceAll(',', '');
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(normalized)) return rawValue;
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return rawValue;
+
+  return parsed.toLocaleString('en-US', { maximumFractionDigits: 20 });
+}
+
 function focusInputAtEnd(input: HTMLInputElement | null) {
   if (!input) return;
   input.focus();
@@ -851,9 +872,34 @@ function focusInputAtEnd(input: HTMLInputElement | null) {
   }
 }
 
+function setInputCaretAtStart(input: HTMLInputElement | null) {
+  if (!input) return;
+  input.scrollLeft = 0;
+  try {
+    input.setSelectionRange(0, 0);
+  } catch {
+    // Some input types (for example number in Safari) do not support selection ranges.
+  }
+}
+
+function focusInputAtStart(input: HTMLInputElement | null) {
+  if (!input) return;
+  input.focus();
+  setInputCaretAtStart(input);
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === 'object' || typeof value === 'function')
+    && value !== null
+    && 'then' in value
+    && typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
 export function GridEditableCell({ value, onChange, navCol, type = 'text', className, placeholder, cellId, disabled = false }: {
   value: string | number;
-  onChange: (v: string) => void;
+  onChange: (v: string) => void | Promise<unknown>;
   navCol: number;
   type?: string;
   className?: string;
@@ -869,32 +915,105 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
   const pointerDownRef = useRef(false);
   const suppressBlurCommitRef = useRef(false);
   const editStartValueRef = useRef(String(value));
+  const valueRef = useRef(String(value));
+  const pendingCommittedValueRef = useRef<string | null>(null);
+  const commitBaseValueRef = useRef<string | null>(null);
+  const awaitingAsyncCommitRef = useRef(false);
+  const showFormattedNumber = type === 'number' && !editing;
+  const inputType = showFormattedNumber ? 'text' : type;
+  const inputValue = showFormattedNumber ? formatGridNumberDisplay(local) : local;
 
   useEffect(() => {
-    if (!focused || !editing) {
-      const nextValue = String(value);
-      setLocal(nextValue);
-      if (!editing) {
-        editStartValueRef.current = nextValue;
+    valueRef.current = String(value);
+  }, [value]);
+
+  useEffect(() => {
+    const nextValue = String(value);
+    const pendingCommittedValue = pendingCommittedValueRef.current;
+    const commitBaseValue = commitBaseValueRef.current;
+
+    if (pendingCommittedValue !== null) {
+      if (!awaitingAsyncCommitRef.current && nextValue === pendingCommittedValue) {
+        pendingCommittedValueRef.current = null;
+        commitBaseValueRef.current = null;
+        setLocal(nextValue);
+        if (!editing) editStartValueRef.current = nextValue;
+        return;
       }
+      if (!awaitingAsyncCommitRef.current && commitBaseValue !== null && nextValue !== commitBaseValue) {
+        pendingCommittedValueRef.current = null;
+        commitBaseValueRef.current = null;
+        setLocal(nextValue);
+        if (!editing) editStartValueRef.current = nextValue;
+        return;
+      }
+      if (!editing) editStartValueRef.current = pendingCommittedValue;
+      return;
+    }
+
+    if (!focused || !editing) {
+      setLocal(nextValue);
+      if (!editing) editStartValueRef.current = nextValue;
     }
   }, [value, focused, editing]);
 
   const commit = () => {
     if (disabled) return;
-    if (local !== String(value)) {
+    const currentValue = String(value);
+    if (local !== currentValue) {
+      pendingCommittedValueRef.current = local;
+      commitBaseValueRef.current = currentValue;
       ctx?.onCellCommit(navCol);
-      onChange(local);
+      const maybePendingChange = onChange(local);
+      if (isPromiseLike(maybePendingChange)) {
+        awaitingAsyncCommitRef.current = true;
+        void Promise.resolve(maybePendingChange).then(() => {
+          awaitingAsyncCommitRef.current = false;
+          const pendingValue = pendingCommittedValueRef.current;
+          if (pendingValue === null) return;
+          const latestValue = valueRef.current;
+          const commitBaseValue = commitBaseValueRef.current;
+          if (latestValue === pendingValue) {
+            pendingCommittedValueRef.current = null;
+            commitBaseValueRef.current = null;
+            return;
+          }
+          if (commitBaseValue !== null && latestValue !== commitBaseValue) {
+            pendingCommittedValueRef.current = null;
+            commitBaseValueRef.current = null;
+            setLocal(latestValue);
+            editStartValueRef.current = latestValue;
+          }
+        }).catch(() => {
+          awaitingAsyncCommitRef.current = false;
+          const rollbackValue = commitBaseValueRef.current ?? valueRef.current;
+          pendingCommittedValueRef.current = null;
+          commitBaseValueRef.current = null;
+          setLocal(rollbackValue);
+          editStartValueRef.current = rollbackValue;
+        });
+      } else {
+        awaitingAsyncCommitRef.current = false;
+      }
+    }
+  };
+
+  const handlePressStart = () => {
+    pointerDownRef.current = true;
+    if (!editing) {
+      editStartValueRef.current = local;
+      setEditing(true);
     }
   };
 
   return (
     <Input
       ref={ref}
-      type={type}
-      value={local}
+      type={inputType}
+      value={inputValue}
       readOnly={!editing}
       disabled={disabled}
+      inputMode={type === 'number' ? 'decimal' : undefined}
       placeholder={placeholder}
       data-row={ctx?.rowIndex}
       data-row-id={ctx?.rowId}
@@ -902,19 +1021,24 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
       data-grid-key={cellId}
       data-grid-editing={editing ? 'true' : 'false'}
       onChange={e => { if (editing) setLocal(e.target.value); }}
-      onMouseDown={e => {
+      onPointerDown={e => {
         if (disabled) return;
-        ctx?.onCellMouseDown(e);
-        pointerDownRef.current = true;
-        if (!editing) {
-          editStartValueRef.current = local;
-          setEditing(true);
-        }
+        if (e.pointerType === 'mouse') return;
+        ctx?.onCellPointerDown();
+        handlePressStart();
+      }}
+      onMouseDown={() => {
+        if (disabled) return;
+        ctx?.onCellMouseDown();
+        handlePressStart();
       }}
       onFocus={() => {
         if (disabled) return;
         setFocused(true);
-        if (!pointerDownRef.current) setEditing(false);
+        if (!pointerDownRef.current) {
+          setEditing(false);
+          scheduleInNextFrame(() => setInputCaretAtStart(ref.current));
+        }
         pointerDownRef.current = false;
       }}
       onBlur={() => {
@@ -949,11 +1073,11 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
                 e.preventDefault();
                 commit();
                 setEditing(false);
-                scheduleInNextFrame(() => ref.current?.focus());
+                scheduleInNextFrame(() => focusInputAtStart(ref.current));
               }
               return;
             }
-            if (!editing && isPrintableEntryKey(e)) {
+            if (!editing && (type === 'number' ? isNumberEntryKey(e) : isPrintableEntryKey(e))) {
               e.preventDefault();
               startEditingWithKey(e.key);
             }
@@ -968,7 +1092,7 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
               scheduleInNextFrame(() => focusInputAtEnd(ref.current));
               return;
             }
-            if (isPrintableEntryKey(e)) {
+            if (type === 'number' ? isNumberEntryKey(e) : isPrintableEntryKey(e)) {
               e.preventDefault();
               startEditingWithKey(e.key);
               return;
@@ -981,15 +1105,18 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
           e.preventDefault();
           commit();
           setEditing(false);
-          scheduleInNextFrame(() => ref.current?.focus());
+          scheduleInNextFrame(() => focusInputAtStart(ref.current));
           return;
         }
 
         if (e.key === 'Escape') {
           e.preventDefault();
+          awaitingAsyncCommitRef.current = false;
+          pendingCommittedValueRef.current = null;
+          commitBaseValueRef.current = null;
           setLocal(editStartValueRef.current);
           setEditing(false);
-          scheduleInNextFrame(() => ref.current?.focus());
+          scheduleInNextFrame(() => focusInputAtStart(ref.current));
           return;
         }
 
@@ -1007,7 +1134,7 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
 
 export function GridCurrencyCell({ value, onChange, navCol, className, disabled = false }: {
   value: number;
-  onChange: (v: string) => void;
+  onChange: (v: string) => void | Promise<unknown>;
   navCol: number;
   className?: string;
   disabled?: boolean;
@@ -1020,22 +1147,91 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
   const pointerDownRef = useRef(false);
   const suppressBlurCommitRef = useRef(false);
   const editStartValueRef = useRef(String(value));
+  const valueRef = useRef(String(value));
+  const pendingCommittedValueRef = useRef<string | null>(null);
+  const commitBaseValueRef = useRef<string | null>(null);
+  const awaitingAsyncCommitRef = useRef(false);
 
   useEffect(() => {
-    if (!focused || !editing) {
-      const nextValue = String(value);
-      setLocal(nextValue);
-      if (!editing) {
-        editStartValueRef.current = nextValue;
+    valueRef.current = String(value);
+  }, [value]);
+
+  useEffect(() => {
+    const nextValue = String(value);
+    const pendingCommittedValue = pendingCommittedValueRef.current;
+    const commitBaseValue = commitBaseValueRef.current;
+
+    if (pendingCommittedValue !== null) {
+      if (!awaitingAsyncCommitRef.current && nextValue === pendingCommittedValue) {
+        pendingCommittedValueRef.current = null;
+        commitBaseValueRef.current = null;
+        setLocal(nextValue);
+        if (!editing) editStartValueRef.current = nextValue;
+        return;
       }
+      if (!awaitingAsyncCommitRef.current && commitBaseValue !== null && nextValue !== commitBaseValue) {
+        pendingCommittedValueRef.current = null;
+        commitBaseValueRef.current = null;
+        setLocal(nextValue);
+        if (!editing) editStartValueRef.current = nextValue;
+        return;
+      }
+      if (!editing) editStartValueRef.current = pendingCommittedValue;
+      return;
+    }
+
+    if (!focused || !editing) {
+      setLocal(nextValue);
+      if (!editing) editStartValueRef.current = nextValue;
     }
   }, [value, focused, editing]);
 
   const commit = () => {
     if (disabled) return;
-    if (local !== String(value)) {
+    const currentValue = String(value);
+    if (local !== currentValue) {
+      pendingCommittedValueRef.current = local;
+      commitBaseValueRef.current = currentValue;
       ctx?.onCellCommit(navCol);
-      onChange(local);
+      const maybePendingChange = onChange(local);
+      if (isPromiseLike(maybePendingChange)) {
+        awaitingAsyncCommitRef.current = true;
+        void Promise.resolve(maybePendingChange).then(() => {
+          awaitingAsyncCommitRef.current = false;
+          const pendingValue = pendingCommittedValueRef.current;
+          if (pendingValue === null) return;
+          const latestValue = valueRef.current;
+          const commitBaseValue = commitBaseValueRef.current;
+          if (latestValue === pendingValue) {
+            pendingCommittedValueRef.current = null;
+            commitBaseValueRef.current = null;
+            return;
+          }
+          if (commitBaseValue !== null && latestValue !== commitBaseValue) {
+            pendingCommittedValueRef.current = null;
+            commitBaseValueRef.current = null;
+            setLocal(latestValue);
+            editStartValueRef.current = latestValue;
+          }
+        }).catch(() => {
+          awaitingAsyncCommitRef.current = false;
+          const rollbackValue = commitBaseValueRef.current ?? valueRef.current;
+          pendingCommittedValueRef.current = null;
+          commitBaseValueRef.current = null;
+          setLocal(rollbackValue);
+          editStartValueRef.current = rollbackValue;
+        });
+      } else {
+        awaitingAsyncCommitRef.current = false;
+      }
+    }
+  };
+
+  const handlePressStart = () => {
+    pointerDownRef.current = true;
+    if (!editing) {
+      editStartValueRef.current = local;
+      setEditing(true);
     }
   };
 
@@ -1054,10 +1250,16 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
         data-col={navCol}
         data-grid-editing={editing ? 'true' : 'false'}
         onChange={e => { if (editing) setLocal(e.target.value); }}
-        onMouseDown={e => {
+        onPointerDown={e => {
           if (disabled) return;
-          ctx?.onCellMouseDown(e);
-          pointerDownRef.current = true;
+          if (e.pointerType === 'mouse') return;
+          ctx?.onCellPointerDown();
+          handlePressStart();
+        }}
+        onMouseDown={() => {
+          if (disabled) return;
+          ctx?.onCellMouseDown();
+          handlePressStart();
         }}
         onFocus={() => {
           if (disabled) return;
@@ -1066,14 +1268,12 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
             pointerDownRef.current = false;
             if (!editing) {
               editStartValueRef.current = local;
-              scheduleInNextFrame(() => {
-                if (document.activeElement !== ref.current) return;
-                setEditing(true);
-              });
+              setEditing(true);
             }
             return;
           }
           setEditing(false);
+          scheduleInNextFrame(() => setInputCaretAtStart(ref.current));
           pointerDownRef.current = false;
         }}
         onBlur={() => {
@@ -1108,7 +1308,7 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
                 e.preventDefault();
                 commit();
                 setEditing(false);
-                scheduleInNextFrame(() => ref.current?.focus());
+                scheduleInNextFrame(() => focusInputAtStart(ref.current));
               }
               return;
             }
@@ -1124,7 +1324,13 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
               e.preventDefault();
               editStartValueRef.current = local;
               setEditing(true);
-              scheduleInNextFrame(() => focusInputAtEnd(ref.current));
+              scheduleInNextFrame(() => {
+                if (e.key === 'Enter') {
+                  focusInputAtEnd(ref.current);
+                } else {
+                  focusInputAtStart(ref.current);
+                }
+              });
               return;
             }
             if (isNumberEntryKey(e)) {
@@ -1140,15 +1346,18 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
             e.preventDefault();
             commit();
             setEditing(false);
-            scheduleInNextFrame(() => ref.current?.focus());
+            scheduleInNextFrame(() => focusInputAtStart(ref.current));
             return;
           }
 
           if (e.key === 'Escape') {
             e.preventDefault();
+            awaitingAsyncCommitRef.current = false;
+            pendingCommittedValueRef.current = null;
+            commitBaseValueRef.current = null;
             setLocal(editStartValueRef.current);
             setEditing(false);
-            scheduleInNextFrame(() => ref.current?.focus());
+            scheduleInNextFrame(() => focusInputAtStart(ref.current));
             return;
           }
 
@@ -1167,7 +1376,7 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
 
 export function GridPercentCell({ value, onChange, navCol, className, disabled = false }: {
   value: number;
-  onChange: (v: string) => void;
+  onChange: (v: string) => void | Promise<unknown>;
   navCol: number;
   className?: string;
   disabled?: boolean;
@@ -1180,22 +1389,91 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
   const pointerDownRef = useRef(false);
   const suppressBlurCommitRef = useRef(false);
   const editStartValueRef = useRef(String(value));
+  const valueRef = useRef(String(value));
+  const pendingCommittedValueRef = useRef<string | null>(null);
+  const commitBaseValueRef = useRef<string | null>(null);
+  const awaitingAsyncCommitRef = useRef(false);
 
   useEffect(() => {
-    if (!focused || !editing) {
-      const nextValue = String(value);
-      setLocal(nextValue);
-      if (!editing) {
-        editStartValueRef.current = nextValue;
+    valueRef.current = String(value);
+  }, [value]);
+
+  useEffect(() => {
+    const nextValue = String(value);
+    const pendingCommittedValue = pendingCommittedValueRef.current;
+    const commitBaseValue = commitBaseValueRef.current;
+
+    if (pendingCommittedValue !== null) {
+      if (!awaitingAsyncCommitRef.current && nextValue === pendingCommittedValue) {
+        pendingCommittedValueRef.current = null;
+        commitBaseValueRef.current = null;
+        setLocal(nextValue);
+        if (!editing) editStartValueRef.current = nextValue;
+        return;
       }
+      if (!awaitingAsyncCommitRef.current && commitBaseValue !== null && nextValue !== commitBaseValue) {
+        pendingCommittedValueRef.current = null;
+        commitBaseValueRef.current = null;
+        setLocal(nextValue);
+        if (!editing) editStartValueRef.current = nextValue;
+        return;
+      }
+      if (!editing) editStartValueRef.current = pendingCommittedValue;
+      return;
+    }
+
+    if (!focused || !editing) {
+      setLocal(nextValue);
+      if (!editing) editStartValueRef.current = nextValue;
     }
   }, [value, focused, editing]);
 
   const commit = () => {
     if (disabled) return;
-    if (local !== String(value)) {
+    const currentValue = String(value);
+    if (local !== currentValue) {
+      pendingCommittedValueRef.current = local;
+      commitBaseValueRef.current = currentValue;
       ctx?.onCellCommit(navCol);
-      onChange(local);
+      const maybePendingChange = onChange(local);
+      if (isPromiseLike(maybePendingChange)) {
+        awaitingAsyncCommitRef.current = true;
+        void Promise.resolve(maybePendingChange).then(() => {
+          awaitingAsyncCommitRef.current = false;
+          const pendingValue = pendingCommittedValueRef.current;
+          if (pendingValue === null) return;
+          const latestValue = valueRef.current;
+          const commitBaseValue = commitBaseValueRef.current;
+          if (latestValue === pendingValue) {
+            pendingCommittedValueRef.current = null;
+            commitBaseValueRef.current = null;
+            return;
+          }
+          if (commitBaseValue !== null && latestValue !== commitBaseValue) {
+            pendingCommittedValueRef.current = null;
+            commitBaseValueRef.current = null;
+            setLocal(latestValue);
+            editStartValueRef.current = latestValue;
+          }
+        }).catch(() => {
+          awaitingAsyncCommitRef.current = false;
+          const rollbackValue = commitBaseValueRef.current ?? valueRef.current;
+          pendingCommittedValueRef.current = null;
+          commitBaseValueRef.current = null;
+          setLocal(rollbackValue);
+          editStartValueRef.current = rollbackValue;
+        });
+      } else {
+        awaitingAsyncCommitRef.current = false;
+      }
+    }
+  };
+
+  const handlePressStart = () => {
+    pointerDownRef.current = true;
+    if (!editing) {
+      editStartValueRef.current = local;
+      setEditing(true);
     }
   };
 
@@ -1215,19 +1493,24 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
         data-col={navCol}
         data-grid-editing={editing ? 'true' : 'false'}
         onChange={e => { if (editing) setLocal(e.target.value); }}
-        onMouseDown={e => {
+        onPointerDown={e => {
           if (disabled) return;
-          ctx?.onCellMouseDown(e);
-          pointerDownRef.current = true;
-          if (!editing) {
-            editStartValueRef.current = local;
-            setEditing(true);
-          }
+          if (e.pointerType === 'mouse') return;
+          ctx?.onCellPointerDown();
+          handlePressStart();
+        }}
+        onMouseDown={() => {
+          if (disabled) return;
+          ctx?.onCellMouseDown();
+          handlePressStart();
         }}
         onFocus={() => {
           if (disabled) return;
           setFocused(true);
-          if (!pointerDownRef.current) setEditing(false);
+          if (!pointerDownRef.current) {
+            setEditing(false);
+            scheduleInNextFrame(() => setInputCaretAtStart(ref.current));
+          }
           pointerDownRef.current = false;
         }}
         onBlur={() => {
@@ -1262,7 +1545,7 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
                 e.preventDefault();
                 commit();
                 setEditing(false);
-                scheduleInNextFrame(() => ref.current?.focus());
+                scheduleInNextFrame(() => focusInputAtStart(ref.current));
               }
               return;
             }
@@ -1278,7 +1561,13 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
               e.preventDefault();
               editStartValueRef.current = local;
               setEditing(true);
-              scheduleInNextFrame(() => focusInputAtEnd(ref.current));
+              scheduleInNextFrame(() => {
+                if (e.key === 'Enter') {
+                  focusInputAtEnd(ref.current);
+                } else {
+                  focusInputAtStart(ref.current);
+                }
+              });
               return;
             }
             if (isNumberEntryKey(e)) {
@@ -1294,15 +1583,18 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
             e.preventDefault();
             commit();
             setEditing(false);
-            scheduleInNextFrame(() => ref.current?.focus());
+            scheduleInNextFrame(() => focusInputAtStart(ref.current));
             return;
           }
 
           if (e.key === 'Escape') {
             e.preventDefault();
+            awaitingAsyncCommitRef.current = false;
+            pendingCommittedValueRef.current = null;
+            commitBaseValueRef.current = null;
             setLocal(editStartValueRef.current);
             setEditing(false);
-            scheduleInNextFrame(() => ref.current?.focus());
+            scheduleInNextFrame(() => focusInputAtStart(ref.current));
             return;
           }
 
@@ -1316,5 +1608,112 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
         className={cn(CELL_INPUT_CLASS, '!w-full pr-6 !text-right', !editing && 'caret-transparent', 'disabled:opacity-60 disabled:cursor-not-allowed', className)}
       />
     </div>
+  );
+}
+
+export function GridCheckboxCell({ checked, onChange, navCol, className, disabled = false }: {
+  checked: boolean;
+  onChange: (next: boolean) => void | Promise<unknown>;
+  navCol: number;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const ctx = useDataGrid();
+  const [localChecked, setLocalChecked] = useState(checked);
+  const checkedRef = useRef(checked);
+  const pendingCommittedCheckedRef = useRef<boolean | null>(null);
+  const commitBaseCheckedRef = useRef<boolean | null>(null);
+  const awaitingAsyncCommitRef = useRef(false);
+
+  useEffect(() => {
+    checkedRef.current = checked;
+  }, [checked]);
+
+  useEffect(() => {
+    const pendingCommittedChecked = pendingCommittedCheckedRef.current;
+    const commitBaseChecked = commitBaseCheckedRef.current;
+
+    if (pendingCommittedChecked !== null) {
+      if (!awaitingAsyncCommitRef.current && checked === pendingCommittedChecked) {
+        pendingCommittedCheckedRef.current = null;
+        commitBaseCheckedRef.current = null;
+        setLocalChecked(checked);
+        return;
+      }
+      if (!awaitingAsyncCommitRef.current && commitBaseChecked !== null && checked !== commitBaseChecked) {
+        pendingCommittedCheckedRef.current = null;
+        commitBaseCheckedRef.current = null;
+        setLocalChecked(checked);
+        return;
+      }
+      setLocalChecked(pendingCommittedChecked);
+      return;
+    }
+
+    setLocalChecked(checked);
+  }, [checked]);
+
+  const commit = (next: boolean) => {
+    if (disabled) return;
+    const currentChecked = checked;
+    if (next === currentChecked && pendingCommittedCheckedRef.current === null) return;
+
+    pendingCommittedCheckedRef.current = next;
+    commitBaseCheckedRef.current = currentChecked;
+    setLocalChecked(next);
+    ctx?.onCellCommit(navCol);
+
+    const maybePendingChange = onChange(next);
+    if (isPromiseLike(maybePendingChange)) {
+      awaitingAsyncCommitRef.current = true;
+      void Promise.resolve(maybePendingChange).then(() => {
+        awaitingAsyncCommitRef.current = false;
+        const pendingChecked = pendingCommittedCheckedRef.current;
+        if (pendingChecked === null) return;
+        const latestChecked = checkedRef.current;
+        const commitBaseChecked = commitBaseCheckedRef.current;
+        if (latestChecked === pendingChecked) {
+          pendingCommittedCheckedRef.current = null;
+          commitBaseCheckedRef.current = null;
+          return;
+        }
+        if (commitBaseChecked !== null && latestChecked !== commitBaseChecked) {
+          pendingCommittedCheckedRef.current = null;
+          commitBaseCheckedRef.current = null;
+          setLocalChecked(latestChecked);
+        }
+      }).catch(() => {
+        awaitingAsyncCommitRef.current = false;
+        const rollbackChecked = commitBaseCheckedRef.current ?? checkedRef.current;
+        pendingCommittedCheckedRef.current = null;
+        commitBaseCheckedRef.current = null;
+        setLocalChecked(rollbackChecked);
+      });
+    } else {
+      awaitingAsyncCommitRef.current = false;
+    }
+  };
+
+  return (
+    <Checkbox
+      checked={localChecked}
+      disabled={disabled}
+      data-row={ctx?.rowIndex}
+      data-row-id={ctx?.rowId}
+      data-col={navCol}
+      onMouseDown={ctx?.onCellMouseDown}
+      onCheckedChange={(next) => {
+        commit(next === true);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          commit(!localChecked);
+          return;
+        }
+        ctx?.onCellKeyDown(event);
+      }}
+      className={className}
+    />
   );
 }

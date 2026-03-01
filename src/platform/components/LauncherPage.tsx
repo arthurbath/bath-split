@@ -14,19 +14,19 @@ import AuthPage from './AuthPage';
 
 export default function LauncherPage() {
   const { user, loading, isSigningOut, signOut } = useAuthContext();
-  const { isAdmin, loading: roleLoading } = useIsAdmin(user?.id);
+  const { isAdmin, loading: roleLoading, resolved: roleResolved } = useIsAdmin(user?.id);
   const navigate = useNavigate();
   const modules = getAvailableModules({ isAdmin });
   const displayName = useProfileDisplayName(user?.id, user?.email ?? undefined);
 
   useEffect(() => {
     // If there's only one module, skip the launcher and go straight to it
-    if (!loading && !roleLoading && user && modules.length === 1) {
+    if (!loading && !roleLoading && roleResolved && user && modules.length === 1) {
       navigate(modules[0].launchPath, { replace: true });
     }
-  }, [loading, roleLoading, user, modules, navigate]);
+  }, [loading, roleLoading, roleResolved, user, modules, navigate]);
 
-  if (loading || isSigningOut || (!!user && roleLoading)) {
+  if (loading || isSigningOut || (!!user && (!roleResolved || roleLoading))) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner />
@@ -44,31 +44,37 @@ export default function LauncherPage() {
 
         <main className="mx-auto max-w-2xl px-4 py-8">
           <div className="grid gap-4">
-            {modules.map(mod => (
-              <Card
-                key={mod.id}
-                className="cursor-pointer hover:shadow-sm transition-shadow"
-              >
-                <a
-                  href={mod.launchPath}
-                  className="block"
-                  onClick={(event) => handleClientSideLinkNavigation(event, navigate, mod.launchPath)}
+            {modules.map((module) => {
+              const ModuleIcon = module.icon;
+              return (
+                <Card
+                  key={module.id}
+                  className="cursor-pointer hover:shadow-sm transition-shadow"
                 >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CardTitle>{mod.name}</CardTitle>
-                      {mod.adminOnly && <Badge className="bg-admin text-admin-foreground">Admin</Badge>}
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{mod.description}</p>
-                </CardContent>
-                </a>
-              </Card>
-            ))}
+                  <a
+                    href={module.launchPath}
+                    className="block"
+                    onClick={(event) => handleClientSideLinkNavigation(event, navigate, module.launchPath)}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-white/90 bg-background">
+                            <ModuleIcon className="h-5 w-5 text-white" aria-hidden="true" />
+                          </span>
+                          <CardTitle>{module.name}</CardTitle>
+                          {module.adminOnly && <Badge className="bg-admin text-admin-foreground">Admin</Badge>}
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">{module.description}</p>
+                    </CardContent>
+                  </a>
+                </Card>
+              );
+            })}
           </div>
         </main>
       </div>
