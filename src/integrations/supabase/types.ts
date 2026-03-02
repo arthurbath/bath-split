@@ -215,6 +215,7 @@ export type Database = {
       }
       budget_expenses: {
         Row: {
+          average_records: Json
           amount: number
           benefit_x: number
           budget_id: string | null
@@ -227,8 +228,10 @@ export type Database = {
           is_estimate: boolean
           linked_account_id: string | null
           name: string
+          value_type: string
         }
         Insert: {
+          average_records?: Json
           amount?: number
           benefit_x?: number
           budget_id?: string | null
@@ -241,8 +244,10 @@ export type Database = {
           is_estimate?: boolean
           linked_account_id?: string | null
           name: string
+          value_type?: string
         }
         Update: {
+          average_records?: Json
           amount?: number
           benefit_x?: number
           budget_id?: string | null
@@ -255,6 +260,7 @@ export type Database = {
           is_estimate?: boolean
           linked_account_id?: string | null
           name?: string
+          value_type?: string
         }
         Relationships: [
           {
@@ -360,34 +366,43 @@ export type Database = {
       }
       budget_income_streams: {
         Row: {
+          average_records: Json
           amount: number
           created_at: string
           frequency_param: number | null
           frequency_type: string
           household_id: string
           id: string
+          is_estimate: boolean
           name: string
           partner_label: string
+          value_type: string
         }
         Insert: {
+          average_records?: Json
           amount?: number
           created_at?: string
           frequency_param?: number | null
           frequency_type?: string
           household_id: string
           id?: string
+          is_estimate?: boolean
           name: string
           partner_label: string
+          value_type?: string
         }
         Update: {
+          average_records?: Json
           amount?: number
           created_at?: string
           frequency_param?: number | null
           frequency_type?: string
           household_id?: string
           id?: string
+          is_estimate?: boolean
           name?: string
           partner_label?: string
+          value_type?: string
         }
         Relationships: [
           {

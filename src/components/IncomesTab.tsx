@@ -10,23 +10,62 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
 import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-affix-input';
 import { Plus, Trash2, MoreHorizontal } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
-import { DataGrid, GridEditableCell, GridCurrencyCell, gridMenuTriggerProps, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
+import {
+  DataGrid,
+  GridEditableCell,
+  GridCurrencyCell,
+  GridCheckboxCell,
+  gridMenuTriggerProps,
+  gridNavProps,
+  useDataGrid,
+  GRID_HEADER_TONE_CLASS,
+  GRID_READONLY_TEXT_CLASS,
+} from '@/components/ui/data-grid';
 import { PersistentTooltipText } from '@/components/ui/tooltip';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import { GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH, INCOMES_GRID_DEFAULT_WIDTHS } from '@/lib/gridColumnWidths';
 import type { FrequencyType } from '@/types/fairshare';
 import type { Income } from '@/hooks/useIncomes';
+import {
+  convertAverageRecordsForValueType,
+  enforceIncomeTypeInvariants,
+  getAveragedFrequencyLabel,
+  seedAverageRecordsFromSimpleAmount,
+  type BudgetAverageRecord,
+  type BudgetValueType,
+} from '@/lib/budgetAveraging';
+import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
 
 const FREQ_OPTIONS: FrequencyType[] = ['weekly', 'twice_monthly', 'monthly', 'annual', 'every_n_days', 'every_n_weeks', 'every_n_months', 'k_times_weekly', 'k_times_monthly', 'k_times_annually'];
 type NewIncomeDraft = Omit<Income, 'id' | 'household_id'>;
+type AveragedValueType = Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>;
+
+const VALUE_TYPE_OPTIONS: { value: BudgetValueType; label: string; description: string }[] = [
+  {
+    value: 'simple',
+    label: 'Simple',
+    description: 'Single amount with a standard frequency.',
+  },
+  {
+    value: 'monthly_averaged',
+    label: 'Monthly Averaged',
+    description: 'Average from one or more month+year records.',
+  },
+  {
+    value: 'yearly_averaged',
+    label: 'Yearly Averaged',
+    description: 'Average from one or more yearly records.',
+  },
+];
 
 const createDefaultIncomeDraft = (): NewIncomeDraft => ({
   name: '',
@@ -34,6 +73,9 @@ const createDefaultIncomeDraft = (): NewIncomeDraft => ({
   partner_label: 'X',
   frequency_type: 'monthly',
   frequency_param: null,
+  is_estimate: false,
+  value_type: 'simple',
+  average_records: [],
 });
 
 interface IncomesTabProps {
@@ -51,9 +93,11 @@ interface IncomesTabProps {
 
 const columnHelper = createColumnHelper<Income>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
-const INCOME_ACTIONS_NAV_COL = 5;
+const INCOME_ACTIONS_NAV_COL = 6;
 
-// ─── Cell Components ───
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unexpected error';
+}
 
 function PartnerCell({
   value,
@@ -110,10 +154,14 @@ function FrequencyCell({
   disabled?: boolean;
 }) {
   const ctx = useDataGrid();
+  if (income.value_type !== 'simple') {
+    return <span className={`text-xs ${GRID_READONLY_TEXT_CLASS}`}>{getAveragedFrequencyLabel(income.value_type)}</span>;
+  }
+
   return (
     <div className="flex items-center gap-1">
       <Select value={income.frequency_type} onValueChange={v => {
-        ctx?.onCellCommit(3);
+        ctx?.onCellCommit(4);
         onChange('frequency_type', v);
       }} disabled={disabled}>
         <SelectTrigger
@@ -121,7 +169,7 @@ function FrequencyCell({
           className={`h-7 min-w-0 border-transparent bg-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${GRID_CONTROL_FOCUS_CLASS}`}
           data-row={ctx?.rowIndex}
           data-row-id={ctx?.rowId}
-          data-col={3}
+          data-col={4}
           onMouseDown={ctx?.onCellMouseDown}
           onKeyDown={(e) => {
             if (!ctx) return;
@@ -139,13 +187,71 @@ function FrequencyCell({
         </SelectContent>
       </Select>
       {needsParam(income.frequency_type) && (
-        <GridEditableCell value={income.frequency_param ?? ''} onChange={v => onChange('frequency_param', v)} type="number" navCol={4} placeholder="X" className="text-left w-8 shrink-0" disabled={disabled} />
+        <GridEditableCell value={income.frequency_param ?? ''} onChange={v => onChange('frequency_param', v)} type="number" navCol={5} placeholder="X" className="text-left w-8 shrink-0" disabled={disabled} />
       )}
     </div>
   );
 }
 
-function IncomeActionsCell({ income, onRemove, disabled = false }: { income: Income; onRemove: (id: string) => void; disabled?: boolean }) {
+function EstimateCell({
+  income,
+  onToggle,
+  disabled = false,
+}: {
+  income: Income;
+  onToggle: (next: boolean) => void | Promise<unknown>;
+  disabled?: boolean;
+}) {
+  const isAveraged = income.value_type !== 'simple';
+  return (
+    <GridCheckboxCell
+      checked={isAveraged ? true : income.is_estimate}
+      onChange={next => {
+        if (isAveraged) return;
+        return onToggle(next);
+      }}
+      navCol={3}
+      disabled={disabled || isAveraged}
+      className={isAveraged ? 'ml-1 opacity-60' : 'ml-1 hover:border-[hsl(var(--grid-sticky-line))]'}
+    />
+  );
+}
+
+function AveragedAmountCell({
+  income,
+  onEdit,
+  disabled = false,
+}: {
+  income: Income;
+  onEdit: () => void;
+  disabled?: boolean;
+}) {
+  const ctx = useDataGrid();
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      className={`h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-right tabular-nums text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))] ${GRID_CONTROL_FOCUS_CLASS} disabled:opacity-60 disabled:cursor-not-allowed`}
+      onClick={onEdit}
+      {...gridNavProps(ctx, 2)}
+      aria-label={`Edit averaged records for ${income.name}`}
+    >
+      ${Math.round(income.amount)}
+    </button>
+  );
+}
+
+function IncomeActionsCell({
+  income,
+  onRemove,
+  onConvert,
+  disabled = false,
+}: {
+  income: Income;
+  onRemove: (id: string) => void;
+  onConvert: (income: Income, targetType: BudgetValueType) => void;
+  disabled?: boolean;
+}) {
   const ctx = useDataGrid();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -166,6 +272,21 @@ function IncomeActionsCell({ income, onRemove, disabled = false }: { income: Inc
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="bg-popover">
+          {income.value_type !== 'simple' && (
+            <DropdownMenuItem onClick={() => onConvert(income, 'simple')}>
+              Convert to Simple Income
+            </DropdownMenuItem>
+          )}
+          {income.value_type !== 'monthly_averaged' && (
+            <DropdownMenuItem onClick={() => onConvert(income, 'monthly_averaged')}>
+              Convert to Monthly Avg Income
+            </DropdownMenuItem>
+          )}
+          {income.value_type !== 'yearly_averaged' && (
+            <DropdownMenuItem onClick={() => onConvert(income, 'yearly_averaged')}>
+              Convert to Yearly Avg Income
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => setConfirmOpen(true)} className="text-destructive focus:text-destructive">
             <Trash2 className="mr-2 h-4 w-4" />
             Delete
@@ -186,8 +307,6 @@ function IncomeActionsCell({ income, onRemove, disabled = false }: { income: Inc
   );
 }
 
-// ─── Main Component ───
-
 export function IncomesTab({
   incomes,
   partnerX,
@@ -203,6 +322,21 @@ export function IncomesTab({
   const [addIncomeOpen, setAddIncomeOpen] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [newIncome, setNewIncome] = useState<NewIncomeDraft>(createDefaultIncomeDraft);
+
+  const [averageEditorState, setAverageEditorState] = useState<{
+    income: Income;
+    targetValueType: AveragedValueType;
+    records: BudgetAverageRecord[];
+    title: string;
+  } | null>(null);
+  const [savingAverageEditor, setSavingAverageEditor] = useState(false);
+
+  const [convertToSimpleState, setConvertToSimpleState] = useState<{
+    income: Income;
+    amount: number;
+    frequency_type: FrequencyType;
+  } | null>(null);
+  const [savingConvertToSimple, setSavingConvertToSimple] = useState(false);
 
   const [sorting, setSorting] = useState<SortingState>(() => {
     try { const s = localStorage.getItem('incomes_sorting'); return s ? JSON.parse(s) : [{ id: 'name', desc: false }]; }
@@ -227,19 +361,39 @@ export function IncomesTab({
     setAddIncomeOpen(true);
   };
 
+  const openAverageEditor = (income: Income, targetValueType: AveragedValueType, records: BudgetAverageRecord[], title: string) => {
+    setAverageEditorState({ income, targetValueType, records, title });
+  };
+
   const handleSaveIncome = async () => {
     if (savingIncome) return;
     setSavingIncome(true);
     try {
-      const payload: NewIncomeDraft = {
-        ...newIncome,
-        frequency_param: needsParam(newIncome.frequency_type) ? newIncome.frequency_param : null,
-      };
-      await onAdd(payload);
+      if (newIncome.value_type === 'simple') {
+        const payload: NewIncomeDraft = {
+          ...newIncome,
+          frequency_param: needsParam(newIncome.frequency_type) ? newIncome.frequency_param : null,
+          average_records: [],
+        };
+        await onAdd(payload);
+      } else {
+        const payload = enforceIncomeTypeInvariants(newIncome.value_type, {
+          amount: newIncome.amount,
+          frequency_type: newIncome.frequency_type,
+          frequency_param: newIncome.frequency_param,
+          is_estimate: newIncome.is_estimate,
+          average_records: newIncome.average_records,
+        });
+        await onAdd({
+          ...newIncome,
+          ...payload,
+        });
+      }
+
       setAddIncomeOpen(false);
       setNewIncome(createDefaultIncomeDraft());
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
     setSavingIncome(false);
   };
@@ -250,15 +404,85 @@ export function IncomesTab({
     else if (field === 'amount') updates.amount = Number(value) || 0;
     else if (field === 'frequency_param') updates.frequency_param = value ? Number(value) : null;
     else updates[field] = value;
-    onUpdate(id, updates as any).catch((e: any) => {
-      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
+    onUpdate(id, updates as Partial<Omit<Income, 'id' | 'household_id'>>).catch((error: unknown) => {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+    });
+  };
+
+  const handleToggleEstimate = (id: string, next: boolean) => {
+    return onUpdate(id, { is_estimate: next }).catch((error: unknown) => {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+      throw error;
     });
   };
 
   const handleRemove = async (id: string) => {
-    try { await onRemove(id); } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    try { await onRemove(id); } catch (error: unknown) {
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
+  };
+
+  const handleConvert = (income: Income, targetType: BudgetValueType) => {
+    if (targetType === income.value_type) return;
+
+    if (targetType === 'simple') {
+      const amount = income.amount;
+      const frequency_type: FrequencyType = income.value_type === 'monthly_averaged' ? 'monthly' : 'annual';
+      setConvertToSimpleState({ income, amount, frequency_type });
+      return;
+    }
+
+    if (income.value_type === 'simple') {
+      const records = seedAverageRecordsFromSimpleAmount(targetType, income.amount);
+      openAverageEditor(income, targetType, records, `Convert ${income.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Income`);
+      return;
+    }
+
+    const records = convertAverageRecordsForValueType(income.average_records, income.value_type, targetType);
+    openAverageEditor(income, targetType, records, `Convert ${income.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Income`);
+  };
+
+  const handleSaveAverageEditor = async () => {
+    if (!averageEditorState || savingAverageEditor) return;
+    setSavingAverageEditor(true);
+
+    const payload = enforceIncomeTypeInvariants(averageEditorState.targetValueType, {
+      amount: averageEditorState.income.amount,
+      frequency_type: averageEditorState.income.frequency_type,
+      frequency_param: averageEditorState.income.frequency_param,
+      is_estimate: averageEditorState.income.is_estimate,
+      average_records: averageEditorState.records,
+    });
+
+    try {
+      await onUpdate(averageEditorState.income.id, payload);
+      setAverageEditorState(null);
+    } catch (error: unknown) {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+    }
+
+    setSavingAverageEditor(false);
+  };
+
+  const handleConfirmConvertToSimple = async () => {
+    if (!convertToSimpleState || savingConvertToSimple) return;
+    setSavingConvertToSimple(true);
+
+    try {
+      await onUpdate(convertToSimpleState.income.id, {
+        value_type: 'simple',
+        average_records: [],
+        amount: convertToSimpleState.amount,
+        frequency_type: convertToSimpleState.frequency_type,
+        frequency_param: null,
+        is_estimate: true,
+      });
+      setConvertToSimpleState(null);
+    } catch (error: unknown) {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+    }
+
+    setSavingConvertToSimple(false);
   };
 
   const columns = useMemo(() => [
@@ -284,7 +508,40 @@ export function IncomesTab({
       size: INCOMES_GRID_DEFAULT_WIDTHS.amount,
       minSize: GRID_MIN_COLUMN_WIDTH,
       meta: { headerClassName: 'text-right', containsEditableInput: true },
-      cell: ({ row }) => <GridCurrencyCell value={Number(row.original.amount)} onChange={v => handleUpdate(row.original.id, 'amount', v)} navCol={2} disabled={!!pendingById[row.original.id]} />,
+      cell: ({ row }) => {
+        if (row.original.value_type === 'simple') {
+          return <GridCurrencyCell value={Number(row.original.amount)} onChange={v => handleUpdate(row.original.id, 'amount', v)} navCol={2} disabled={!!pendingById[row.original.id]} />;
+        }
+
+        return (
+          <AveragedAmountCell
+            income={row.original}
+            onEdit={() => openAverageEditor(
+              row.original,
+              row.original.value_type,
+              row.original.average_records,
+              `Edit ${row.original.value_type === 'monthly_averaged' ? 'Monthly' : 'Yearly'} Records`,
+            )}
+            disabled={!!pendingById[row.original.id]}
+          />
+        );
+      },
+    }),
+    columnHelper.accessor('is_estimate', {
+      id: 'estimate',
+      header: () => (
+        <PersistentTooltipText side="bottom" content="Estimated means this value was manually marked as estimated or derived from averaging multiple records.">Est</PersistentTooltipText>
+      ),
+      size: INCOMES_GRID_DEFAULT_WIDTHS.estimate,
+      minSize: GRID_MIN_COLUMN_WIDTH,
+      meta: { headerClassName: 'text-center', cellClassName: 'text-center', containsEditableInput: true },
+      cell: ({ row }) => (
+        <EstimateCell
+          income={row.original}
+          onToggle={next => handleToggleEstimate(row.original.id, next)}
+          disabled={!!pendingById[row.original.id]}
+        />
+      ),
     }),
     columnHelper.accessor('frequency_type', {
       id: 'frequency_type',
@@ -314,7 +571,14 @@ export function IncomesTab({
       minSize: INCOMES_GRID_DEFAULT_WIDTHS.actions,
       maxSize: INCOMES_GRID_DEFAULT_WIDTHS.actions,
       meta: { headerClassName: 'px-0', cellClassName: 'px-0', containsButton: true },
-      cell: ({ row }) => <IncomeActionsCell income={row.original} onRemove={handleRemove} disabled={!!pendingById[row.original.id]} />,
+      cell: ({ row }) => (
+        <IncomeActionsCell
+          income={row.original}
+          onRemove={handleRemove}
+          onConvert={handleConvert}
+          disabled={!!pendingById[row.original.id]}
+        />
+      ),
     }),
   ], [partnerX, partnerY, pendingById]);
 
@@ -341,160 +605,272 @@ export function IncomesTab({
   const gridCardContentClassName = fullView ? 'px-0 pb-0 flex-1 min-h-0' : 'px-0 pb-2.5';
 
   return (
-    <Card className={fullView ? 'max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 border-t-0 md:border-t h-full min-h-0 flex flex-col' : undefined}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Incomes</CardTitle>
-          <Button
-            onClick={openAddIncomeModal}
-            disabled={savingIncome}
-            variant="outline-success"
-            size="sm"
-            className="h-8 w-8 p-0"
-            aria-label="Add income"
+    <>
+      <Card className={fullView ? 'max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 border-t-0 md:border-t h-full min-h-0 flex flex-col' : undefined}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Incomes</CardTitle>
+            <Button
+              onClick={openAddIncomeModal}
+              disabled={savingIncome}
+              variant="outline-success"
+              size="sm"
+              className="h-8 w-8 p-0"
+              aria-label="Add income"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className={gridCardContentClassName}>
+          <DataGrid
+            table={table}
+            fullView={fullView}
+            maxHeight={fullView ? 'none' : undefined}
+            className={fullView ? 'h-full min-h-0' : undefined}
+            emptyMessage='No income streams yet. Click "Add" to start.'
+            footer={incomes.length > 0 ? (
+              <>
+                <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
+                  <td className={`h-9 align-middle font-semibold text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>Totals</td>
+                  <td colSpan={4} className={`h-9 align-middle text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>
+                    {partnerX} ${Math.round(xTotal)} (
+                    {wageGapAdjustmentEnabled ? (
+                      <PersistentTooltipText align="start" side="top" contentClassName="text-xs" content={ratioTooltipText}>
+                        {`${ratioX.toFixed(0)}%`}
+                      </PersistentTooltipText>
+                    ) : (
+                      `${ratioX.toFixed(0)}%`
+                    )}
+                    ) • {partnerY} ${Math.round(yTotal)} (
+                    {wageGapAdjustmentEnabled ? (
+                      <PersistentTooltipText align="start" side="top" contentClassName="text-xs" content={ratioTooltipText}>
+                        {`${(100 - ratioX).toFixed(0)}%`}
+                      </PersistentTooltipText>
+                    ) : (
+                      `${(100 - ratioX).toFixed(0)}%`
+                    )}
+                    )
+                  </td>
+                  <td className={`h-9 align-middle text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>${Math.round(total)}</td>
+                  <td className={GRID_HEADER_TONE_CLASS} />
+                </tr>
+              </>
+            ) : undefined}
+          />
+        </CardContent>
+        <Dialog
+          open={addIncomeOpen}
+          onOpenChange={open => {
+            if (!open && !savingIncome) {
+              setAddIncomeOpen(false);
+              setNewIncome(createDefaultIncomeDraft());
+            }
+          }}
+        >
+          <DialogContent
+            className={`sm:max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col ${savingIncome ? '[&>button]:pointer-events-none [&>button]:opacity-50' : ''}`}
+            onInteractOutside={(event) => {
+              event.preventDefault();
+            }}
           >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className={gridCardContentClassName}>
-        <DataGrid
-          table={table}
-          fullView={fullView}
-          maxHeight={fullView ? 'none' : undefined}
-          className={fullView ? 'h-full min-h-0' : undefined}
-          emptyMessage='No income streams yet. Click "Add" to start.'
-          footer={incomes.length > 0 ? (
-            <>
-              <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
-                <td className={`h-9 align-middle font-semibold text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>Totals</td>
-                <td colSpan={3} className={`h-9 align-middle text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>
-                  {partnerX} ${Math.round(xTotal)} (
-                  {wageGapAdjustmentEnabled ? (
-                    <PersistentTooltipText align="start" side="top" contentClassName="text-xs" content={ratioTooltipText}>
-                      {`${ratioX.toFixed(0)}%`}
-                    </PersistentTooltipText>
-                  ) : (
-                    `${ratioX.toFixed(0)}%`
-                  )}
-                  ) • {partnerY} ${Math.round(yTotal)} (
-                  {wageGapAdjustmentEnabled ? (
-                    <PersistentTooltipText align="start" side="top" contentClassName="text-xs" content={ratioTooltipText}>
-                      {`${(100 - ratioX).toFixed(0)}%`}
-                    </PersistentTooltipText>
-                  ) : (
-                    `${(100 - ratioX).toFixed(0)}%`
-                  )}
-                  )
-                </td>
-                <td className={`h-9 align-middle text-right font-semibold tabular-nums text-xs ${GRID_HEADER_TONE_CLASS} px-2`}>${Math.round(total)}</td>
-                <td className={GRID_HEADER_TONE_CLASS} />
-              </tr>
-            </>
-          ) : undefined}
-        />
-      </CardContent>
+            <DialogHeader><DialogTitle>Add Income Stream</DialogTitle></DialogHeader>
+            <DialogBody className="min-h-0 flex-1 overflow-y-auto shadow-[inset_0_5px_6px_-6px_hsl(var(--foreground)/0.25),inset_0_-5px_6px_-6px_hsl(var(--foreground)/0.25)]">
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <DataGridAddFormLabel htmlFor="new-income-name">Name</DataGridAddFormLabel>
+                  <Input
+                    id="new-income-name"
+                    value={newIncome.name}
+                    onChange={e => setNewIncome(prev => ({ ...prev, name: e.target.value }))}
+                    autoFocus
+                    disabled={savingIncome}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <DataGridAddFormLabel>Partner</DataGridAddFormLabel>
+                  <Select
+                    value={newIncome.partner_label}
+                    onValueChange={v => setNewIncome(prev => ({ ...prev, partner_label: v }))}
+                    disabled={savingIncome}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="X">{partnerX}</SelectItem>
+                      <SelectItem value="Y">{partnerY}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <DataGridAddFormLabel>Type</DataGridAddFormLabel>
+                  <Select
+                    value={newIncome.value_type}
+                    onValueChange={v => setNewIncome(prev => ({ ...prev, value_type: v as BudgetValueType }))}
+                    disabled={savingIncome}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {VALUE_TYPE_OPTIONS.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
+                            <span>{option.label}</span>
+                            <span className="text-[11px] text-muted-foreground">{option.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {newIncome.value_type === 'simple' ? (
+                  <>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+                      <div className="space-y-1.5">
+                        <DataGridAddFormLabel htmlFor="new-income-amount">Amount</DataGridAddFormLabel>
+                        <DataGridAddFormAffixInput
+                          id="new-income-amount"
+                          prefix="$"
+                          value={String(newIncome.amount)}
+                          onChange={e => setNewIncome(prev => ({ ...prev, amount: Number(e.target.value) || 0 }))}
+                          disabled={savingIncome}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <DataGridAddFormLabel htmlFor="new-income-estimate" tooltip="Estimated means this value was manually marked as estimated.">Estimated</DataGridAddFormLabel>
+                        <div className="h-9 flex items-center -translate-y-0.5">
+                          <Checkbox
+                            id="new-income-estimate"
+                            checked={newIncome.is_estimate}
+                            onCheckedChange={checked => setNewIncome(prev => ({ ...prev, is_estimate: !!checked }))}
+                            disabled={savingIncome}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <DataGridAddFormLabel>Frequency</DataGridAddFormLabel>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={newIncome.frequency_type}
+                          onValueChange={v => {
+                            const nextFreq = v as FrequencyType;
+                            setNewIncome(prev => ({
+                              ...prev,
+                              frequency_type: nextFreq,
+                              frequency_param: needsParam(nextFreq) ? prev.frequency_param : null,
+                            }));
+                          }}
+                          disabled={savingIncome}
+                        >
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {needsParam(newIncome.frequency_type) && (
+                          <Input
+                            type="number"
+                            value={newIncome.frequency_param == null ? '' : String(newIncome.frequency_param)}
+                            onChange={e => setNewIncome(prev => ({ ...prev, frequency_param: e.target.value ? Number(e.target.value) : null }))}
+                            disabled={savingIncome}
+                            className="h-9 w-24"
+                            placeholder="X"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <AverageRecordsEditor
+                    valueType={newIncome.value_type}
+                    records={newIncome.average_records}
+                    onChange={records => setNewIncome(prev => ({ ...prev, average_records: records }))}
+                    disabled={savingIncome}
+                  />
+                )}
+              </div>
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAddIncomeOpen(false);
+                  setNewIncome(createDefaultIncomeDraft());
+                }}
+                disabled={savingIncome}
+              >
+                Cancel
+              </Button>
+              <Button variant="outline-success" onClick={handleSaveIncome} disabled={savingIncome}>{savingIncome ? 'Saving...' : 'Add'}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </Card>
+
       <Dialog
-        open={addIncomeOpen}
+        open={averageEditorState !== null}
         onOpenChange={open => {
-          if (!open && !savingIncome) {
-            setAddIncomeOpen(false);
-            setNewIncome(createDefaultIncomeDraft());
-          }
+          if (!open && !savingAverageEditor) setAverageEditorState(null);
         }}
       >
         <DialogContent
-          className={`sm:max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col ${savingIncome ? '[&>button]:pointer-events-none [&>button]:opacity-50' : ''}`}
+          className={`sm:max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col ${savingAverageEditor ? '[&>button]:pointer-events-none [&>button]:opacity-50' : ''}`}
           onInteractOutside={(event) => {
             event.preventDefault();
           }}
         >
-          <DialogHeader><DialogTitle>Add Income Stream</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{averageEditorState?.title ?? 'Edit Averaged Records'}</DialogTitle>
+            <DialogDescription>Manage the source records used to compute this averaged income.</DialogDescription>
+          </DialogHeader>
           <DialogBody className="min-h-0 flex-1 overflow-y-auto shadow-[inset_0_5px_6px_-6px_hsl(var(--foreground)/0.25),inset_0_-5px_6px_-6px_hsl(var(--foreground)/0.25)]">
-            <div className="space-y-3">
-            <div className="space-y-1.5">
-              <DataGridAddFormLabel htmlFor="new-income-name">Name</DataGridAddFormLabel>
-              <Input
-                id="new-income-name"
-                value={newIncome.name}
-                onChange={e => setNewIncome(prev => ({ ...prev, name: e.target.value }))}
-                autoFocus
-                disabled={savingIncome}
+            {averageEditorState && (
+              <AverageRecordsEditor
+                valueType={averageEditorState.targetValueType}
+                records={averageEditorState.records}
+                onChange={records => setAverageEditorState(prev => prev ? { ...prev, records } : prev)}
+                disabled={savingAverageEditor}
               />
-            </div>
-            <div className="space-y-1.5">
-              <DataGridAddFormLabel>Partner</DataGridAddFormLabel>
-              <Select
-                value={newIncome.partner_label}
-                onValueChange={v => setNewIncome(prev => ({ ...prev, partner_label: v }))}
-                disabled={savingIncome}
-              >
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="X">{partnerX}</SelectItem>
-                  <SelectItem value="Y">{partnerY}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <DataGridAddFormLabel htmlFor="new-income-amount">Amount</DataGridAddFormLabel>
-              <DataGridAddFormAffixInput
-                id="new-income-amount"
-                prefix="$"
-                value={String(newIncome.amount)}
-                onChange={e => setNewIncome(prev => ({ ...prev, amount: Number(e.target.value) || 0 }))}
-                disabled={savingIncome}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <DataGridAddFormLabel>Frequency</DataGridAddFormLabel>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={newIncome.frequency_type}
-                  onValueChange={v => {
-                    const nextFreq = v as FrequencyType;
-                    setNewIncome(prev => ({
-                      ...prev,
-                      frequency_type: nextFreq,
-                      frequency_param: needsParam(nextFreq) ? prev.frequency_param : null,
-                    }));
-                  }}
-                  disabled={savingIncome}
-                >
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {needsParam(newIncome.frequency_type) && (
-                  <Input
-                    type="number"
-                    value={newIncome.frequency_param == null ? '' : String(newIncome.frequency_param)}
-                    onChange={e => setNewIncome(prev => ({ ...prev, frequency_param: e.target.value ? Number(e.target.value) : null }))}
-                    disabled={savingIncome}
-                    className="h-9 w-24"
-                    placeholder="X"
-                  />
-                )}
-              </div>
-            </div>
-            </div>
+            )}
           </DialogBody>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => {
-                setAddIncomeOpen(false);
-                setNewIncome(createDefaultIncomeDraft());
-              }}
-              disabled={savingIncome}
+              onClick={() => setAverageEditorState(null)}
+              disabled={savingAverageEditor}
             >
               Cancel
             </Button>
-            <Button variant="outline-success" onClick={handleSaveIncome} disabled={savingIncome}>{savingIncome ? 'Saving...' : 'Add'}</Button>
+            <Button variant="outline-success" onClick={handleSaveAverageEditor} disabled={savingAverageEditor}>{savingAverageEditor ? 'Saving...' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+
+      <AlertDialog open={convertToSimpleState !== null} onOpenChange={(open) => { if (!open && !savingConvertToSimple) setConvertToSimpleState(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Convert to simple income?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This keeps the current averaged amount and removes the contributing records. The converted income will be marked as estimated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingConvertToSimple}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={savingConvertToSimple}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmConvertToSimple();
+              }}
+            >
+              {savingConvertToSimple ? 'Converting...' : 'Convert'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

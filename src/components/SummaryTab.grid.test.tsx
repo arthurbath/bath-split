@@ -46,6 +46,9 @@ describe('SummaryTab DataGrid', () => {
         partner_label: 'X',
         frequency_type: 'monthly',
         frequency_param: null,
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
       },
       {
         id: 'income-y',
@@ -55,6 +58,9 @@ describe('SummaryTab DataGrid', () => {
         partner_label: 'Y',
         frequency_type: 'monthly',
         frequency_param: null,
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
       },
     ];
     const linkedAccounts: LinkedAccount[] = [
@@ -79,6 +85,8 @@ describe('SummaryTab DataGrid', () => {
         budget_id: null,
         linked_account_id: 'acct-x',
         is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
       },
     ];
 
@@ -113,6 +121,9 @@ describe('SummaryTab DataGrid', () => {
         partner_label: 'X',
         frequency_type: 'monthly',
         frequency_param: null,
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
       },
     ];
     const linkedAccounts: LinkedAccount[] = [];
@@ -129,6 +140,8 @@ describe('SummaryTab DataGrid', () => {
         budget_id: null,
         linked_account_id: null,
         is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
       },
       {
         id: 'exp-b',
@@ -142,6 +155,8 @@ describe('SummaryTab DataGrid', () => {
         budget_id: null,
         linked_account_id: null,
         is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
       },
     ];
 
@@ -177,6 +192,9 @@ describe('SummaryTab DataGrid', () => {
         partner_label: 'X',
         frequency_type: 'monthly',
         frequency_param: null,
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
       },
     ];
     const linkedAccounts: LinkedAccount[] = [];
@@ -193,6 +211,8 @@ describe('SummaryTab DataGrid', () => {
         budget_id: null,
         linked_account_id: null,
         is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
       },
     ];
 

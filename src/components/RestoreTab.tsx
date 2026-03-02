@@ -76,6 +76,10 @@ const BackupActionsTrigger = forwardRef<HTMLButtonElement, ComponentPropsWithout
   );
 });
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unexpected error';
+}
+
 export function RestoreTab({ userId, points, incomes, expenses, categories, linkedAccounts, onSave, onRemove, onUpdateNotes, onRestore }: RestoreTabProps) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -124,8 +128,18 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
     setSaving(true);
     try {
       const snapshot: Json = {
-        incomes: incomes.map(({ id, name, amount, frequency_type, frequency_param, partner_label }) =>
-          ({ id, name, amount, frequency_type, frequency_param, partner_label })
+        incomes: incomes.map(({
+          id,
+          name,
+          amount,
+          frequency_type,
+          frequency_param,
+          partner_label,
+          is_estimate,
+          value_type,
+          average_records,
+        }) =>
+          ({ id, name, amount, frequency_type, frequency_param, partner_label, is_estimate, value_type, average_records })
         ) as unknown as Json,
         expenses: expenses.map(({
           id,
@@ -138,8 +152,10 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
           linked_account_id,
           budget_id,
           is_estimate,
+          value_type,
+          average_records,
         }) =>
-          ({ id, name, amount, frequency_type, frequency_param, benefit_x, category_id, linked_account_id, budget_id, is_estimate })
+          ({ id, name, amount, frequency_type, frequency_param, benefit_x, category_id, linked_account_id, budget_id, is_estimate, value_type, average_records })
         ) as unknown as Json,
         categories: categories.map(({ id, name, color }) => ({ id, name, color })) as unknown as Json,
         linkedAccounts: linkedAccounts.map(({ id, name, color, owner_partner }) => ({ id, name, color, owner_partner })) as unknown as Json,
@@ -148,8 +164,8 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
       setNotes('');
       setAddDialogOpen(false);
       toast({ title: 'Snapshot saved' });
-    } catch (e: any) {
-      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
     }
     setSaving(false);
   };
@@ -159,8 +175,8 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
     try {
       await onRestore(restoreTarget.data);
       toast({ title: 'Restored', description: `Restored from ${formatTimestamp(restoreTarget.created_at)}` });
-    } catch (e: any) {
-      toast({ title: 'Error restoring', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error restoring', description: getErrorMessage(error), variant: 'destructive' });
     }
     setRestoreTarget(null);
   };
@@ -169,8 +185,8 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
     if (!deleteTarget) return;
     try {
       await onRemove(deleteTarget.id);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
     setDeleteTarget(null);
   };
@@ -197,8 +213,8 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
     try {
       await onUpdateNotes(editingNotesId, next);
       toast({ title: 'Notes updated' });
-    } catch (e: any) {
-      toast({ title: 'Error updating notes', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error updating notes', description: getErrorMessage(error), variant: 'destructive' });
     }
     cancelEditingNotes();
   }, [editingNotesId, editingNotesValue, onUpdateNotes, points]);

@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ColorPicker } from '@/components/ManagedListSection';
 import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
@@ -34,6 +34,15 @@ import type { Expense } from '@/hooks/useExpenses';
 import type { Category } from '@/hooks/useCategories';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
 import type { Income } from '@/hooks/useIncomes';
+import {
+  enforceExpenseTypeInvariants,
+  getAveragedFrequencyLabel,
+  seedAverageRecordsFromSimpleAmount,
+  convertAverageRecordsForValueType,
+  type BudgetAverageRecord,
+  type BudgetValueType,
+} from '@/lib/budgetAveraging';
+import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
 
 // ─── Types ───
 
@@ -70,10 +79,33 @@ type AddSource =
   | { type: 'existing_expense'; expenseId: string; field: 'category_id' | 'linked_account_id' }
   | { type: 'new_expense'; field: 'category_id' | 'linked_account_id' };
 type NewExpenseDraft = Omit<Expense, 'id' | 'household_id'>;
+type AveragedValueType = Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>;
+
+const VALUE_TYPE_OPTIONS: { value: BudgetValueType; label: string; description: string }[] = [
+  {
+    value: 'simple',
+    label: 'Simple',
+    description: 'Single amount with a standard frequency.',
+  },
+  {
+    value: 'monthly_averaged',
+    label: 'Monthly Averaged',
+    description: 'Average from one or more month+year records.',
+  },
+  {
+    value: 'yearly_averaged',
+    label: 'Yearly Averaged',
+    description: 'Average from one or more yearly records.',
+  },
+];
 
 const columnHelper = createColumnHelper<ComputedRow>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 const EXPENSE_ACTIONS_NAV_COL = 12;
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unexpected error';
+}
 
 function DropdownOptionColorSwatch({ color }: { color?: string | null }) {
   const normalizedColor = normalizePaletteColor(color);
@@ -127,6 +159,8 @@ const createDefaultExpenseDraft = (): NewExpenseDraft => ({
   frequency_type: 'monthly',
   frequency_param: null,
   is_estimate: false,
+  value_type: 'simple',
+  average_records: [],
 });
 
 // ─── Cell Components ───
@@ -178,6 +212,10 @@ function CategoryCell({ exp, categories, onChange, onAddNew, disabled = false }:
 
 function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expense; onChange: (field: string, v: string) => void; disabled?: boolean }) {
   const ctx = useDataGrid();
+  if (exp.value_type !== 'simple') {
+    return <span className={`text-xs ${GRID_READONLY_TEXT_CLASS}`}>{getAveragedFrequencyLabel(exp.value_type)}</span>;
+  }
+
   return (
     <div className="flex items-center gap-1">
       <Select value={exp.frequency_type} onValueChange={v => {
@@ -271,12 +309,46 @@ function EstimateCell({ checked, onToggle, disabled = false }: { checked: boolea
       onChange={onToggle}
       navCol={3}
       disabled={disabled}
-      className="ml-1 hover:border-[hsl(var(--grid-sticky-line))]"
+      className={disabled ? 'ml-1 opacity-60' : 'ml-1 hover:border-[hsl(var(--grid-sticky-line))]'}
     />
   );
 }
 
-function ExpenseActionsCell({ name, onRemove, disabled = false }: { name: string; onRemove: () => void; disabled?: boolean }) {
+function AveragedAmountCell({
+  expense,
+  onEdit,
+  disabled = false,
+}: {
+  expense: Expense;
+  onEdit: () => void;
+  disabled?: boolean;
+}) {
+  const ctx = useDataGrid();
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      className={`h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-right tabular-nums text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))] ${GRID_CONTROL_FOCUS_CLASS} disabled:opacity-60 disabled:cursor-not-allowed`}
+      onClick={onEdit}
+      {...gridNavProps(ctx, 2)}
+      aria-label={`Edit averaged records for ${expense.name}`}
+    >
+      ${Math.round(expense.amount)}
+    </button>
+  );
+}
+
+function ExpenseActionsCell({
+  expense,
+  onRemove,
+  onConvert,
+  disabled = false,
+}: {
+  expense: Expense;
+  onRemove: () => void;
+  onConvert: (expense: Expense, targetType: BudgetValueType) => void;
+  disabled?: boolean;
+}) {
   const ctx = useDataGrid();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -290,13 +362,28 @@ function ExpenseActionsCell({ name, onRemove, disabled = false }: { name: string
             type="button"
             disabled={disabled}
             className={`float-right mr-[5px] h-7 w-7 ${GRID_CONTROL_FOCUS_CLASS}`}
-            aria-label={`Actions for ${name}`}
+            aria-label={`Actions for ${expense.name}`}
             {...gridMenuTriggerProps(ctx, EXPENSE_ACTIONS_NAV_COL)}
           >
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="bg-popover">
+          {expense.value_type !== 'simple' && (
+            <DropdownMenuItem onClick={() => onConvert(expense, 'simple')}>
+              Convert to Simple Expense
+            </DropdownMenuItem>
+          )}
+          {expense.value_type !== 'monthly_averaged' && (
+            <DropdownMenuItem onClick={() => onConvert(expense, 'monthly_averaged')}>
+              Convert to Monthly Avg Expense
+            </DropdownMenuItem>
+          )}
+          {expense.value_type !== 'yearly_averaged' && (
+            <DropdownMenuItem onClick={() => onConvert(expense, 'yearly_averaged')}>
+              Convert to Yearly Avg Expense
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => setConfirmOpen(true)} className="text-destructive focus:text-destructive">
             <Trash2 className="mr-2 h-4 w-4" />
             Delete
@@ -306,7 +393,7 @@ function ExpenseActionsCell({ name, onRemove, disabled = false }: { name: string
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete expense</AlertDialogTitle>
-          <AlertDialogDescription>Are you sure you want to delete &ldquo;{name}&rdquo;? This action cannot be undone.</AlertDialogDescription>
+          <AlertDialogDescription>Are you sure you want to delete &ldquo;{expense.name}&rdquo;? This action cannot be undone.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -348,6 +435,19 @@ export function ExpensesTab({
   const [addSource, setAddSource] = useState<AddSource | null>(null);
   const [savingExpense, setSavingExpense] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
+  const [averageEditorState, setAverageEditorState] = useState<{
+    expense: Expense;
+    targetValueType: AveragedValueType;
+    records: BudgetAverageRecord[];
+    title: string;
+  } | null>(null);
+  const [savingAverageEditor, setSavingAverageEditor] = useState(false);
+  const [convertToSimpleState, setConvertToSimpleState] = useState<{
+    expense: Expense;
+    amount: number;
+    frequency_type: FrequencyType;
+  } | null>(null);
+  const [savingConvertToSimple, setSavingConvertToSimple] = useState(false);
 
   type PayerFilter = 'all' | 'X' | 'Y' | 'unassigned';
   const [filterPayer, setFilterPayer] = useState<PayerFilter>(() => {
@@ -472,14 +572,39 @@ export function ExpensesTab({
     setAddDialog(type);
   };
 
+  const openAverageEditor = (
+    expense: Expense,
+    targetValueType: AveragedValueType,
+    records: BudgetAverageRecord[],
+    title: string,
+  ) => {
+    setAverageEditorState({ expense, targetValueType, records, title });
+  };
+
   const handleSaveNewExpense = async () => {
     if (savingExpense) return;
     setSavingExpense(true);
     try {
-      const payload: NewExpenseDraft = {
-        ...newExpense,
-        frequency_param: needsParam(newExpense.frequency_type) ? newExpense.frequency_param : null,
-      };
+      let payload: NewExpenseDraft;
+      if (newExpense.value_type === 'simple') {
+        payload = {
+          ...newExpense,
+          frequency_param: needsParam(newExpense.frequency_type) ? newExpense.frequency_param : null,
+          average_records: [],
+        };
+      } else {
+        const averagedPayload = enforceExpenseTypeInvariants(newExpense.value_type, {
+          amount: newExpense.amount,
+          frequency_type: newExpense.frequency_type,
+          frequency_param: newExpense.frequency_param,
+          is_estimate: newExpense.is_estimate,
+          average_records: newExpense.average_records,
+        });
+        payload = {
+          ...newExpense,
+          ...averagedPayload,
+        };
+      }
       const isVisibleInGrid = isVisibleWithCurrentPayerFilter(payload.linked_account_id);
       await onAdd(payload);
       setAddExpenseOpen(false);
@@ -490,8 +615,8 @@ export function ExpensesTab({
           description: 'The expense was added, but it is not visible because of the current filters.',
         });
       }
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
     setSavingExpense(false);
   };
@@ -506,22 +631,98 @@ export function ExpensesTab({
     else if (field === 'linked_account_id') {
       updates.linked_account_id = value === '_none' ? null : value;
     } else updates[field] = value;
-    onUpdate(id, updates as any).catch((e: any) => {
-      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
+    onUpdate(id, updates as Partial<Omit<Expense, 'id' | 'household_id'>>).catch((error: unknown) => {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
     });
   };
 
   const handleToggleEstimate = (id: string, checked: boolean) => {
-    return onUpdate(id, { is_estimate: checked }).catch((e: any) => {
-      toast({ title: 'Error saving', description: e.message, variant: 'destructive' });
-      throw e;
+    return onUpdate(id, { is_estimate: checked }).catch((error: unknown) => {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+      throw error;
     });
   };
 
   const handleRemove = async (id: string) => {
-    try { await onRemove(id); } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    try { await onRemove(id); } catch (error: unknown) {
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
+  };
+
+  const handleConvert = (expense: Expense, targetType: BudgetValueType) => {
+    if (targetType === expense.value_type) return;
+
+    if (targetType === 'simple') {
+      const frequency_type: FrequencyType = expense.value_type === 'monthly_averaged' ? 'monthly' : 'annual';
+      setConvertToSimpleState({
+        expense,
+        amount: expense.amount,
+        frequency_type,
+      });
+      return;
+    }
+
+    if (expense.value_type === 'simple') {
+      const records = seedAverageRecordsFromSimpleAmount(targetType, expense.amount);
+      openAverageEditor(
+        expense,
+        targetType,
+        records,
+        `Convert ${expense.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Expense`,
+      );
+      return;
+    }
+
+    const records = convertAverageRecordsForValueType(expense.average_records, expense.value_type, targetType);
+    openAverageEditor(
+      expense,
+      targetType,
+      records,
+      `Convert ${expense.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Expense`,
+    );
+  };
+
+  const handleSaveAverageEditor = async () => {
+    if (!averageEditorState || savingAverageEditor) return;
+    setSavingAverageEditor(true);
+
+    const payload = enforceExpenseTypeInvariants(averageEditorState.targetValueType, {
+      amount: averageEditorState.expense.amount,
+      frequency_type: averageEditorState.expense.frequency_type,
+      frequency_param: averageEditorState.expense.frequency_param,
+      is_estimate: averageEditorState.expense.is_estimate,
+      average_records: averageEditorState.records,
+    });
+
+    try {
+      await onUpdate(averageEditorState.expense.id, payload);
+      setAverageEditorState(null);
+    } catch (error: unknown) {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+    }
+
+    setSavingAverageEditor(false);
+  };
+
+  const handleConfirmConvertToSimple = async () => {
+    if (!convertToSimpleState || savingConvertToSimple) return;
+    setSavingConvertToSimple(true);
+
+    try {
+      await onUpdate(convertToSimpleState.expense.id, {
+        value_type: 'simple',
+        average_records: [],
+        amount: convertToSimpleState.amount,
+        frequency_type: convertToSimpleState.frequency_type,
+        frequency_param: null,
+        is_estimate: true,
+      });
+      setConvertToSimpleState(null);
+    } catch (error: unknown) {
+      toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+    }
+
+    setSavingConvertToSimple(false);
   };
 
   const handleSaveNewItem = async () => {
@@ -551,8 +752,8 @@ export function ExpensesTab({
       }
       setAddDialog(null);
       setAddSource(null);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
     setSavingItem(false);
   };
@@ -600,28 +801,48 @@ export function ExpensesTab({
       size: EXPENSES_GRID_DEFAULT_WIDTHS.amount,
       minSize: GRID_MIN_COLUMN_WIDTH,
       meta: { headerClassName: 'text-right', containsEditableInput: true },
-      cell: ({ row }) => (
-        <GridCurrencyCell
-          value={Number(row.original.exp.amount)}
-          onChange={v => handleUpdate(row.original.exp.id, 'amount', v)}
-          navCol={2}
-          disabled={!!pendingById[row.original.exp.id]}
-        />
-      ),
+      cell: ({ row }) => {
+        if (row.original.exp.value_type === 'simple') {
+          return (
+            <GridCurrencyCell
+              value={Number(row.original.exp.amount)}
+              onChange={v => handleUpdate(row.original.exp.id, 'amount', v)}
+              navCol={2}
+              disabled={!!pendingById[row.original.exp.id]}
+            />
+          );
+        }
+
+        return (
+          <AveragedAmountCell
+            expense={row.original.exp}
+            onEdit={() => openAverageEditor(
+              row.original.exp,
+              row.original.exp.value_type,
+              row.original.exp.average_records,
+              `Edit ${row.original.exp.value_type === 'monthly_averaged' ? 'Monthly' : 'Yearly'} Records`,
+            )}
+            disabled={!!pendingById[row.original.exp.id]}
+          />
+        );
+      },
     }),
     columnHelper.accessor(r => r.exp.is_estimate, {
       id: 'estimate',
       header: () => (
-        <PersistentTooltipText side="bottom" content="Expense is estimated">Est</PersistentTooltipText>
+        <PersistentTooltipText side="bottom" content="Estimated means this value was manually marked as estimated or derived from averaging multiple records.">Est</PersistentTooltipText>
       ),
       size: EXPENSES_GRID_DEFAULT_WIDTHS.estimate,
       minSize: GRID_MIN_COLUMN_WIDTH,
       meta: { headerClassName: 'text-center', cellClassName: 'text-center', containsEditableInput: true },
       cell: ({ row }) => (
         <EstimateCell
-          checked={row.original.exp.is_estimate}
-          onToggle={v => handleToggleEstimate(row.original.exp.id, v)}
-          disabled={!!pendingById[row.original.exp.id]}
+          checked={row.original.exp.value_type === 'simple' ? row.original.exp.is_estimate : true}
+          onToggle={v => {
+            if (row.original.exp.value_type !== 'simple') return;
+            return handleToggleEstimate(row.original.exp.id, v);
+          }}
+          disabled={!!pendingById[row.original.exp.id] || row.original.exp.value_type !== 'simple'}
         />
       ),
     }),
@@ -880,8 +1101,9 @@ export function ExpensesTab({
       meta: { headerClassName: 'px-0', cellClassName: 'px-0', containsButton: true },
       cell: ({ row }) => (
         <ExpenseActionsCell
-          name={row.original.exp.name}
+          expense={row.original.exp}
           onRemove={() => handleRemove(row.original.exp.id)}
+          onConvert={handleConvert}
           disabled={!!pendingById[row.original.exp.id]}
         />
       ),
@@ -1133,63 +1355,6 @@ export function ExpensesTab({
               </Select>
             </div>
 
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
-                <div className="space-y-1.5">
-                  <DataGridAddFormLabel htmlFor="new-expense-amount">Amount</DataGridAddFormLabel>
-                  <DataGridAddFormAffixInput
-                    id="new-expense-amount"
-                    prefix="$"
-                    value={String(newExpense.amount)}
-                    onChange={e => setNewExpense(prev => ({ ...prev, amount: Number(e.target.value) || 0 }))}
-                    disabled={savingExpense}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <DataGridAddFormLabel htmlFor="new-expense-estimate" tooltip="Expense is estimated">Estimated</DataGridAddFormLabel>
-                  <div className="h-9 flex items-center -translate-y-0.5">
-                    <Checkbox
-                      id="new-expense-estimate"
-                      checked={newExpense.is_estimate}
-                      onCheckedChange={checked => setNewExpense(prev => ({ ...prev, is_estimate: !!checked }))}
-                      disabled={savingExpense}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-              <DataGridAddFormLabel>Frequency</DataGridAddFormLabel>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={newExpense.frequency_type}
-                  onValueChange={v => {
-                    const nextFreq = v as FrequencyType;
-                    setNewExpense(prev => ({
-                      ...prev,
-                      frequency_type: nextFreq,
-                      frequency_param: needsParam(nextFreq) ? prev.frequency_param : null,
-                    }));
-                  }}
-                  disabled={savingExpense}
-                >
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {needsParam(newExpense.frequency_type) && (
-                  <Input
-                    type="number"
-                    value={newExpense.frequency_param == null ? '' : String(newExpense.frequency_param)}
-                    onChange={e => setNewExpense(prev => ({ ...prev, frequency_param: e.target.value ? Number(e.target.value) : null }))}
-                    disabled={savingExpense}
-                    className="h-9 w-24"
-                    placeholder="X"
-                  />
-                )}
-              </div>
-            </div>
-
               <div className="space-y-1.5">
               <DataGridAddFormLabel>Payment Method</DataGridAddFormLabel>
               <Select
@@ -1257,6 +1422,95 @@ export function ExpensesTab({
                   />
                 </div>
               </div>
+
+              <div className="space-y-1.5">
+                <DataGridAddFormLabel>Type</DataGridAddFormLabel>
+                <Select
+                  value={newExpense.value_type}
+                  onValueChange={v => setNewExpense(prev => ({ ...prev, value_type: v as BudgetValueType }))}
+                  disabled={savingExpense}
+                >
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {VALUE_TYPE_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
+                          <span>{option.label}</span>
+                          <span className="text-[11px] text-muted-foreground">{option.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {newExpense.value_type === 'simple' ? (
+                <>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+                    <div className="space-y-1.5">
+                      <DataGridAddFormLabel htmlFor="new-expense-amount">Amount</DataGridAddFormLabel>
+                      <DataGridAddFormAffixInput
+                        id="new-expense-amount"
+                        prefix="$"
+                        value={String(newExpense.amount)}
+                        onChange={e => setNewExpense(prev => ({ ...prev, amount: Number(e.target.value) || 0 }))}
+                        disabled={savingExpense}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <DataGridAddFormLabel htmlFor="new-expense-estimate" tooltip="Estimated means this value was manually marked as estimated.">Estimated</DataGridAddFormLabel>
+                      <div className="h-9 flex items-center -translate-y-0.5">
+                        <Checkbox
+                          id="new-expense-estimate"
+                          checked={newExpense.is_estimate}
+                          onCheckedChange={checked => setNewExpense(prev => ({ ...prev, is_estimate: !!checked }))}
+                          disabled={savingExpense}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <DataGridAddFormLabel>Frequency</DataGridAddFormLabel>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={newExpense.frequency_type}
+                        onValueChange={v => {
+                          const nextFreq = v as FrequencyType;
+                          setNewExpense(prev => ({
+                            ...prev,
+                            frequency_type: nextFreq,
+                            frequency_param: needsParam(nextFreq) ? prev.frequency_param : null,
+                          }));
+                        }}
+                        disabled={savingExpense}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {needsParam(newExpense.frequency_type) && (
+                        <Input
+                          type="number"
+                          value={newExpense.frequency_param == null ? '' : String(newExpense.frequency_param)}
+                          onChange={e => setNewExpense(prev => ({ ...prev, frequency_param: e.target.value ? Number(e.target.value) : null }))}
+                          disabled={savingExpense}
+                          className="h-9 w-24"
+                          placeholder="X"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <AverageRecordsEditor
+                  valueType={newExpense.value_type}
+                  records={newExpense.average_records}
+                  onChange={records => setNewExpense(prev => ({ ...prev, average_records: records }))}
+                  disabled={savingExpense}
+                />
+              )}
             </div>
           </DialogBody>
           <DialogFooter>
@@ -1274,6 +1528,68 @@ export function ExpensesTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={averageEditorState !== null}
+        onOpenChange={open => {
+          if (!open && !savingAverageEditor) setAverageEditorState(null);
+        }}
+      >
+        <DialogContent
+          className={`sm:max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col ${savingAverageEditor ? '[&>button]:pointer-events-none [&>button]:opacity-50' : ''}`}
+          onInteractOutside={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{averageEditorState?.title ?? 'Edit Averaged Records'}</DialogTitle>
+            <DialogDescription>Manage the source records used to compute this averaged expense.</DialogDescription>
+          </DialogHeader>
+          <DialogBody className="min-h-0 flex-1 overflow-y-auto shadow-[inset_0_5px_6px_-6px_hsl(var(--foreground)/0.25),inset_0_-5px_6px_-6px_hsl(var(--foreground)/0.25)]">
+            {averageEditorState && (
+              <AverageRecordsEditor
+                valueType={averageEditorState.targetValueType}
+                records={averageEditorState.records}
+                onChange={records => setAverageEditorState(prev => prev ? { ...prev, records } : prev)}
+                disabled={savingAverageEditor}
+              />
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAverageEditorState(null)}
+              disabled={savingAverageEditor}
+            >
+              Cancel
+            </Button>
+            <Button variant="outline-success" onClick={handleSaveAverageEditor} disabled={savingAverageEditor}>{savingAverageEditor ? 'Saving...' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={convertToSimpleState !== null} onOpenChange={open => { if (!open && !savingConvertToSimple) setConvertToSimpleState(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Convert to simple expense?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This keeps the current averaged amount and removes the contributing records. The converted expense will be marked as estimated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingConvertToSimple}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={savingConvertToSimple}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmConvertToSimple();
+              }}
+            >
+              {savingConvertToSimple ? 'Converting...' : 'Convert'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={viewControlsOpen} onOpenChange={setViewControlsOpen}>
         <DialogContent className="w-screen max-w-none rounded-none sm:w-full sm:max-w-sm sm:rounded-lg">
