@@ -1,12 +1,23 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useHostModule } from '@/platform/hooks/useHostModule';
-import { getModuleById } from '@/platform/modules';
+import { getModuleById, type PlatformModuleId } from '@/platform/modules';
 
 const DEFAULT_TITLE = 'BathOS';
-const DEFAULT_DESCRIPTION = 'A bunch of hyper-specific apps for Art and his friends';
 const DEFAULT_ICON = '/favicon.png';
 const DEFAULT_APPLE_ICON = '/apple-touch-icon.png';
+
+/** iOS/macOS Safari ignores dynamic (Blob) manifests for "Add to Home Screen".
+ *  By removing the manifest link entirely on these platforms, Safari falls back
+ *  to plain-bookmark behaviour — capturing the current URL and document.title. */
+const IS_APPLE_SAFARI = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+const MODULE_MANIFEST_MAP: Partial<Record<PlatformModuleId, string>> = {
+  budget: '/manifest-budget.json',
+  drawers: '/manifest-drawers.json',
+  garage: '/manifest-garage.json',
+  admin: '/manifest-admin.json',
+};
 
 function setLinkHref(rel: string, href: string) {
   const link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
@@ -15,33 +26,17 @@ function setLinkHref(rel: string, href: string) {
   }
 }
 
-let currentManifestBlobUrl: string | null = null;
-
-function setManifest(name: string, startUrl: string, iconPath: string) {
-  const manifest = {
-    name,
-    short_name: name,
-    description: DEFAULT_DESCRIPTION,
-    start_url: startUrl,
-    display: 'standalone' as const,
-    background_color: '#fcfcfc',
-    theme_color: '#1f1f1f',
-    icons: [
-      { src: iconPath, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-      { src: iconPath, sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
-    ],
-  };
-
-  if (currentManifestBlobUrl) {
-    URL.revokeObjectURL(currentManifestBlobUrl);
-  }
-
-  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
-  currentManifestBlobUrl = URL.createObjectURL(blob);
-
+function setManifestLink(href: string | null) {
   const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-  if (link) {
-    link.href = currentManifestBlobUrl;
+  if (!link) return;
+
+  if (href) {
+    link.href = href;
+    link.removeAttribute('data-removed');
+  } else {
+    // Remove manifest so Safari uses bookmark semantics
+    link.removeAttribute('href');
+    link.setAttribute('data-removed', 'true');
   }
 }
 
@@ -52,21 +47,27 @@ export function useDocumentHead() {
   useEffect(() => {
     const firstSegment = location.pathname.split('/')[1];
     const effectiveId = firstSegment === 'admin' ? 'admin' : moduleId;
-    const mod = effectiveId ? getModuleById(effectiveId as any) : undefined;
+    const mod = effectiveId ? getModuleById(effectiveId as PlatformModuleId) : undefined;
 
     if (mod) {
       document.title = mod.name;
       const icon = mod.iconPath ?? DEFAULT_ICON;
       setLinkHref('icon', icon);
       setLinkHref('apple-touch-icon', icon);
-      // Point manifest start_url to the current path so "Add to Home Screen"
-      // captures this exact URL with the module name and icon.
-      setManifest(mod.name, location.pathname, icon);
+
+      if (IS_APPLE_SAFARI) {
+        // Remove manifest so iOS/macOS A2HS captures current URL + title
+        setManifestLink(null);
+      } else {
+        // Chrome/Edge/etc. respect the manifest for A2HS
+        const manifestPath = MODULE_MANIFEST_MAP[mod.id] ?? '/manifest.json';
+        setManifestLink(manifestPath);
+      }
     } else {
       document.title = DEFAULT_TITLE;
       setLinkHref('icon', DEFAULT_ICON);
       setLinkHref('apple-touch-icon', DEFAULT_APPLE_ICON);
-      setManifest(DEFAULT_TITLE, '/', '/icon-192.png');
+      setManifestLink('/manifest.json');
     }
   }, [moduleId, location.pathname]);
 }
