@@ -14,6 +14,7 @@ Split shared expenses fairly between two partners. The Budget module calculates 
 - Grouping by category, payer, payment method, or estimation status
 - Automatic payer inheritance from assigned payment methods
 - Income tracking with flexible frequency options (weekly, fortnightly, monthly, yearly, custom)
+- Simple and averaged line items (monthly or yearly averaged records)
 - Settlement summary showing who owes whom
 - Backup and restore points for household data
 - Partner invite codes for joining an existing household

@@ -36,6 +36,7 @@ export const INCOMES_GRID_DEFAULT_WIDTHS: ColumnWidthMap = {
   name: 240,
   partner_label: 200,
   amount: 120,
+  estimate: 80,
   frequency_type: 220,
   monthly: 120,
   [GRID_ACTIONS_COLUMN_ID]: GRID_ACTIONS_COLUMN_WIDTH,

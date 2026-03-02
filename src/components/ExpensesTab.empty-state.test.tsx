@@ -91,6 +91,8 @@ describe('ExpensesTab empty message', () => {
       is_estimate: false,
       budget_id: null,
       linked_account_id: 'account-y',
+      value_type: 'simple',
+      average_records: [],
     };
 
     const linkedAccount: LinkedAccount = {
@@ -128,6 +130,8 @@ describe('ExpensesTab empty message', () => {
       is_estimate: false,
       budget_id: null,
       linked_account_id: null,
+      value_type: 'simple',
+      average_records: [],
     };
 
     const { container, root } = renderExpensesTab({ expenses: [expense] });
@@ -146,6 +150,38 @@ describe('ExpensesTab empty message', () => {
       expect(text).toContain(`Daily: $${daily.toFixed(2)}`);
       expect(text).toContain(`Weekly: $${weekly.toFixed(2)}`);
       expect(text).toContain(`Annually: $${annual.toFixed(2)}`);
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('shows averaged frequency text and opens averaged records editor from amount', () => {
+    const expense: Expense = {
+      id: 'expense-avg',
+      name: 'Groceries',
+      amount: 950,
+      frequency_type: 'monthly',
+      frequency_param: null,
+      benefit_x: 50,
+      category_id: null,
+      household_id: 'household-1',
+      is_estimate: true,
+      budget_id: null,
+      linked_account_id: null,
+      value_type: 'monthly_averaged',
+      average_records: [{ year: 2026, month: 2, amount: 1000 }, { year: 2025, month: 12, amount: 900 }],
+    };
+
+    const { container, root } = renderExpensesTab({ expenses: [expense] });
+    try {
+      expect(container.textContent).toContain('Monthly Avg');
+      const amountButton = container.querySelector('button[aria-label="Edit averaged records for Groceries"]');
+      expect(amountButton).toBeTruthy();
+
+      act(() => {
+        amountButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(document.body.textContent).toContain('Edit Monthly Records');
     } finally {
       unmount(root, container);
     }

@@ -5,6 +5,12 @@ import type { FrequencyType } from '@/types/fairshare';
 import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
+import {
+  normalizeAverageRecords,
+  normalizeBudgetValueType,
+  type BudgetAverageRecord,
+  type BudgetValueType,
+} from '@/lib/budgetAveraging';
 
 export interface Expense {
   id: string;
@@ -18,6 +24,8 @@ export interface Expense {
   is_estimate: boolean;
   budget_id: string | null;
   linked_account_id: string | null;
+  value_type: BudgetValueType;
+  average_records: BudgetAverageRecord[];
 }
 
 function sortByCreatedAt(rows: Expense[]): Expense[] {
@@ -26,6 +34,26 @@ function sortByCreatedAt(rows: Expense[]): Expense[] {
     const bCreated = (b as unknown as { created_at?: string }).created_at ?? '';
     return aCreated.localeCompare(bCreated);
   });
+}
+
+function normalizeExpenseRow(raw: unknown): Expense {
+  const row = raw as Record<string, unknown>;
+  const valueType = normalizeBudgetValueType(row.value_type);
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ''),
+    amount: Number(row.amount ?? 0),
+    frequency_type: (String(row.frequency_type ?? 'monthly') as FrequencyType),
+    frequency_param: row.frequency_param == null ? null : Number(row.frequency_param),
+    benefit_x: Number(row.benefit_x ?? 50),
+    category_id: row.category_id == null ? null : String(row.category_id),
+    household_id: String(row.household_id),
+    is_estimate: Boolean(row.is_estimate),
+    budget_id: row.budget_id == null ? null : String(row.budget_id),
+    linked_account_id: row.linked_account_id == null ? null : String(row.linked_account_id),
+    value_type: valueType,
+    average_records: normalizeAverageRecords(row.average_records, valueType),
+  };
 }
 
 export function useExpenses(householdId: string) {
@@ -44,7 +72,7 @@ export function useExpenses(householdId: string) {
           .eq('household_id', householdId)
           .order('created_at'),
       );
-      return (rows as Expense[]) ?? [];
+      return (rows ?? []).map(normalizeExpenseRow);
     },
   });
 
@@ -76,7 +104,7 @@ export function useExpenses(householdId: string) {
             .select('*')
             .single(),
         );
-        return row as Expense;
+        return normalizeExpenseRow(row);
       });
 
       queryClient.setQueryData<Expense[]>(queryKey, (current) => sortByCreatedAt([...(current ?? []), saved]));
@@ -112,7 +140,7 @@ export function useExpenses(householdId: string) {
             .select('*')
             .single(),
         );
-        return row as Expense;
+        return normalizeExpenseRow(row);
       });
 
       queryClient.setQueryData<Expense[]>(queryKey, (current) =>
