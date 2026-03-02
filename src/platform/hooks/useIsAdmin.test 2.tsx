@@ -10,7 +10,7 @@ const getUserMock = vi.fn();
 const queryBuilder = {
   select: vi.fn(),
   eq: vi.fn(),
-  maybeSingle: (...args: unknown[]) => maybeSingleMock(...args),
+  maybeSingle: (...args: any[]) => maybeSingleMock(...args),
 };
 
 queryBuilder.select.mockImplementation(() => queryBuilder);
@@ -21,9 +21,9 @@ const fromMock = vi.fn(() => queryBuilder);
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     auth: {
-      getUser: (...args: unknown[]) => getUserMock(...args),
+      getUser: (...args: any[]) => getUserMock(...args),
     },
-    from: (...args: unknown[]) => fromMock(...args),
+    from: (...args: any[]) => (fromMock as any)(...args),
   },
 }));
 
