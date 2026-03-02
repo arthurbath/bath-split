@@ -15,6 +15,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import TermsGate from "@/platform/components/TermsGate";
 import AuthCallbackToasts from "@/platform/components/AuthCallbackToasts";
 import { isLikelyNetworkError } from "@/lib/networkErrors";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import Index from "./pages/Index";
 import DrawersIndex from "@/modules/drawers/DrawersIndex";
 import GarageIndex from "@/modules/garage/GarageIndex";
@@ -56,43 +57,45 @@ function DeferredNotFound() {
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<LauncherPage />} />
-      <Route path="/account" element={<AccountPage />} />
-      <Route path="/admin" element={<AdminPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/terms" element={<TermsPage />} />
+    <PullToRefresh>
+      <Routes>
+        <Route path="/" element={<LauncherPage />} />
+        <Route path="/account" element={<AccountPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/terms" element={<TermsPage />} />
 
-      {/* Budget module */}
-      <Route path="/budget" element={<Navigate to="/budget/summary" replace />} />
-      <Route path="/budget/incomes" element={<Index />} />
-      <Route path="/budget/expenses" element={<Index />} />
-      <Route path="/budget/summary" element={<Index />} />
-      <Route path="/budget/config" element={<Index />} />
-      <Route path="/budget/restore" element={<Navigate to="/budget/config" replace />} />
+        {/* Budget module */}
+        <Route path="/budget" element={<Navigate to="/budget/summary" replace />} />
+        <Route path="/budget/incomes" element={<Index />} />
+        <Route path="/budget/expenses" element={<Index />} />
+        <Route path="/budget/summary" element={<Index />} />
+        <Route path="/budget/config" element={<Index />} />
+        <Route path="/budget/restore" element={<Navigate to="/budget/config" replace />} />
 
-      {/* Drawer Planner module */}
-      <Route path="/drawers" element={<Navigate to="/drawers/plan" replace />} />
-      <Route path="/drawers/plan" element={<DrawersIndex />} />
-      <Route path="/drawers/config" element={<DrawersIndex />} />
+        {/* Drawer Planner module */}
+        <Route path="/drawers" element={<Navigate to="/drawers/plan" replace />} />
+        <Route path="/drawers/plan" element={<DrawersIndex />} />
+        <Route path="/drawers/config" element={<DrawersIndex />} />
 
-      {/* Garage module */}
-      <Route path="/garage" element={<Navigate to="/garage/due" replace />} />
-      <Route path="/garage/due" element={<GarageIndex />} />
-      <Route path="/garage/services" element={<GarageIndex />} />
-      <Route path="/garage/servicings" element={<GarageIndex />} />
-      <Route path="/garage/config" element={<GarageIndex />} />
+        {/* Garage module */}
+        <Route path="/garage" element={<Navigate to="/garage/due" replace />} />
+        <Route path="/garage/due" element={<GarageIndex />} />
+        <Route path="/garage/services" element={<GarageIndex />} />
+        <Route path="/garage/servicings" element={<GarageIndex />} />
+        <Route path="/garage/config" element={<GarageIndex />} />
 
-      {/* Legacy routes */}
-      <Route path="/incomes" element={<Navigate to="/budget/incomes" replace />} />
-      <Route path="/expenses" element={<Navigate to="/budget/expenses" replace />} />
-      <Route path="/summary" element={<Navigate to="/budget/summary" replace />} />
-      <Route path="/config" element={<Navigate to="/budget/config" replace />} />
-      <Route path="/restore" element={<Navigate to="/budget/config" replace />} />
+        {/* Legacy routes */}
+        <Route path="/incomes" element={<Navigate to="/budget/incomes" replace />} />
+        <Route path="/expenses" element={<Navigate to="/budget/expenses" replace />} />
+        <Route path="/summary" element={<Navigate to="/budget/summary" replace />} />
+        <Route path="/config" element={<Navigate to="/budget/config" replace />} />
+        <Route path="/restore" element={<Navigate to="/budget/config" replace />} />
 
-      <Route path="*" element={<DeferredNotFound />} />
-    </Routes>
+        <Route path="*" element={<DeferredNotFound />} />
+      </Routes>
+    </PullToRefresh>
   );
 }
 
