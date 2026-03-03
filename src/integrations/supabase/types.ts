@@ -215,8 +215,8 @@ export type Database = {
       }
       budget_expenses: {
         Row: {
-          average_records: Json
           amount: number
+          average_records: Json
           benefit_x: number
           budget_id: string | null
           category_id: string | null
@@ -231,8 +231,8 @@ export type Database = {
           value_type: string
         }
         Insert: {
-          average_records?: Json
           amount?: number
+          average_records?: Json
           benefit_x?: number
           budget_id?: string | null
           category_id?: string | null
@@ -247,8 +247,8 @@ export type Database = {
           value_type?: string
         }
         Update: {
-          average_records?: Json
           amount?: number
+          average_records?: Json
           benefit_x?: number
           budget_id?: string | null
           category_id?: string | null
@@ -366,8 +366,8 @@ export type Database = {
       }
       budget_income_streams: {
         Row: {
-          average_records: Json
           amount: number
+          average_records: Json
           created_at: string
           frequency_param: number | null
           frequency_type: string
@@ -379,8 +379,8 @@ export type Database = {
           value_type: string
         }
         Insert: {
-          average_records?: Json
           amount?: number
+          average_records?: Json
           created_at?: string
           frequency_param?: number | null
           frequency_type?: string
@@ -392,8 +392,8 @@ export type Database = {
           value_type?: string
         }
         Update: {
-          average_records?: Json
           amount?: number
+          average_records?: Json
           created_at?: string
           frequency_param?: number | null
           frequency_type?: string
