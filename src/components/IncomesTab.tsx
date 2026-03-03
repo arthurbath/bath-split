@@ -40,6 +40,7 @@ import {
   enforceIncomeTypeInvariants,
   getAveragedFrequencyLabel,
   seedAverageRecordsFromSimpleAmount,
+  sortAverageRecordsForEditor,
   type BudgetAverageRecord,
   type BudgetValueType,
 } from '@/lib/budgetAveraging';
@@ -58,7 +59,7 @@ const VALUE_TYPE_OPTIONS: { value: BudgetValueType; label: string; description: 
   {
     value: 'monthly_averaged',
     label: 'Monthly Averaged',
-    description: 'Average from one or more month+year records.',
+    description: 'Average from one or more monthly records.',
   },
   {
     value: 'yearly_averaged',
@@ -77,6 +78,35 @@ const createDefaultIncomeDraft = (): NewIncomeDraft => ({
   value_type: 'simple',
   average_records: [],
 });
+
+export function applyNewIncomeTypeToDraft(
+  previous: NewIncomeDraft,
+  nextType: BudgetValueType,
+  currentDate: Date = new Date(),
+): NewIncomeDraft {
+  if (previous.value_type === nextType) return previous;
+  if (nextType === 'simple') {
+    return {
+      ...previous,
+      value_type: nextType,
+      average_records: [],
+    };
+  }
+
+  const targetType = nextType as AveragedValueType;
+  const convertedRecords = previous.value_type === 'simple'
+    ? []
+    : convertAverageRecordsForValueType(previous.average_records, previous.value_type, targetType);
+  const seededRecords = convertedRecords.length > 0
+    ? convertedRecords
+    : seedAverageRecordsFromSimpleAmount(targetType, 0, currentDate);
+
+  return {
+    ...previous,
+    value_type: targetType,
+    average_records: seededRecords,
+  };
+}
 
 interface IncomesTabProps {
   incomes: Income[];
@@ -155,7 +185,7 @@ function FrequencyCell({
 }) {
   const ctx = useDataGrid();
   if (income.value_type !== 'simple') {
-    return <span className={`text-xs ${GRID_READONLY_TEXT_CLASS}`}>{getAveragedFrequencyLabel(income.value_type)}</span>;
+    return <span className={`block px-1 text-xs ${GRID_READONLY_TEXT_CLASS}`}>{getAveragedFrequencyLabel(income.value_type)}</span>;
   }
 
   return (
@@ -228,16 +258,19 @@ function AveragedAmountCell({
 }) {
   const ctx = useDataGrid();
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      className={`h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-right tabular-nums text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))] ${GRID_CONTROL_FOCUS_CLASS} disabled:opacity-60 disabled:cursor-not-allowed`}
-      onClick={onEdit}
-      {...gridNavProps(ctx, 2)}
-      aria-label={`Edit averaged records for ${income.name}`}
-    >
-      ${Math.round(income.amount)}
-    </button>
+    <div className="relative w-full min-w-[60px]">
+      <span className={`pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs font-normal ${GRID_READONLY_TEXT_CLASS}`}>$</span>
+      <button
+        type="button"
+        disabled={disabled}
+        className={`h-7 w-full rounded-md border border-transparent bg-transparent pl-4 pr-2 text-right tabular-nums text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))] ${GRID_CONTROL_FOCUS_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
+        onClick={onEdit}
+        {...gridNavProps(ctx, 2)}
+        aria-label={`Edit averaged records for ${income.name}`}
+      >
+        {Math.round(income.amount)}
+      </button>
+    </div>
   );
 }
 
@@ -362,7 +395,11 @@ export function IncomesTab({
   };
 
   const openAverageEditor = (income: Income, targetValueType: AveragedValueType, records: BudgetAverageRecord[], title: string) => {
-    setAverageEditorState({ income, targetValueType, records, title });
+    setAverageEditorState({ income, targetValueType, records: sortAverageRecordsForEditor(records), title });
+  };
+
+  const handleNewIncomeTypeChange = (nextType: BudgetValueType) => {
+    setNewIncome((previous) => applyNewIncomeTypeToDraft(previous, nextType));
   };
 
   const handleSaveIncome = async () => {
@@ -695,7 +732,7 @@ export function IncomesTab({
                     onValueChange={v => setNewIncome(prev => ({ ...prev, partner_label: v }))}
                     disabled={savingIncome}
                   >
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="X">{partnerX}</SelectItem>
                       <SelectItem value="Y">{partnerY}</SelectItem>
@@ -707,10 +744,10 @@ export function IncomesTab({
                   <DataGridAddFormLabel>Type</DataGridAddFormLabel>
                   <Select
                     value={newIncome.value_type}
-                    onValueChange={v => setNewIncome(prev => ({ ...prev, value_type: v as BudgetValueType }))}
+                    onValueChange={(value) => handleNewIncomeTypeChange(value as BudgetValueType)}
                     disabled={savingIncome}
                   >
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {VALUE_TYPE_OPTIONS.map(option => (
                         <SelectItem key={option.value} value={option.value}>
@@ -738,7 +775,7 @@ export function IncomesTab({
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <DataGridAddFormLabel htmlFor="new-income-estimate" tooltip="Estimated means this value was manually marked as estimated.">Estimated</DataGridAddFormLabel>
+                        <DataGridAddFormLabel htmlFor="new-income-estimate" tooltip="Estimated means this value was manually marked as estimated." tooltipTabStop={false}>Estimated</DataGridAddFormLabel>
                         <div className="h-9 flex items-center -translate-y-0.5">
                           <Checkbox
                             id="new-income-estimate"
@@ -765,7 +802,7 @@ export function IncomesTab({
                           }}
                           disabled={savingIncome}
                         >
-                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
                           </SelectContent>
@@ -776,7 +813,7 @@ export function IncomesTab({
                             value={newIncome.frequency_param == null ? '' : String(newIncome.frequency_param)}
                             onChange={e => setNewIncome(prev => ({ ...prev, frequency_param: e.target.value ? Number(e.target.value) : null }))}
                             disabled={savingIncome}
-                            className="h-9 w-24"
+                            className="w-24"
                             placeholder="X"
                           />
                         )}
@@ -824,7 +861,6 @@ export function IncomesTab({
         >
           <DialogHeader>
             <DialogTitle>{averageEditorState?.title ?? 'Edit Averaged Records'}</DialogTitle>
-            <DialogDescription>Manage the source records used to compute this averaged income.</DialogDescription>
           </DialogHeader>
           <DialogBody className="min-h-0 flex-1 overflow-y-auto shadow-[inset_0_5px_6px_-6px_hsl(var(--foreground)/0.25),inset_0_-5px_6px_-6px_hsl(var(--foreground)/0.25)]">
             {averageEditorState && (

@@ -296,19 +296,16 @@ export function HouseholdManagementPanel({
             </div>
           </div>
           <div className="space-y-3 border-t pt-4">
-            <div className="space-y-1">
-              <h3 className="text-sm font-medium">Danger Zone</h3>
-            </div>
-          <Button
-            type="button"
-            variant="outline-destructive"
-            className="w-full justify-start gap-1.5"
-            onClick={() => setDeleteOpen(true)}
-            disabled={deletingHousehold || leavingHousehold}
-          >
-            <Trash2 className="h-4 w-4" />
-            {deletingHousehold ? 'Deleting Household...' : 'Delete Household'}
-          </Button>
+            <Button
+              type="button"
+              variant="outline-destructive"
+              className="w-full justify-center gap-1.5"
+              onClick={() => setDeleteOpen(true)}
+              disabled={deletingHousehold || leavingHousehold}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deletingHousehold ? 'Deleting Household...' : 'Delete Household'}
+            </Button>
           </div>
         </CardContent>
       </Card>

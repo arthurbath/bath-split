@@ -2,7 +2,7 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ExpensesTab } from '@/components/ExpensesTab';
+import { ExpensesTab, applyNewExpenseTypeToDraft } from '@/components/ExpensesTab';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { fromMonthly } from '@/lib/frequency';
 import type { Expense } from '@/hooks/useExpenses';
@@ -185,5 +185,24 @@ describe('ExpensesTab empty message', () => {
     } finally {
       unmount(root, container);
     }
+  });
+
+  it('seeds one default monthly record when switching add-expense draft to monthly averaged', () => {
+    const converted = applyNewExpenseTypeToDraft({
+      name: 'New expense',
+      amount: 0,
+      benefit_x: 50,
+      category_id: null,
+      budget_id: null,
+      linked_account_id: null,
+      frequency_type: 'monthly',
+      frequency_param: null,
+      is_estimate: false,
+      value_type: 'simple',
+      average_records: [],
+    }, 'monthly_averaged', new Date('2026-03-02T12:00:00-08:00'));
+
+    expect(converted.value_type).toBe('monthly_averaged');
+    expect(converted.average_records).toEqual([{ year: 2026, month: 3, amount: 0 }]);
   });
 });

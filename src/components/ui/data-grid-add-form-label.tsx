@@ -8,13 +8,20 @@ interface DataGridAddFormLabelProps {
   tooltip?: ReactNode;
   htmlFor?: string;
   className?: string;
+  tooltipTabStop?: boolean;
 }
 
 /**
  * Standard label component for data-grid add forms.
  * If `tooltip` is provided, label text mirrors header tooltip behavior.
  */
-export function DataGridAddFormLabel({ children, tooltip, htmlFor, className }: DataGridAddFormLabelProps) {
+export function DataGridAddFormLabel({
+  children,
+  tooltip,
+  htmlFor,
+  className,
+  tooltipTabStop = true,
+}: DataGridAddFormLabelProps) {
   const label = (
     <Label
       htmlFor={htmlFor}
@@ -27,7 +34,7 @@ export function DataGridAddFormLabel({ children, tooltip, htmlFor, className }: 
   if (!tooltip) return label;
 
   return (
-    <PersistentTooltipText side="bottom" content={tooltip}>
+    <PersistentTooltipText side="bottom" content={tooltip} includeInTabOrder={tooltipTabStop}>
       {label}
     </PersistentTooltipText>
   );

@@ -4,6 +4,7 @@ import {
   calculateYearlyAveragedAmount,
   convertAverageRecordsForValueType,
   seedAverageRecordsFromSimpleAmount,
+  sortAverageRecordsForEditor,
   type BudgetAverageRecord,
 } from '@/lib/budgetAveraging';
 
@@ -60,5 +61,25 @@ describe('budgetAveraging', () => {
   it('seeds yearly averages from the current year', () => {
     const seeded = seedAverageRecordsFromSimpleAmount('yearly_averaged', 500, new Date('2026-03-02T12:00:00-08:00'));
     expect(seeded).toEqual([{ year: 2026, month: null, amount: 500 }]);
+  });
+
+  it('sorts averaged records by date desc then amount desc', () => {
+    const records: BudgetAverageRecord[] = [
+      { year: 2025, month: 12, amount: 900 },
+      { year: 2026, month: 2, amount: 1000 },
+      { year: 2026, month: 2, amount: 500 },
+      { year: 2026, month: 1, amount: 1000 },
+      { year: 2024, month: null, amount: 1000 },
+      { year: 2026, month: null, amount: 1100 },
+    ];
+
+    expect(sortAverageRecordsForEditor(records)).toEqual([
+      { year: 2026, month: 2, amount: 1000 },
+      { year: 2026, month: 2, amount: 500 },
+      { year: 2026, month: 1, amount: 1000 },
+      { year: 2026, month: null, amount: 1100 },
+      { year: 2025, month: 12, amount: 900 },
+      { year: 2024, month: null, amount: 1000 },
+    ]);
   });
 });

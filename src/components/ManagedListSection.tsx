@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type KeyboardEventHandler, type MouseEventHandler } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type KeyboardEventHandler, type MouseEventHandler, type PointerEventHandler } from 'react';
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -205,6 +205,7 @@ const ManagedListActionsTrigger = forwardRef<HTMLButtonElement, ManagedListActio
   ariaLabel,
   onKeyDown,
   onMouseDown,
+  onPointerDown,
   ...props
 }, ref) {
   const ctx = useDataGrid();
@@ -224,6 +225,13 @@ const ManagedListActionsTrigger = forwardRef<HTMLButtonElement, ManagedListActio
     }
   };
 
+  const handlePointerDown: PointerEventHandler<HTMLButtonElement> = (event) => {
+    (navProps.onPointerDown as PointerEventHandler<HTMLButtonElement> | undefined)?.(event);
+    if (!event.defaultPrevented) {
+      onPointerDown?.(event);
+    }
+  };
+
   return (
     <Button
       ref={ref}
@@ -236,6 +244,7 @@ const ManagedListActionsTrigger = forwardRef<HTMLButtonElement, ManagedListActio
       {...navProps}
       onKeyDown={handleKeyDown}
       onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
     >
       <MoreHorizontal className="h-4 w-4" />
     </Button>
