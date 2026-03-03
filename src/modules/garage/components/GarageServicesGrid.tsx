@@ -162,7 +162,7 @@ interface GarageServicesGridProps {
     every_months?: number | null;
     monitoring?: boolean;
     notes?: string | null;
-  }) => Promise<void>;
+  }) => Promise<GarageService>;
   onUpdateService: (id: string, updates: Partial<Omit<GarageService, 'id' | 'user_id' | 'vehicle_id' | 'created_at'>>) => Promise<void>;
   onDeleteService: (id: string) => Promise<void>;
 }

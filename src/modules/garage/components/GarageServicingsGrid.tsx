@@ -17,9 +17,10 @@ import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import { GARAGE_SERVICINGS_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS } from '@/lib/gridColumnWidths';
 import { cn } from '@/lib/utils';
-import { getGarageServiceTypeLabel } from '@/modules/garage/lib/serviceTypes';
+import { GARAGE_SERVICE_TYPE_OPTIONS, getGarageServiceTypeLabel } from '@/modules/garage/lib/serviceTypes';
 import type {
   GarageService,
+  GarageServiceType,
   GarageServiceStatus,
   GarageServicingWithRelations,
 } from '@/modules/garage/types/garage';
@@ -60,6 +61,14 @@ function buildDefaultOutcomeMap(services: GarageService[], servicing?: GarageSer
 function normalizeMileage(raw: string): number {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed);
+}
+
+function normalizePositiveInt(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return Math.round(parsed);
 }
 
@@ -147,7 +156,7 @@ function ServicingDateCell({
           <span className="truncate">
             {parsedDate ? format(parsedDate, 'MMM d, yyyy') : (value || 'Pick a date')}
           </span>
-          <CalendarIcon className="ml-auto h-3.5 w-3.5 shrink-0" />
+          <CalendarIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -237,9 +246,11 @@ function ServicingActionsCell({
 
 interface GarageServicingsGridProps {
   userId: string;
+  currentVehicleId: string;
   services: GarageService[];
   servicings: GarageServicingWithRelations[];
   loading: boolean;
+  currentVehicleMileage: number;
   vehicleName: string;
   fullView?: boolean;
   onAddServicing: (input: {
@@ -261,19 +272,30 @@ interface GarageServicingsGridProps {
   }) => Promise<void>;
   onDeleteServicing: (id: string) => Promise<void>;
   onOpenReceipt: (storagePath: string) => Promise<void>;
+  onAddService: (input: {
+    name: string;
+    type: GarageServiceType;
+    every_miles?: number | null;
+    every_months?: number | null;
+    monitoring?: boolean;
+    notes?: string | null;
+  }) => Promise<GarageService>;
 }
 
 export function GarageServicingsGrid({
   userId,
+  currentVehicleId,
   services,
   servicings,
   loading,
+  currentVehicleMileage,
   vehicleName,
   fullView = false,
   onAddServicing,
   onUpdateServicing,
   onDeleteServicing,
   onOpenReceipt,
+  onAddService,
 }: GarageServicingsGridProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'service_date', desc: true }]);
   const {
@@ -288,27 +310,44 @@ export function GarageServicingsGrid({
     fixedColumnIds: GRID_FIXED_COLUMNS.garage_servicings,
   });
 
+  const createDefaultFormState = useCallback((): ServicingFormState => ({
+    // Servicings are sorted newest-first, so index 0 is the most recent record.
+    id: null,
+    service_date: new Date().toISOString().slice(0, 10),
+    odometer_miles: String(currentVehicleMileage),
+    shop_name: servicings[0]?.shop_name ?? '',
+    notes: '',
+    outcomes: buildDefaultOutcomeMap(services),
+    newFiles: [],
+    deletedReceipts: [],
+  }), [currentVehicleMileage, services, servicings]);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogBusy, setDialogBusy] = useState(false);
   const [serviceDatePickerOpen, setServiceDatePickerOpen] = useState(false);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [servicePickerQuery, setServicePickerQuery] = useState('');
+  const [addServiceDialogOpen, setAddServiceDialogOpen] = useState(false);
+  const [addServiceBusy, setAddServiceBusy] = useState(false);
+  const [addServiceName, setAddServiceName] = useState('');
+  const [addServiceType, setAddServiceType] = useState<GarageServiceType>('replacement');
+  const [addServiceMiles, setAddServiceMiles] = useState('');
+  const [addServiceMonths, setAddServiceMonths] = useState('');
+  const [addServiceNotes, setAddServiceNotes] = useState('');
+  const [sessionAddedServices, setSessionAddedServices] = useState<GarageService[]>([]);
+  const [shopSuggestionsOpen, setShopSuggestionsOpen] = useState(false);
   const [receiptDropActive, setReceiptDropActive] = useState(false);
-  const [formState, setFormState] = useState<ServicingFormState>({
-    id: null,
-    service_date: new Date().toISOString().slice(0, 10),
-    odometer_miles: '',
-    shop_name: '',
-    notes: '',
-    outcomes: buildDefaultOutcomeMap(services),
-    newFiles: [],
-    deletedReceipts: [],
-  });
+  const [formState, setFormState] = useState<ServicingFormState>(createDefaultFormState);
   const [serviceDatePickerMonth, setServiceDatePickerMonth] = useState<Date>(
     () => getCalendarMonthForDateInput(new Date().toISOString().slice(0, 10)),
   );
   const servicePickerSearchRef = useRef<HTMLInputElement | null>(null);
   const servicePickerItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const servicePickerAddNewRef = useRef<HTMLButtonElement | null>(null);
+  const serviceOutcomeAddButtonRef = useRef<HTMLButtonElement | null>(null);
+  const shopInputRef = useRef<HTMLInputElement | null>(null);
+  const shopSuggestionItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const notesInputRef = useRef<HTMLInputElement | null>(null);
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
   const dialogBodyRef = useRef<HTMLDivElement | null>(null);
   const dialogBodyScrollTopRef = useRef(0);
@@ -320,17 +359,13 @@ export function GarageServicingsGrid({
     setServiceDatePickerOpen(false);
     setServicePickerOpen(false);
     setServicePickerQuery('');
-    setFormState({
-      id: null,
-      service_date: new Date().toISOString().slice(0, 10),
-      odometer_miles: '',
-      shop_name: '',
-      notes: '',
-      outcomes: buildDefaultOutcomeMap(services),
-      newFiles: [],
-      deletedReceipts: [],
-    });
+    setShopSuggestionsOpen(false);
+    setFormState(createDefaultFormState());
   };
+
+  useEffect(() => {
+    setSessionAddedServices([]);
+  }, [currentVehicleId]);
 
   const openCreateDialog = () => {
     dialogBodyScrollTopRef.current = 0;
@@ -343,6 +378,7 @@ export function GarageServicingsGrid({
     setServiceDatePickerOpen(false);
     setServicePickerOpen(false);
     setServicePickerQuery('');
+    setShopSuggestionsOpen(false);
     setEditingServicing(servicing);
     setFormState({
       id: servicing.id,
@@ -357,13 +393,22 @@ export function GarageServicingsGrid({
     setDialogOpen(true);
   }, [services]);
 
+  const availableServices = useMemo(() => {
+    const byId = new Map<string, GarageService>();
+    for (const service of services) byId.set(service.id, service);
+    for (const service of sessionAddedServices) {
+      if (!byId.has(service.id)) byId.set(service.id, service);
+    }
+    return Array.from(byId.values());
+  }, [services, sessionAddedServices]);
+
   const servicesById = useMemo(() => {
     const map = new Map<string, GarageService>();
-    for (const service of services) {
+    for (const service of availableServices) {
       map.set(service.id, service);
     }
     return map;
-  }, [services]);
+  }, [availableServices]);
 
   const selectedServiceRows = useMemo(() => (
     Object.entries(formState.outcomes)
@@ -382,10 +427,10 @@ export function GarageServicingsGrid({
   );
 
   const addableServices = useMemo(() => (
-    services
+    availableServices
       .filter((service) => !selectedServiceIdSet.has(service.id))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
-  ), [selectedServiceIdSet, services]);
+  ), [availableServices, selectedServiceIdSet]);
 
   const filteredAddableServices = useMemo(() => {
     const query = servicePickerQuery.trim().toLowerCase();
@@ -395,6 +440,55 @@ export function GarageServicingsGrid({
       return haystack.includes(query);
     });
   }, [addableServices, servicePickerQuery]);
+
+  const servicePickerQueryTrimmed = servicePickerQuery.trim();
+  const canCreateServiceFromQuery = servicePickerQueryTrimmed.length > 0
+    && filteredAddableServices.length === 0
+    && !availableServices.some((service) => service.name.trim().toLowerCase() === servicePickerQueryTrimmed.toLowerCase());
+
+  const knownShopNames = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+
+    for (const servicing of servicings) {
+      const shopName = servicing.shop_name?.trim();
+      if (!shopName) continue;
+      const key = shopName.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(shopName);
+    }
+
+    return names;
+  }, [servicings]);
+
+  const filteredShopSuggestions = useMemo(() => {
+    const query = formState.shop_name.trim().toLowerCase();
+    if (!query) return [];
+    return knownShopNames.filter((shopName) => {
+      const normalized = shopName.toLowerCase();
+      if (normalized === query) return false;
+      return normalized.includes(query);
+    });
+  }, [formState.shop_name, knownShopNames]);
+
+  const shopSuggestionsVisible = shopSuggestionsOpen && filteredShopSuggestions.length > 0;
+
+  const focusShopInputAtEnd = useCallback(() => {
+    const input = shopInputRef.current;
+    if (!input) return;
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  }, []);
+
+  const applyShopSuggestion = useCallback((shopName: string) => {
+    setFormState((prev) => ({ ...prev, shop_name: shopName }));
+    setShopSuggestionsOpen(false);
+    window.requestAnimationFrame(() => {
+      focusShopInputAtEnd();
+    });
+  }, [focusShopInputAtEnd]);
 
   const addServiceOutcome = useCallback((serviceId: string) => {
     setFormState((prev) => ({
@@ -407,6 +501,56 @@ export function GarageServicingsGrid({
     setServicePickerOpen(false);
     setServicePickerQuery('');
   }, []);
+
+  const openAddServiceDialog = useCallback((seedName: string) => {
+    setServicePickerOpen(false);
+    setAddServiceName(seedName);
+    setAddServiceType('replacement');
+    setAddServiceMiles('');
+    setAddServiceMonths('');
+    setAddServiceNotes('');
+    setAddServiceDialogOpen(true);
+  }, []);
+
+  const submitAddService = useCallback(async () => {
+    const name = addServiceName.trim();
+    if (!name) {
+      toast({ title: 'Service name required', variant: 'destructive' });
+      return;
+    }
+
+    setAddServiceBusy(true);
+    try {
+      const createdService = await onAddService({
+        name,
+        type: addServiceType,
+        every_miles: normalizePositiveInt(addServiceMiles),
+        every_months: normalizePositiveInt(addServiceMonths),
+        notes: addServiceNotes.trim() || null,
+      });
+
+      setSessionAddedServices((prev) => {
+        if (prev.some((service) => service.id === createdService.id)) return prev;
+        return [...prev, createdService];
+      });
+      addServiceOutcome(createdService.id);
+      setAddServiceDialogOpen(false);
+      setServicePickerOpen(false);
+      setServicePickerQuery('');
+      window.requestAnimationFrame(() => {
+        serviceOutcomeAddButtonRef.current?.focus();
+      });
+      toast({ title: 'Service added' });
+    } catch (error) {
+      toast({
+        title: 'Failed to add service',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setAddServiceBusy(false);
+    }
+  }, [addServiceMonths, addServiceMiles, addServiceName, addServiceNotes, addServiceOutcome, addServiceType, onAddService]);
 
   const removeServiceOutcome = useCallback((serviceId: string) => {
     setFormState((prev) => {
@@ -462,6 +606,15 @@ export function GarageServicingsGrid({
     if (!dialogOpen) return;
     restoreDialogBodyScroll();
   });
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    if (formState.id) return;
+    const frame = window.requestAnimationFrame(() => {
+      notesInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [dialogOpen, formState.id]);
 
   const buildOutcomePayload = () =>
     Object.entries(formState.outcomes)
@@ -749,7 +902,7 @@ export function GarageServicingsGrid({
                       <span className="truncate">{formState.service_date
                         ? format(parseDateInputValue(formState.service_date) ?? new Date(`${formState.service_date}T00:00:00`), 'MMM d, yyyy')
                         : 'Pick a date'}</span>
-                      <CalendarIcon className="ml-auto h-4 w-4 shrink-0" />
+                      <CalendarIcon className="ml-auto h-4 w-4 shrink-0 text-foreground opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -773,13 +926,101 @@ export function GarageServicingsGrid({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-servicing-shop">Shop</Label>
-                <Input id="garage-servicing-shop" value={formState.shop_name} onChange={(event) => setFormState((prev) => ({ ...prev, shop_name: event.target.value }))} placeholder="Optional" />
+                <div
+                  className="relative"
+                  onBlurCapture={(event) => {
+                    const container = event.currentTarget;
+                    window.requestAnimationFrame(() => {
+                      const active = document.activeElement;
+                      if (active && container.contains(active)) return;
+                      setShopSuggestionsOpen(false);
+                    });
+                  }}
+                >
+                  <Input
+                    ref={shopInputRef}
+                    id="garage-servicing-shop"
+                    value={formState.shop_name}
+                    onFocus={() => {
+                      if (filteredShopSuggestions.length > 0) {
+                        setShopSuggestionsOpen(true);
+                      }
+                    }}
+                    onChange={(event) => {
+                      setFormState((prev) => ({ ...prev, shop_name: event.target.value }));
+                      setShopSuggestionsOpen(true);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Tab' && !event.shiftKey) {
+                        event.preventDefault();
+                        setShopSuggestionsOpen(false);
+                        notesInputRef.current?.focus();
+                        return;
+                      }
+                      if (event.key !== 'ArrowDown') return;
+                      if (!shopSuggestionsVisible) return;
+                      event.preventDefault();
+                      shopSuggestionItemRefs.current[0]?.focus();
+                    }}
+                    placeholder="Optional"
+                    aria-autocomplete="list"
+                    aria-expanded={shopSuggestionsVisible}
+                  />
+                  {shopSuggestionsVisible && (
+                    <div className="absolute z-20 mt-1 max-h-44 w-full overflow-y-auto rounded-md border bg-popover">
+                      {filteredShopSuggestions.map((shopName, index) => (
+                        <button
+                          key={shopName.toLowerCase()}
+                          ref={(element) => {
+                            shopSuggestionItemRefs.current[index] = element;
+                          }}
+                          type="button"
+                          tabIndex={-1}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                          }}
+                          onClick={() => applyShopSuggestion(shopName)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'ArrowDown') {
+                              event.preventDefault();
+                              const nextIndex = Math.min(index + 1, filteredShopSuggestions.length - 1);
+                              shopSuggestionItemRefs.current[nextIndex]?.focus();
+                              return;
+                            }
+                            if (event.key === 'ArrowUp') {
+                              event.preventDefault();
+                              if (index === 0) {
+                                focusShopInputAtEnd();
+                                return;
+                              }
+                              shopSuggestionItemRefs.current[index - 1]?.focus();
+                              return;
+                            }
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              applyShopSuggestion(shopName);
+                              return;
+                            }
+                            if (event.key === 'Escape') {
+                              event.preventDefault();
+                              setShopSuggestionsOpen(false);
+                              focusShopInputAtEnd();
+                            }
+                          }}
+                        >
+                          {shopName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="garage-servicing-notes">Notes</Label>
-              <Input id="garage-servicing-notes" value={formState.notes} onChange={(event) => setFormState((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional" />
+              <Input ref={notesInputRef} id="garage-servicing-notes" value={formState.notes} onChange={(event) => setFormState((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional" />
             </div>
 
             <div className="space-y-2">
@@ -794,6 +1035,7 @@ export function GarageServicingsGrid({
                 >
                   <PopoverTrigger asChild>
                     <Button
+                      ref={serviceOutcomeAddButtonRef}
                       type="button"
                       size="sm"
                       variant="outline-success"
@@ -816,16 +1058,57 @@ export function GarageServicingsGrid({
                           value={servicePickerQuery}
                           onChange={(event) => setServicePickerQuery(event.target.value)}
                           placeholder="Type to find a service..."
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
                           onKeyDown={(event) => {
+                            if (event.key === 'Tab') {
+                              event.preventDefault();
+                              return;
+                            }
                             if (event.key !== 'ArrowDown') return;
-                            if (filteredAddableServices.length === 0) return;
                             event.preventDefault();
+                            if (filteredAddableServices.length === 0) {
+                              if (canCreateServiceFromQuery) {
+                                servicePickerAddNewRef.current?.focus();
+                              }
+                              return;
+                            }
                             servicePickerItemRefs.current[0]?.focus();
                           }}
                         />
                       </div>
                       {filteredAddableServices.length === 0 ? (
-                        <p className="px-3 py-2 text-sm text-muted-foreground">No matching services.</p>
+                        canCreateServiceFromQuery ? (
+                          <div className="py-1">
+                            <button
+                              ref={servicePickerAddNewRef}
+                              type="button"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                              onClick={() => openAddServiceDialog(servicePickerQueryTrimmed)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Tab') {
+                                  event.preventDefault();
+                                  return;
+                                }
+                                if (event.key === 'ArrowUp') {
+                                  event.preventDefault();
+                                  servicePickerSearchRef.current?.focus();
+                                  return;
+                                }
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  openAddServiceDialog(servicePickerQueryTrimmed);
+                                }
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>Add "{servicePickerQueryTrimmed}" as a new service</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="px-3 py-2 text-sm text-muted-foreground">No matching services.</p>
+                        )
                       ) : (
                         <div className="py-1">
                           {filteredAddableServices.map((service, index) => (
@@ -838,6 +1121,10 @@ export function GarageServicingsGrid({
                               className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
                               onClick={() => addServiceOutcome(service.id)}
                               onKeyDown={(event) => {
+                                if (event.key === 'Tab') {
+                                  event.preventDefault();
+                                  return;
+                                }
                                 if (event.key === 'ArrowDown') {
                                   event.preventDefault();
                                   const nextIndex = Math.min(index + 1, filteredAddableServices.length - 1);
@@ -872,7 +1159,7 @@ export function GarageServicingsGrid({
               <div className="rounded-md border">
                 <div className="divide-y">
                   {selectedServiceRows.length === 0 && (
-                    <p className="px-3 py-2 text-sm text-muted-foreground">No service outcomes added.</p>
+                    <p className="px-3 py-2 text-sm text-muted-foreground">No service outcomes added yet</p>
                   )}
                   {selectedServiceRows.map((row) => (
                     <div key={row.serviceId} className="space-y-1.5 px-2 py-1.5">
@@ -970,7 +1257,7 @@ export function GarageServicingsGrid({
               <button
                 type="button"
                 className={cn(
-                  'flex w-full flex-col items-center justify-center rounded-md border border-dashed px-3 py-5 text-sm',
+                  'flex w-full flex-col items-center justify-center rounded-md border border-dashed px-3 py-5 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-2 focus:ring-offset-background focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   receiptDropActive ? 'border-primary bg-muted/40' : 'border-[hsl(var(--grid-sticky-line))]',
                 )}
                 onClick={() => receiptInputRef.current?.click()}
@@ -1022,6 +1309,71 @@ export function GarageServicingsGrid({
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={dialogBusy}>Cancel</Button>
             <Button type="button" onClick={() => { void submit(); }} disabled={dialogBusy}>{dialogBusy ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addServiceDialogOpen} onOpenChange={(open) => !addServiceBusy && setAddServiceDialogOpen(open)}>
+        <DialogContent className="max-w-lg rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Add Service</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="garage-servicing-add-service-name">Name</Label>
+              <Input
+                id="garage-servicing-add-service-name"
+                value={addServiceName}
+                onChange={(event) => setAddServiceName(event.target.value)}
+                placeholder="Oil Change"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={addServiceType} onValueChange={(value) => setAddServiceType(value as GarageServiceType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {GARAGE_SERVICE_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="garage-servicing-add-service-miles">Every (Miles)</Label>
+                <Input
+                  id="garage-servicing-add-service-miles"
+                  type="number"
+                  value={addServiceMiles}
+                  onChange={(event) => setAddServiceMiles(event.target.value)}
+                  placeholder="10,000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="garage-servicing-add-service-months">Every (Months)</Label>
+                <Input
+                  id="garage-servicing-add-service-months"
+                  type="number"
+                  value={addServiceMonths}
+                  onChange={(event) => setAddServiceMonths(event.target.value)}
+                  placeholder="12"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="garage-servicing-add-service-notes">Notes</Label>
+              <Input
+                id="garage-servicing-add-service-notes"
+                value={addServiceNotes}
+                onChange={(event) => setAddServiceNotes(event.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddServiceDialogOpen(false)} disabled={addServiceBusy}>Cancel</Button>
+            <Button type="button" onClick={() => { void submitAddService(); }} disabled={addServiceBusy}>{addServiceBusy ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

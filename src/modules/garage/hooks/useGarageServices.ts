@@ -47,21 +47,26 @@ export function useGarageServices(userId: string | undefined, vehicleId: string 
 
     try {
       const nextOrder = ((data ?? []).reduce((max, row) => Math.max(max, row.sort_order), 0) || 0) + 1;
-      await supabaseRequest(async () =>
-        await supabase.from('garage_services').insert({
-          user_id: userId,
-          vehicle_id: vehicleId,
-          name: input.name,
-          type: input.type,
-          cadence_type: deriveCadenceType(input.every_miles ?? null, input.every_months ?? null),
-          every_miles: input.every_miles ?? null,
-          every_months: input.every_months ?? null,
-          monitoring: input.monitoring ?? false,
-          notes: input.notes ?? null,
-          sort_order: nextOrder,
-        }),
+      const inserted = await supabaseRequest(async () =>
+        await supabase
+          .from('garage_services')
+          .insert({
+            user_id: userId,
+            vehicle_id: vehicleId,
+            name: input.name,
+            type: input.type,
+            cadence_type: deriveCadenceType(input.every_miles ?? null, input.every_months ?? null),
+            every_miles: input.every_miles ?? null,
+            every_months: input.every_months ?? null,
+            monitoring: input.monitoring ?? false,
+            notes: input.notes ?? null,
+            sort_order: nextOrder,
+          })
+          .select('*')
+          .single(),
       );
       await refetch();
+      return inserted as GarageService;
     } catch (error) {
       showMutationError(error);
       throw error;

@@ -665,7 +665,7 @@ export function IncomesTab({
             fullView={fullView}
             maxHeight={fullView ? 'none' : undefined}
             className={fullView ? 'h-full min-h-0' : undefined}
-            emptyMessage='No income streams yet. Click "Add" to start.'
+            emptyMessage='No income yet. Click "Add" to start.'
             footer={incomes.length > 0 ? (
               <>
                 <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
@@ -711,7 +711,7 @@ export function IncomesTab({
               event.preventDefault();
             }}
           >
-            <DialogHeader><DialogTitle>Add Income Stream</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Add Income</DialogTitle></DialogHeader>
             <DialogBody className="min-h-0 flex-1 overflow-y-auto shadow-[inset_0_5px_6px_-6px_hsl(var(--foreground)/0.25),inset_0_-5px_6px_-6px_hsl(var(--foreground)/0.25)]">
               <div className="space-y-3">
                 <div className="space-y-1.5">

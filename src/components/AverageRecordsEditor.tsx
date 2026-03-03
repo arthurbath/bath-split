@@ -200,7 +200,7 @@ function MonthlyRecordMonthPicker({
           )}
         >
           <span>{format(selectedDate, 'MMM yyyy')}</span>
-          <CalendarIcon className="ml-2 h-4 w-4 shrink-0 opacity-70" />
+          <CalendarIcon className="ml-2 h-4 w-4 shrink-0 text-foreground opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
