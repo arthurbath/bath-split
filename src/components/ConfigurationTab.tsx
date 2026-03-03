@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type KeyboardEventHandler, type MouseEventHandler } from 'react';
+import { forwardRef, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type KeyboardEventHandler, type MouseEventHandler, type PointerEventHandler } from 'react';
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from '@tanstack/react-table';
 import { ManagedListSection, ColorPicker } from '@/components/ManagedListSection';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -307,6 +307,7 @@ const PaymentMethodActionsTrigger = forwardRef<HTMLButtonElement, PaymentMethodA
   ariaLabel,
   onKeyDown,
   onMouseDown,
+  onPointerDown,
   ...props
 }, ref) {
   const ctx = useDataGrid();
@@ -326,6 +327,13 @@ const PaymentMethodActionsTrigger = forwardRef<HTMLButtonElement, PaymentMethodA
     }
   };
 
+  const handlePointerDown: PointerEventHandler<HTMLButtonElement> = (event) => {
+    (navProps.onPointerDown as PointerEventHandler<HTMLButtonElement> | undefined)?.(event);
+    if (!event.defaultPrevented) {
+      onPointerDown?.(event);
+    }
+  };
+
   return (
     <Button
       ref={ref}
@@ -338,6 +346,7 @@ const PaymentMethodActionsTrigger = forwardRef<HTMLButtonElement, PaymentMethodA
       {...navProps}
       onKeyDown={handleKeyDown}
       onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
     >
       <MoreHorizontal className="h-4 w-4" />
     </Button>

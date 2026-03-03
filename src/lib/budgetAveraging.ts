@@ -143,6 +143,16 @@ export function seedAverageRecordsFromSimpleAmount(
   return [{ year, month: null, amount }];
 }
 
+export function sortAverageRecordsForEditor(records: BudgetAverageRecord[]): BudgetAverageRecord[] {
+  return [...records].sort((left, right) => {
+    const leftDateKey = left.year * 100 + (left.month ?? 0);
+    const rightDateKey = right.year * 100 + (right.month ?? 0);
+    if (rightDateKey !== leftDateKey) return rightDateKey - leftDateKey;
+
+    return right.amount - left.amount;
+  });
+}
+
 export function enforceExpenseTypeInvariants(
   valueType: BudgetValueType,
   input: {

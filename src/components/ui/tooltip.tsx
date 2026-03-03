@@ -39,6 +39,7 @@ interface PersistentTooltipTextProps {
   align?: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>["align"];
   contentClassName?: string;
   triggerClassName?: string;
+  includeInTabOrder?: boolean;
 }
 
 function PersistentTooltipText({
@@ -48,6 +49,7 @@ function PersistentTooltipText({
   align = "center",
   contentClassName,
   triggerClassName,
+  includeInTabOrder = true,
 }: PersistentTooltipTextProps) {
   const triggerRef = React.useRef<HTMLSpanElement>(null);
   const [hovered, setHovered] = React.useState(false);
@@ -74,7 +76,7 @@ function PersistentTooltipText({
       <TooltipTrigger asChild>
         <span
           ref={triggerRef}
-          tabIndex={0}
+          tabIndex={includeInTabOrder ? 0 : -1}
           role="button"
           className={cn(
             "inline-block cursor-help underline decoration-dotted underline-offset-2 focus:outline-none [&_*]:cursor-help",

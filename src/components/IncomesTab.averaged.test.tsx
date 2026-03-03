@@ -2,7 +2,7 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
-import { IncomesTab } from '@/components/IncomesTab';
+import { IncomesTab, applyNewIncomeTypeToDraft } from '@/components/IncomesTab';
 import type { Income } from '@/hooks/useIncomes';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -65,5 +65,21 @@ describe('IncomesTab averaged rows', () => {
     } finally {
       unmount(root, container);
     }
+  });
+
+  it('seeds one default record row when switching draft type to yearly averaged', () => {
+    const converted = applyNewIncomeTypeToDraft({
+      name: 'New income',
+      amount: 0,
+      partner_label: 'X',
+      frequency_type: 'monthly',
+      frequency_param: null,
+      is_estimate: false,
+      value_type: 'simple',
+      average_records: [],
+    }, 'yearly_averaged', new Date('2026-03-02T12:00:00-08:00'));
+
+    expect(converted.value_type).toBe('yearly_averaged');
+    expect(converted.average_records).toEqual([{ year: 2026, month: null, amount: 0 }]);
   });
 });

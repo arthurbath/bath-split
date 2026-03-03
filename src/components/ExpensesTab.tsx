@@ -38,6 +38,7 @@ import {
   enforceExpenseTypeInvariants,
   getAveragedFrequencyLabel,
   seedAverageRecordsFromSimpleAmount,
+  sortAverageRecordsForEditor,
   convertAverageRecordsForValueType,
   type BudgetAverageRecord,
   type BudgetValueType,
@@ -90,7 +91,7 @@ const VALUE_TYPE_OPTIONS: { value: BudgetValueType; label: string; description: 
   {
     value: 'monthly_averaged',
     label: 'Monthly Averaged',
-    description: 'Average from one or more month+year records.',
+    description: 'Average from one or more monthly records.',
   },
   {
     value: 'yearly_averaged',
@@ -163,6 +164,35 @@ const createDefaultExpenseDraft = (): NewExpenseDraft => ({
   average_records: [],
 });
 
+export function applyNewExpenseTypeToDraft(
+  previous: NewExpenseDraft,
+  nextType: BudgetValueType,
+  currentDate: Date = new Date(),
+): NewExpenseDraft {
+  if (previous.value_type === nextType) return previous;
+  if (nextType === 'simple') {
+    return {
+      ...previous,
+      value_type: nextType,
+      average_records: [],
+    };
+  }
+
+  const targetType = nextType as AveragedValueType;
+  const convertedRecords = previous.value_type === 'simple'
+    ? []
+    : convertAverageRecordsForValueType(previous.average_records, previous.value_type, targetType);
+  const seededRecords = convertedRecords.length > 0
+    ? convertedRecords
+    : seedAverageRecordsFromSimpleAmount(targetType, 0, currentDate);
+
+  return {
+    ...previous,
+    value_type: targetType,
+    average_records: seededRecords,
+  };
+}
+
 // ─── Cell Components ───
 
 function CategoryCell({ exp, categories, onChange, onAddNew, disabled = false }: {
@@ -213,7 +243,7 @@ function CategoryCell({ exp, categories, onChange, onAddNew, disabled = false }:
 function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expense; onChange: (field: string, v: string) => void; disabled?: boolean }) {
   const ctx = useDataGrid();
   if (exp.value_type !== 'simple') {
-    return <span className={`text-xs ${GRID_READONLY_TEXT_CLASS}`}>{getAveragedFrequencyLabel(exp.value_type)}</span>;
+    return <span className={`block px-1 text-xs ${GRID_READONLY_TEXT_CLASS}`}>{getAveragedFrequencyLabel(exp.value_type)}</span>;
   }
 
   return (
@@ -325,16 +355,19 @@ function AveragedAmountCell({
 }) {
   const ctx = useDataGrid();
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      className={`h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-right tabular-nums text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))] ${GRID_CONTROL_FOCUS_CLASS} disabled:opacity-60 disabled:cursor-not-allowed`}
-      onClick={onEdit}
-      {...gridNavProps(ctx, 2)}
-      aria-label={`Edit averaged records for ${expense.name}`}
-    >
-      ${Math.round(expense.amount)}
-    </button>
+    <div className="relative w-full min-w-[60px]">
+      <span className={`pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs font-normal ${GRID_READONLY_TEXT_CLASS}`}>$</span>
+      <button
+        type="button"
+        disabled={disabled}
+        className={`h-7 w-full rounded-md border border-transparent bg-transparent pl-4 pr-2 text-right tabular-nums text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))] ${GRID_CONTROL_FOCUS_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
+        onClick={onEdit}
+        {...gridNavProps(ctx, 2)}
+        aria-label={`Edit averaged records for ${expense.name}`}
+      >
+        {Math.round(expense.amount)}
+      </button>
+    </div>
   );
 }
 
@@ -578,7 +611,11 @@ export function ExpensesTab({
     records: BudgetAverageRecord[],
     title: string,
   ) => {
-    setAverageEditorState({ expense, targetValueType, records, title });
+    setAverageEditorState({ expense, targetValueType, records: sortAverageRecordsForEditor(records), title });
+  };
+
+  const handleNewExpenseTypeChange = (nextType: BudgetValueType) => {
+    setNewExpense((previous) => applyNewExpenseTypeToDraft(previous, nextType));
   };
 
   const handleSaveNewExpense = async () => {
@@ -1338,7 +1375,6 @@ export function ExpensesTab({
                 disabled={savingExpense}
               >
                 <SelectTrigger
-                  className="h-9 rounded-sm"
                   style={{ backgroundColor: normalizePaletteColor(categories.find(c => c.id === newExpense.category_id)?.color) || 'transparent' }}
                 >
                   <SelectValue placeholder="—" />
@@ -1369,7 +1405,6 @@ export function ExpensesTab({
                 disabled={savingExpense}
               >
                 <SelectTrigger
-                  className="h-9 rounded-sm"
                   style={{ backgroundColor: normalizePaletteColor(linkedAccounts.find(la => la.id === newExpense.linked_account_id)?.color) || 'transparent' }}
                 >
                   <SelectValue placeholder="—" />
@@ -1388,7 +1423,7 @@ export function ExpensesTab({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <DataGridAddFormLabel htmlFor="new-expense-benefit-x" tooltip={`The percentage that ${partnerX} benefits from the expense`}>
+                  <DataGridAddFormLabel htmlFor="new-expense-benefit-x" tooltip={`The percentage that ${partnerX} benefits from the expense`} tooltipTabStop={false}>
                     {partnerX} Benefit
                   </DataGridAddFormLabel>
                   <DataGridAddFormAffixInput
@@ -1405,7 +1440,7 @@ export function ExpensesTab({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <DataGridAddFormLabel htmlFor="new-expense-benefit-y" tooltip={`The percentage that ${partnerY} benefits from the expense`}>
+                  <DataGridAddFormLabel htmlFor="new-expense-benefit-y" tooltip={`The percentage that ${partnerY} benefits from the expense`} tooltipTabStop={false}>
                     {partnerY} Benefit
                   </DataGridAddFormLabel>
                   <DataGridAddFormAffixInput
@@ -1427,10 +1462,10 @@ export function ExpensesTab({
                 <DataGridAddFormLabel>Type</DataGridAddFormLabel>
                 <Select
                   value={newExpense.value_type}
-                  onValueChange={v => setNewExpense(prev => ({ ...prev, value_type: v as BudgetValueType }))}
+                  onValueChange={(value) => handleNewExpenseTypeChange(value as BudgetValueType)}
                   disabled={savingExpense}
                 >
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {VALUE_TYPE_OPTIONS.map(option => (
                       <SelectItem key={option.value} value={option.value}>
@@ -1452,13 +1487,13 @@ export function ExpensesTab({
                       <DataGridAddFormAffixInput
                         id="new-expense-amount"
                         prefix="$"
-                        value={String(newExpense.amount)}
+                        value={newExpense.amount === 0 ? '' : String(newExpense.amount)}
                         onChange={e => setNewExpense(prev => ({ ...prev, amount: Number(e.target.value) || 0 }))}
                         disabled={savingExpense}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <DataGridAddFormLabel htmlFor="new-expense-estimate" tooltip="Estimated means this value was manually marked as estimated.">Estimated</DataGridAddFormLabel>
+                      <DataGridAddFormLabel htmlFor="new-expense-estimate" tooltip="Estimated means this value was manually marked as estimated." tooltipTabStop={false}>Estimated</DataGridAddFormLabel>
                       <div className="h-9 flex items-center -translate-y-0.5">
                         <Checkbox
                           id="new-expense-estimate"
@@ -1485,7 +1520,7 @@ export function ExpensesTab({
                         }}
                         disabled={savingExpense}
                       >
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
                         </SelectContent>
@@ -1543,7 +1578,6 @@ export function ExpensesTab({
         >
           <DialogHeader>
             <DialogTitle>{averageEditorState?.title ?? 'Edit Averaged Records'}</DialogTitle>
-            <DialogDescription>Manage the source records used to compute this averaged expense.</DialogDescription>
           </DialogHeader>
           <DialogBody className="min-h-0 flex-1 overflow-y-auto shadow-[inset_0_5px_6px_-6px_hsl(var(--foreground)/0.25),inset_0_-5px_6px_-6px_hsl(var(--foreground)/0.25)]">
             {averageEditorState && (

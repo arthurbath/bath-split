@@ -102,4 +102,55 @@ describe('RestoreTab snapshot payload', () => {
       unmount(root, container);
     }
   });
+
+  it('opens backup actions menu when clicking the ellipsis trigger', async () => {
+    const { container, root } = mount(
+      <RestoreTab
+        points={[
+          {
+            id: 'restore-1',
+            notes: 'First backup',
+            data: {},
+            household_id: 'h-1',
+            created_at: '2026-03-01T12:00:00.000Z',
+          },
+        ]}
+        incomes={[]}
+        expenses={[]}
+        categories={[]}
+        linkedAccounts={[]}
+        onSave={async () => {}}
+        onRemove={async () => {}}
+        onUpdateNotes={async () => {}}
+        onRestore={async () => {}}
+      />,
+    );
+
+    try {
+      const trigger = container.querySelector('button[aria-label="Backup actions"]') as HTMLButtonElement | null;
+      expect(trigger).toBeTruthy();
+
+      await act(async () => {
+        const pointerDownEvent = typeof PointerEvent !== 'undefined'
+          ? new PointerEvent('pointerdown', { bubbles: true, button: 0, ctrlKey: false, pointerType: 'mouse' })
+          : (() => {
+            const event = new MouseEvent('pointerdown', { bubbles: true, button: 0, ctrlKey: false });
+            Object.defineProperty(event, 'pointerType', { value: 'mouse' });
+            return event;
+          })();
+
+        trigger?.dispatchEvent(pointerDownEvent);
+        trigger?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+        trigger?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+        trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }));
+        await Promise.resolve();
+      });
+
+      const menuItems = Array.from(document.body.querySelectorAll('[role="menuitem"]'));
+      const restoreItem = menuItems.find((item) => item.textContent?.includes('Restore'));
+      expect(restoreItem).toBeTruthy();
+    } finally {
+      unmount(root, container);
+    }
+  });
 });

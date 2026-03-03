@@ -33,7 +33,7 @@ Never use colors purely for decoration. Every color must carry meaning.
 - No exclamation points, even for destructive actions
 - No marketing language in the UI
 - Helper text is used sparingly — prefer self-evident UI
-- Subtext beneath page, section, card, and modal headings is off by default. Add heading subtext only when explicitly requested.
+- Do not add subtext beneath page, section, card, or modal headings unless explicitly requested in the task.
 
 ## Label Casing
 
