@@ -164,6 +164,20 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
     }
   };
 
+  const handleAddServicing = async (input: {
+    service_date: string;
+    odometer_miles: number;
+    shop_name?: string | null;
+    notes?: string | null;
+    outcomes: Array<{ service_id: string; status: 'performed' | 'not_needed_yet' | 'declined' }>;
+    receipt_files?: File[];
+  }) => {
+    await addServicing(input);
+    if (!selectedVehicle) return;
+    if (input.odometer_miles <= selectedVehicle.current_odometer_miles) return;
+    await updateVehicle(selectedVehicle.id, { current_odometer_miles: input.odometer_miles });
+  };
+
   if (vehiclesLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -270,15 +284,18 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
               <div className="flex-1 min-h-0">
                 <GarageServicingsGrid
                   userId={userId}
+                  currentVehicleId={selectedVehicle.id}
                   services={services}
                   servicings={servicings}
                   loading={servicingsLoading}
+                  currentVehicleMileage={selectedVehicle.current_odometer_miles}
                   vehicleName={selectedVehicle.name}
                   fullView
-                  onAddServicing={addServicing}
+                  onAddServicing={handleAddServicing}
                   onUpdateServicing={updateServicing}
                   onDeleteServicing={removeServicing}
                   onOpenReceipt={handleOpenReceipt}
+                  onAddService={addService}
                 />
               </div>
             )}
