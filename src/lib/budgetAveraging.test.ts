@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateMonthlyAveragedAmount,
   calculateYearlyAveragedAmount,
+  getAverageCalculationDetails,
   convertAverageRecordsForValueType,
   seedAverageRecordsFromSimpleAmount,
   sortAverageRecordsForEditor,
@@ -32,6 +33,67 @@ describe('budgetAveraging', () => {
   it('returns 0 for empty averaged records', () => {
     expect(calculateMonthlyAveragedAmount([])).toBe(0);
     expect(calculateYearlyAveragedAmount([])).toBe(0);
+  });
+
+  it('excludes current-month records from monthly averages when configured', () => {
+    const records: BudgetAverageRecord[] = [
+      { year: 2026, month: 2, amount: 900, date: '2026-02-11' },
+      { year: 2026, month: 3, amount: 1000, date: '2026-03-02' },
+      { year: 2026, month: 3, amount: 50, date: '2026-03-18' },
+    ];
+
+    expect(
+      getAverageCalculationDetails(
+        'monthly_averaged',
+        records,
+        'exclude_current_period_until_closed',
+        new Date('2026-03-20T12:00:00-08:00'),
+      ),
+    ).toEqual({
+      amount: 900,
+      includedPeriodCount: 1,
+      excludedCurrentPeriodRecordCount: 2,
+    });
+  });
+
+  it('excludes current-year records from yearly averages when configured', () => {
+    const records: BudgetAverageRecord[] = [
+      { year: 2025, month: null, amount: 12000, date: '2025-04-15' },
+      { year: 2026, month: null, amount: 18000, date: '2026-01-01' },
+    ];
+
+    expect(
+      getAverageCalculationDetails(
+        'yearly_averaged',
+        records,
+        'exclude_current_period_until_closed',
+        new Date('2026-06-01T12:00:00-07:00'),
+      ),
+    ).toEqual({
+      amount: 12000,
+      includedPeriodCount: 1,
+      excludedCurrentPeriodRecordCount: 1,
+    });
+  });
+
+  it('returns 0 when every averaged record falls in the excluded current period', () => {
+    const records: BudgetAverageRecord[] = [
+      { year: 2026, month: 3, amount: 1000, date: '2026-03-02' },
+      { year: 2026, month: 3, amount: 200, date: '2026-03-18' },
+    ];
+
+    expect(
+      getAverageCalculationDetails(
+        'monthly_averaged',
+        records,
+        'exclude_current_period_until_closed',
+        new Date('2026-03-20T12:00:00-08:00'),
+      ),
+    ).toEqual({
+      amount: 0,
+      includedPeriodCount: 0,
+      excludedCurrentPeriodRecordCount: 2,
+    });
   });
 
   it('transforms monthly records to yearly records by stripping month', () => {

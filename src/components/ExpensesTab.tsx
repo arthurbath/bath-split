@@ -35,12 +35,14 @@ import type { Category } from '@/hooks/useCategories';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
 import type { Income } from '@/hooks/useIncomes';
 import {
+  DEFAULT_CURRENT_PERIOD_HANDLING,
   enforceExpenseTypeInvariants,
   getAveragedFrequencyLabel,
   seedAverageRecordsFromSimpleAmount,
   sortAverageRecordsForEditor,
   convertAverageRecordsForValueType,
   type BudgetAverageRecord,
+  type BudgetCurrentPeriodHandling,
   type BudgetValueType,
 } from '@/lib/budgetAveraging';
 import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
@@ -161,6 +163,7 @@ const createDefaultExpenseDraft = (): NewExpenseDraft => ({
   frequency_param: null,
   is_estimate: false,
   value_type: 'simple',
+  current_period_handling: DEFAULT_CURRENT_PERIOD_HANDLING,
   average_records: [],
 });
 
@@ -174,6 +177,7 @@ export function applyNewExpenseTypeToDraft(
     return {
       ...previous,
       value_type: nextType,
+      current_period_handling: DEFAULT_CURRENT_PERIOD_HANDLING,
       average_records: [],
     };
   }
@@ -189,6 +193,7 @@ export function applyNewExpenseTypeToDraft(
   return {
     ...previous,
     value_type: targetType,
+    current_period_handling: previous.current_period_handling ?? DEFAULT_CURRENT_PERIOD_HANDLING,
     average_records: seededRecords,
   };
 }
@@ -471,6 +476,7 @@ export function ExpensesTab({
   const [averageEditorState, setAverageEditorState] = useState<{
     expense: Expense;
     targetValueType: AveragedValueType;
+    currentPeriodHandling: BudgetCurrentPeriodHandling;
     records: BudgetAverageRecord[];
     title: string;
   } | null>(null);
@@ -608,10 +614,17 @@ export function ExpensesTab({
   const openAverageEditor = (
     expense: Expense,
     targetValueType: AveragedValueType,
+    currentPeriodHandling: BudgetCurrentPeriodHandling,
     records: BudgetAverageRecord[],
     title: string,
   ) => {
-    setAverageEditorState({ expense, targetValueType, records: sortAverageRecordsForEditor(records), title });
+    setAverageEditorState({
+      expense,
+      targetValueType,
+      currentPeriodHandling,
+      records: sortAverageRecordsForEditor(records),
+      title,
+    });
   };
 
   const handleNewExpenseTypeChange = (nextType: BudgetValueType) => {
@@ -635,6 +648,7 @@ export function ExpensesTab({
           frequency_type: newExpense.frequency_type,
           frequency_param: newExpense.frequency_param,
           is_estimate: newExpense.is_estimate,
+          current_period_handling: newExpense.current_period_handling,
           average_records: newExpense.average_records,
         });
         payload = {
@@ -704,6 +718,7 @@ export function ExpensesTab({
       openAverageEditor(
         expense,
         targetType,
+        DEFAULT_CURRENT_PERIOD_HANDLING,
         records,
         `Convert ${expense.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Expense`,
       );
@@ -714,6 +729,7 @@ export function ExpensesTab({
     openAverageEditor(
       expense,
       targetType,
+      expense.current_period_handling,
       records,
       `Convert ${expense.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Expense`,
     );
@@ -728,6 +744,7 @@ export function ExpensesTab({
       frequency_type: averageEditorState.expense.frequency_type,
       frequency_param: averageEditorState.expense.frequency_param,
       is_estimate: averageEditorState.expense.is_estimate,
+      current_period_handling: averageEditorState.currentPeriodHandling,
       average_records: averageEditorState.records,
     });
 
@@ -753,6 +770,7 @@ export function ExpensesTab({
         frequency_type: convertToSimpleState.frequency_type,
         frequency_param: null,
         is_estimate: true,
+        current_period_handling: DEFAULT_CURRENT_PERIOD_HANDLING,
       });
       setConvertToSimpleState(null);
     } catch (error: unknown) {
@@ -856,6 +874,7 @@ export function ExpensesTab({
             onEdit={() => openAverageEditor(
               row.original.exp,
               row.original.exp.value_type as AveragedValueType,
+              row.original.exp.current_period_handling,
               row.original.exp.average_records,
               `Edit ${row.original.exp.value_type === 'monthly_averaged' ? 'Monthly' : 'Yearly'} Records`,
             )}
@@ -1543,6 +1562,8 @@ export function ExpensesTab({
                   valueType={newExpense.value_type}
                   records={newExpense.average_records}
                   onChange={records => setNewExpense(prev => ({ ...prev, average_records: records }))}
+                  currentPeriodHandling={newExpense.current_period_handling}
+                  onCurrentPeriodHandlingChange={currentPeriodHandling => setNewExpense(prev => ({ ...prev, current_period_handling: currentPeriodHandling }))}
                   disabled={savingExpense}
                 />
               )}
@@ -1585,6 +1606,8 @@ export function ExpensesTab({
                 valueType={averageEditorState.targetValueType}
                 records={averageEditorState.records}
                 onChange={records => setAverageEditorState(prev => prev ? { ...prev, records } : prev)}
+                currentPeriodHandling={averageEditorState.currentPeriodHandling}
+                onCurrentPeriodHandlingChange={currentPeriodHandling => setAverageEditorState(prev => prev ? { ...prev, currentPeriodHandling } : prev)}
                 disabled={savingAverageEditor}
                 autoFocusAddButton
                 onSubmitFromAmountEnter={() => {

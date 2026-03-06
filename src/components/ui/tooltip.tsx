@@ -3,7 +3,22 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
 import { cn } from "@/lib/utils";
 
-const TooltipProvider = TooltipPrimitive.Provider;
+const TOOLTIP_HOVER_DELAY_MS = 300;
+
+function TooltipProvider({
+  ...props
+}: Omit<
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Provider>,
+  "delayDuration" | "skipDelayDuration"
+>) {
+  return (
+    <TooltipPrimitive.Provider
+      delayDuration={TOOLTIP_HOVER_DELAY_MS}
+      skipDelayDuration={0}
+      {...props}
+    />
+  );
+}
 
 const Tooltip = TooltipPrimitive.Root;
 
@@ -52,9 +67,16 @@ function PersistentTooltipText({
   includeInTabOrder = true,
 }: PersistentTooltipTextProps) {
   const triggerRef = React.useRef<HTMLSpanElement>(null);
+  const hoverTimerRef = React.useRef<number | null>(null);
   const [hovered, setHovered] = React.useState(false);
   const [pinned, setPinned] = React.useState(false);
   const open = hovered || pinned;
+
+  const clearHoverTimer = React.useCallback(() => {
+    if (hoverTimerRef.current === null) return;
+    window.clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
+  }, []);
 
   React.useEffect(() => {
     if (!open) return;
@@ -71,6 +93,8 @@ function PersistentTooltipText({
     return () => document.removeEventListener("pointerdown", handlePointerDown, true);
   }, [open]);
 
+  React.useEffect(() => clearHoverTimer, [clearHoverTimer]);
+
   return (
     <Tooltip open={open}>
       <TooltipTrigger asChild>
@@ -82,17 +106,31 @@ function PersistentTooltipText({
             "inline-block cursor-help underline decoration-dotted underline-offset-2 focus:outline-none [&_*]:cursor-help",
             triggerClassName,
           )}
-          onMouseEnter={() => setHovered(true)}
+          onMouseEnter={() => {
+            clearHoverTimer();
+            hoverTimerRef.current = window.setTimeout(() => {
+              hoverTimerRef.current = null;
+              setHovered(true);
+            }, TOOLTIP_HOVER_DELAY_MS);
+          }}
           onMouseLeave={() => {
+            clearHoverTimer();
             setHovered(false);
             setPinned(false);
           }}
-          onFocus={() => setPinned(true)}
+          onFocus={() => {
+            clearHoverTimer();
+            setPinned(true);
+          }}
           onBlur={() => setPinned(false)}
-          onClick={() => setPinned(true)}
+          onClick={() => {
+            clearHoverTimer();
+            setPinned(true);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
+              clearHoverTimer();
               setPinned(true);
             }
           }}
@@ -107,4 +145,4 @@ function PersistentTooltipText({
   );
 }
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, PersistentTooltipText };
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, PersistentTooltipText, TOOLTIP_HOVER_DELAY_MS };

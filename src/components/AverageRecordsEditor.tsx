@@ -3,12 +3,15 @@ import { CalendarIcon, Minus, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-affix-input';
 import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  calculateAmountFromAverageRecords,
+  DEFAULT_CURRENT_PERIOD_HANDLING,
+  getAverageCalculationDetails,
   type BudgetAverageRecord,
+  type BudgetCurrentPeriodHandling,
   type BudgetValueType,
 } from '@/lib/budgetAveraging';
 import { cn } from '@/lib/utils';
@@ -17,10 +20,13 @@ interface AverageRecordsEditorProps {
   valueType: Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>;
   records: BudgetAverageRecord[];
   onChange: (records: BudgetAverageRecord[]) => void;
+  currentPeriodHandling?: BudgetCurrentPeriodHandling;
+  onCurrentPeriodHandlingChange?: (value: BudgetCurrentPeriodHandling) => void;
   disabled?: boolean;
   averageLabel?: string;
   autoFocusAddButton?: boolean;
   onSubmitFromAmountEnter?: () => void;
+  currentDate?: Date;
 }
 
 function toDateInputValue(date: Date): string {
@@ -143,15 +149,24 @@ export function AverageRecordsEditor({
   valueType,
   records,
   onChange,
+  currentPeriodHandling = DEFAULT_CURRENT_PERIOD_HANDLING,
+  onCurrentPeriodHandlingChange,
   disabled = false,
   averageLabel,
   autoFocusAddButton = false,
   onSubmitFromAmountEnter,
+  currentDate = new Date(),
 }: AverageRecordsEditorProps) {
   const modeLabel = valueType === 'monthly_averaged' ? 'month' : 'year';
-  const recordsLabel = valueType === 'monthly_averaged' ? 'Monthly Records' : 'Yearly Records';
   const defaultAverageLabel = valueType === 'monthly_averaged' ? 'Monthly average' : 'Yearly average';
-  const computedAverage = calculateAmountFromAverageRecords(valueType, records);
+  const periodLabel = valueType === 'monthly_averaged' ? 'month' : 'year';
+  const periodLabelPlural = `${periodLabel}s`;
+  const currentPeriodCheckboxLabel = `Don't count records from the current ${periodLabel} in average`;
+  const currentPeriodTooltip = `If you plan to track multiple records per ${periodLabel} and track them as they happen rather than at the end of the ${periodLabel}, including the records from the in-progress ${periodLabel} in the average will artificially deflate the average. Excluding the records from the in-progress ${periodLabel} prevents that deflation.`;
+  const {
+    amount: computedAverage,
+    includedPeriodCount,
+  } = getAverageCalculationDetails(valueType, records, currentPeriodHandling, currentDate);
   const computedMonthlyAverageFromYearly = computedAverage / 12;
   const [blankAmountRows, setBlankAmountRows] = useState<number[]>([]);
   const shouldFocusNewestRowRef = useRef(false);
@@ -258,7 +273,7 @@ export function AverageRecordsEditor({
   return (
     <div ref={containerRef} className="space-y-2.5">
       <div className="flex items-center justify-between">
-        <DataGridAddFormLabel>{recordsLabel}</DataGridAddFormLabel>
+        <DataGridAddFormLabel>Records</DataGridAddFormLabel>
         <Button
           ref={addButtonRef}
           type="button"
@@ -316,9 +331,25 @@ export function AverageRecordsEditor({
           ))}
         </div>
       )}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={`average-current-period-${valueType}`}
+          checked={currentPeriodHandling === 'exclude_current_period_until_closed'}
+          onCheckedChange={(checked) => onCurrentPeriodHandlingChange?.(checked ? 'exclude_current_period_until_closed' : 'include_current_period')}
+          disabled={disabled || !onCurrentPeriodHandlingChange}
+        />
+        <DataGridAddFormLabel
+          htmlFor={`average-current-period-${valueType}`}
+          tooltip={currentPeriodTooltip}
+          className="leading-5"
+        >
+          {currentPeriodCheckboxLabel}
+        </DataGridAddFormLabel>
+      </div>
       <div className="space-y-0.5 text-xs text-muted-foreground">
         <div>
           {(averageLabel ?? defaultAverageLabel)}: <span className="tabular-nums text-foreground">${computedAverage.toFixed(2)}</span>
+          <span>{` from ${includedPeriodCount} included ${includedPeriodCount === 1 ? periodLabel : periodLabelPlural}`}</span>
         </div>
         {valueType === 'yearly_averaged' && (
           <div>

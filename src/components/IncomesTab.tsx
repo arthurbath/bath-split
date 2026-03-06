@@ -37,11 +37,13 @@ import type { FrequencyType } from '@/types/fairshare';
 import type { Income } from '@/hooks/useIncomes';
 import {
   convertAverageRecordsForValueType,
+  DEFAULT_CURRENT_PERIOD_HANDLING,
   enforceIncomeTypeInvariants,
   getAveragedFrequencyLabel,
   seedAverageRecordsFromSimpleAmount,
   sortAverageRecordsForEditor,
   type BudgetAverageRecord,
+  type BudgetCurrentPeriodHandling,
   type BudgetValueType,
 } from '@/lib/budgetAveraging';
 import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
@@ -76,6 +78,7 @@ const createDefaultIncomeDraft = (): NewIncomeDraft => ({
   frequency_param: null,
   is_estimate: false,
   value_type: 'simple',
+  current_period_handling: DEFAULT_CURRENT_PERIOD_HANDLING,
   average_records: [],
 });
 
@@ -89,6 +92,7 @@ export function applyNewIncomeTypeToDraft(
     return {
       ...previous,
       value_type: nextType,
+      current_period_handling: DEFAULT_CURRENT_PERIOD_HANDLING,
       average_records: [],
     };
   }
@@ -104,6 +108,7 @@ export function applyNewIncomeTypeToDraft(
   return {
     ...previous,
     value_type: targetType,
+    current_period_handling: previous.current_period_handling ?? DEFAULT_CURRENT_PERIOD_HANDLING,
     average_records: seededRecords,
   };
 }
@@ -359,6 +364,7 @@ export function IncomesTab({
   const [averageEditorState, setAverageEditorState] = useState<{
     income: Income;
     targetValueType: AveragedValueType;
+    currentPeriodHandling: BudgetCurrentPeriodHandling;
     records: BudgetAverageRecord[];
     title: string;
   } | null>(null);
@@ -394,8 +400,20 @@ export function IncomesTab({
     setAddIncomeOpen(true);
   };
 
-  const openAverageEditor = (income: Income, targetValueType: AveragedValueType, records: BudgetAverageRecord[], title: string) => {
-    setAverageEditorState({ income, targetValueType, records: sortAverageRecordsForEditor(records), title });
+  const openAverageEditor = (
+    income: Income,
+    targetValueType: AveragedValueType,
+    currentPeriodHandling: BudgetCurrentPeriodHandling,
+    records: BudgetAverageRecord[],
+    title: string,
+  ) => {
+    setAverageEditorState({
+      income,
+      targetValueType,
+      currentPeriodHandling,
+      records: sortAverageRecordsForEditor(records),
+      title,
+    });
   };
 
   const handleNewIncomeTypeChange = (nextType: BudgetValueType) => {
@@ -419,6 +437,7 @@ export function IncomesTab({
           frequency_type: newIncome.frequency_type,
           frequency_param: newIncome.frequency_param,
           is_estimate: newIncome.is_estimate,
+          current_period_handling: newIncome.current_period_handling,
           average_records: newIncome.average_records,
         });
         await onAdd({
@@ -471,12 +490,24 @@ export function IncomesTab({
 
     if (income.value_type === 'simple') {
       const records = seedAverageRecordsFromSimpleAmount(targetType, income.amount);
-      openAverageEditor(income, targetType, records, `Convert ${income.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Income`);
+      openAverageEditor(
+        income,
+        targetType,
+        DEFAULT_CURRENT_PERIOD_HANDLING,
+        records,
+        `Convert ${income.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Income`,
+      );
       return;
     }
 
     const records = convertAverageRecordsForValueType(income.average_records, income.value_type, targetType);
-    openAverageEditor(income, targetType, records, `Convert ${income.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Income`);
+    openAverageEditor(
+      income,
+      targetType,
+      income.current_period_handling,
+      records,
+      `Convert ${income.name} to ${targetType === 'monthly_averaged' ? 'Monthly Averaged' : 'Yearly Averaged'} Income`,
+    );
   };
 
   const handleSaveAverageEditor = async () => {
@@ -488,6 +519,7 @@ export function IncomesTab({
       frequency_type: averageEditorState.income.frequency_type,
       frequency_param: averageEditorState.income.frequency_param,
       is_estimate: averageEditorState.income.is_estimate,
+      current_period_handling: averageEditorState.currentPeriodHandling,
       average_records: averageEditorState.records,
     });
 
@@ -513,6 +545,7 @@ export function IncomesTab({
         frequency_type: convertToSimpleState.frequency_type,
         frequency_param: null,
         is_estimate: true,
+        current_period_handling: DEFAULT_CURRENT_PERIOD_HANDLING,
       });
       setConvertToSimpleState(null);
     } catch (error: unknown) {
@@ -556,6 +589,7 @@ export function IncomesTab({
             onEdit={() => openAverageEditor(
               row.original,
               row.original.value_type as AveragedValueType,
+              row.original.current_period_handling,
               row.original.average_records,
               `Edit ${row.original.value_type === 'monthly_averaged' ? 'Monthly' : 'Yearly'} Records`,
             )}
@@ -825,6 +859,8 @@ export function IncomesTab({
                     valueType={newIncome.value_type}
                     records={newIncome.average_records}
                     onChange={records => setNewIncome(prev => ({ ...prev, average_records: records }))}
+                    currentPeriodHandling={newIncome.current_period_handling}
+                    onCurrentPeriodHandlingChange={currentPeriodHandling => setNewIncome(prev => ({ ...prev, current_period_handling: currentPeriodHandling }))}
                     disabled={savingIncome}
                   />
                 )}
@@ -868,6 +904,8 @@ export function IncomesTab({
                 valueType={averageEditorState.targetValueType}
                 records={averageEditorState.records}
                 onChange={records => setAverageEditorState(prev => prev ? { ...prev, records } : prev)}
+                currentPeriodHandling={averageEditorState.currentPeriodHandling}
+                onCurrentPeriodHandlingChange={currentPeriodHandling => setAverageEditorState(prev => prev ? { ...prev, currentPeriodHandling } : prev)}
                 disabled={savingAverageEditor}
                 autoFocusAddButton
                 onSubmitFromAmountEnter={() => {

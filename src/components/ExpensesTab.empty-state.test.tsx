@@ -1,9 +1,9 @@
 import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExpensesTab, applyNewExpenseTypeToDraft } from '@/components/ExpensesTab';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TOOLTIP_HOVER_DELAY_MS, TooltipProvider } from '@/components/ui/tooltip';
 import { fromMonthly } from '@/lib/frequency';
 import type { Expense } from '@/hooks/useExpenses';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
@@ -118,6 +118,7 @@ describe('ExpensesTab empty message', () => {
   });
 
   it('shows normalized cadence details when hovering a monthly value', async () => {
+    vi.useFakeTimers();
     const expense: Expense = {
       id: 'expense-1',
       name: 'Rent',
@@ -143,6 +144,9 @@ describe('ExpensesTab empty message', () => {
       act(() => {
         trigger?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       });
+      act(() => {
+        vi.advanceTimersByTime(TOOLTIP_HOVER_DELAY_MS);
+      });
       await flushUi();
 
       const { daily, weekly, annual } = fromMonthly(333);
@@ -152,6 +156,7 @@ describe('ExpensesTab empty message', () => {
       expect(text).toContain(`Annually: $${annual.toFixed(2)}`);
     } finally {
       unmount(root, container);
+      vi.useRealTimers();
     }
   });
 

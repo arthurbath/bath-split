@@ -6,8 +6,11 @@ import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
 import {
+  calculateAmountFromAverageRecords,
   normalizeAverageRecords,
+  normalizeCurrentPeriodHandling,
   normalizeBudgetValueType,
+  type BudgetCurrentPeriodHandling,
   type BudgetAverageRecord,
   type BudgetValueType,
 } from '@/lib/budgetAveraging';
@@ -22,6 +25,7 @@ export interface Income {
   household_id: string;
   is_estimate: boolean;
   value_type: BudgetValueType;
+  current_period_handling: BudgetCurrentPeriodHandling;
   average_records: BudgetAverageRecord[];
 }
 
@@ -36,17 +40,22 @@ function sortByCreatedAt(rows: Income[]): Income[] {
 function normalizeIncomeRow(raw: unknown): Income {
   const row = raw as Record<string, unknown>;
   const valueType = normalizeBudgetValueType(row.value_type);
+  const currentPeriodHandling = normalizeCurrentPeriodHandling(row.current_period_handling);
+  const averageRecords = normalizeAverageRecords(row.average_records, valueType);
   return {
     id: String(row.id),
     name: String(row.name ?? ''),
-    amount: Number(row.amount ?? 0),
+    amount: valueType === 'simple'
+      ? Number(row.amount ?? 0)
+      : calculateAmountFromAverageRecords(valueType, averageRecords, currentPeriodHandling),
     frequency_type: (String(row.frequency_type ?? 'monthly') as FrequencyType),
     frequency_param: row.frequency_param == null ? null : Number(row.frequency_param),
     partner_label: String(row.partner_label ?? 'X'),
     household_id: String(row.household_id),
     is_estimate: Boolean(row.is_estimate),
     value_type: valueType,
-    average_records: normalizeAverageRecords(row.average_records, valueType),
+    current_period_handling: currentPeriodHandling,
+    average_records: averageRecords,
   };
 }
 
@@ -120,7 +129,7 @@ export function useIncomes(householdId: string) {
       const next = (current ?? []).map((income) => {
         if (income.id !== id) return income;
         previousIncome = income;
-        return { ...income, ...updates };
+        return normalizeIncomeRow({ ...income, ...updates });
       });
       return sortByCreatedAt(next);
     });

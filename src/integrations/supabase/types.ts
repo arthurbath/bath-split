@@ -224,6 +224,7 @@ export type Database = {
           budget_id: string | null
           category_id: string | null
           created_at: string
+          current_period_handling: string
           frequency_param: number | null
           frequency_type: string
           household_id: string
@@ -240,6 +241,7 @@ export type Database = {
           budget_id?: string | null
           category_id?: string | null
           created_at?: string
+          current_period_handling?: string
           frequency_param?: number | null
           frequency_type?: string
           household_id: string
@@ -256,6 +258,7 @@ export type Database = {
           budget_id?: string | null
           category_id?: string | null
           created_at?: string
+          current_period_handling?: string
           frequency_param?: number | null
           frequency_type?: string
           household_id?: string
@@ -372,6 +375,7 @@ export type Database = {
           amount: number
           average_records: Json
           created_at: string
+          current_period_handling: string
           frequency_param: number | null
           frequency_type: string
           household_id: string
@@ -385,6 +389,7 @@ export type Database = {
           amount?: number
           average_records?: Json
           created_at?: string
+          current_period_handling?: string
           frequency_param?: number | null
           frequency_type?: string
           household_id: string
@@ -398,6 +403,7 @@ export type Database = {
           amount?: number
           average_records?: Json
           created_at?: string
+          current_period_handling?: string
           frequency_param?: number | null
           frequency_type?: string
           household_id?: string
