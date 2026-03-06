@@ -555,7 +555,7 @@ export function IncomesTab({
             income={row.original}
             onEdit={() => openAverageEditor(
               row.original,
-              row.original.value_type,
+              row.original.value_type as AveragedValueType,
               row.original.average_records,
               `Edit ${row.original.value_type === 'monthly_averaged' ? 'Monthly' : 'Yearly'} Records`,
             )}

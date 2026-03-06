@@ -5,14 +5,16 @@ import { DayPicker } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
+  onKeyDownCapture?: React.KeyboardEventHandler;
+};
 
 function Calendar({ className, classNames, showOutsideDays = true, onKeyDownCapture, ...props }: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
-      onKeyDownCapture={(event) => {
+      onKeyDownCapture={(event: React.KeyboardEvent) => {
         if (event.key === "Tab") {
           event.preventDefault();
           event.stopPropagation();
@@ -52,7 +54,7 @@ function Calendar({ className, classNames, showOutsideDays = true, onKeyDownCapt
         IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4" />,
       }}
-      {...props}
+      {...(props as any)}
     />
   );
 }

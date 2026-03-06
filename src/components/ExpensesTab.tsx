@@ -855,7 +855,7 @@ export function ExpensesTab({
             expense={row.original.exp}
             onEdit={() => openAverageEditor(
               row.original.exp,
-              row.original.exp.value_type,
+              row.original.exp.value_type as AveragedValueType,
               row.original.exp.average_records,
               `Edit ${row.original.exp.value_type === 'monthly_averaged' ? 'Monthly' : 'Yearly'} Records`,
             )}
