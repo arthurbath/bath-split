@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
+import type { BudgetAverageRecord } from '@/lib/budgetAveraging';
 
 function mount(ui: React.ReactElement) {
   const container = document.createElement('div');
@@ -175,7 +176,7 @@ describe('AverageRecordsEditor', () => {
 
   it('focuses the newly-added row primary picker control', async () => {
     function Harness() {
-      const [records, setRecords] = React.useState([{ year: 2025, month: null as null, amount: 100 }]);
+      const [records, setRecords] = React.useState<BudgetAverageRecord[]>([{ year: 2025, month: null, amount: 100 }]);
       return (
         <AverageRecordsEditor
           valueType="yearly_averaged"
@@ -474,10 +475,10 @@ describe('AverageRecordsEditor', () => {
   it('focuses the next-highest row primary input after deleting a middle row', async () => {
     function Harness() {
       const [records, setRecords] = React.useState([
-        { year: 2026, month: null as null, amount: 300 },
-        { year: 2025, month: null as null, amount: 200 },
-        { year: 2024, month: null as null, amount: 100 },
-      ]);
+        { year: 2026, month: null, amount: 300 },
+        { year: 2025, month: null, amount: 200 },
+        { year: 2024, month: null, amount: 100 },
+      ] as BudgetAverageRecord[]);
       return (
         <AverageRecordsEditor
           valueType="yearly_averaged"
@@ -508,9 +509,9 @@ describe('AverageRecordsEditor', () => {
 
   it('focuses the next row primary input after deleting the topmost row', async () => {
     function Harness() {
-      const [records, setRecords] = React.useState([
-        { year: 2026, month: null as null, amount: 300 },
-        { year: 2025, month: null as null, amount: 200 },
+      const [records, setRecords] = React.useState<BudgetAverageRecord[]>([
+        { year: 2026, month: null, amount: 300 },
+        { year: 2025, month: null, amount: 200 },
       ]);
       return (
         <AverageRecordsEditor
@@ -542,7 +543,7 @@ describe('AverageRecordsEditor', () => {
 
   it('returns focus to yearly record year input after selecting a year', async () => {
     function Harness() {
-      const [records, setRecords] = React.useState([{ year: 2026, month: null as null, amount: 100 }]);
+      const [records, setRecords] = React.useState<BudgetAverageRecord[]>([{ year: 2026, month: null, amount: 100 }]);
       return (
         <AverageRecordsEditor
           valueType="yearly_averaged"
