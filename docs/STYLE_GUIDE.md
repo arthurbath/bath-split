@@ -79,6 +79,9 @@ Use lowercase for these words when they appear in the middle of a label:
   - The trailing `actions` column uses the shared fixed width (`40px`) and the same right-edge button spacing used on Expenses/Incomes (`mr-[5px]` on the icon button).
   - If the grid is narrower than its container, assign all leftover width to the trailing `actions` column (do not distribute it across data columns).
   - Fields that support inline editing (for example Name) should be click-to-edit directly in-cell, rather than routed through an actions-menu rename flow.
+  - Keyboard navigation and save behavior must use the shared `DataGrid` focus-restoration path. On blur/commit, the grid must not introduce extra scroll movement beyond what is required to keep the focused cell fully visible.
+  - When moving focus by Tab/Shift+Tab or arrow keys, the target cell must be scrolled fully into view, accounting for sticky headers, sticky grouped rows, sticky footers, and pinned left/right columns. A cell must never remain partially hidden beneath sticky grid chrome.
+  - Focus restoration after async saves must wait until the target control is focusable again before scrolling. Do not add module-specific blur/save scroll hacks on top of the shared grid behavior.
   - Color swatch controls are treated as inputs: `h-7`, no extra margin, gray input border (`--grid-sticky-line`), standard input focus ring, keyboard/grid navigation focuses the swatch input without auto-opening the menu, and Space/Enter opens the swatch menu with focus landing on the selected swatch (or first swatch when none is selected).
   - New rows in a data-grid card are created from a `+` button in the card header that opens a modal form; do not use inline add rows above the grid.
   - The standard DataGrid add button style is the compact green outline icon button used by Budget Expenses/Incomes: `variant="outline-success"`, `size="sm"`, `className="h-8 w-8 p-0"`, with a `Plus` icon and an `aria-label`.

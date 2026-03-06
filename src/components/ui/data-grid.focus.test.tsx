@@ -175,6 +175,63 @@ function ConditionalFrequencyHarness() {
   return <DataGrid table={table} />;
 }
 
+function StickyViewportHarness() {
+  const [rows] = React.useState<RowData[]>([
+    { id: "row-a", name: "Alpha", note: "Apple" },
+  ]);
+
+  const columns = React.useMemo(
+    () => [
+      columnHelper.accessor("name", {
+        id: "name",
+        header: "Name",
+        cell: ({ row, getValue }) => (
+          <GridEditableCell
+            value={getValue()}
+            navCol={0}
+            onChange={() => {}}
+            cellId={`name-${row.original.id}`}
+          />
+        ),
+      }),
+      columnHelper.accessor("note", {
+        id: "note",
+        header: "Note",
+        cell: ({ row, getValue }) => (
+          <GridEditableCell
+            value={getValue()}
+            navCol={1}
+            onChange={() => {}}
+            cellId={`note-${row.original.id}`}
+          />
+        ),
+      }),
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  return (
+    <DataGrid
+      table={table}
+      fullView
+      groupBy={() => "Group"}
+      renderGroupHeader={(_groupKey, groupRows) => (
+        <tr key="group-row" className="sticky top-[36px] z-30">
+          <td className="sticky left-0 z-30">Group ({groupRows.length})</td>
+          <td />
+        </tr>
+      )}
+    />
+  );
+}
+
 function AsyncSelectCell({
   value,
   disabled,
@@ -727,6 +784,44 @@ async function dispatchTouchPointerDown(input: HTMLInputElement) {
   });
 }
 
+function makeRect({
+  top,
+  left,
+  width,
+  height,
+}: {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}): DOMRect {
+  return {
+    x: left,
+    y: top,
+    top,
+    left,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+function mockElementRect(element: Element, rect: DOMRect) {
+  const original = element.getBoundingClientRect.bind(element);
+  Object.defineProperty(element, "getBoundingClientRect", {
+    configurable: true,
+    value: () => rect,
+  });
+  return () => {
+    Object.defineProperty(element, "getBoundingClientRect", {
+      configurable: true,
+      value: original,
+    });
+  };
+}
+
 function mount(ui: React.ReactElement) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -823,6 +918,114 @@ describe("DataGrid focus after commit resort", () => {
       });
       expect(onUpdate).toHaveBeenCalledTimes(1);
     } finally {
+      unmount(root, container);
+    }
+  });
+});
+
+describe("DataGrid viewport scrolling", () => {
+  it("keeps keyboard-focused cells fully clear of sticky headers, group rows, and left sticky columns", async () => {
+    const { container, root } = mount(<StickyViewportHarness />);
+    const restoreRects: Array<() => void> = [];
+
+    try {
+      const gridContainer = container.querySelector<HTMLDivElement>("div.overflow-auto");
+      const header = container.querySelector<HTMLElement>("thead.sticky");
+      const groupRow = container.querySelector<HTMLElement>("tbody tr.sticky");
+      const groupHeaderCell = groupRow?.querySelector<HTMLElement>("td.sticky");
+      const stickyFirstCell = container.querySelector<HTMLElement>("tbody tr:not(.sticky) td.sticky");
+      const targetInput = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="1"]');
+
+      expect(gridContainer).not.toBeNull();
+      expect(header).not.toBeNull();
+      expect(groupRow).not.toBeNull();
+      expect(groupHeaderCell).not.toBeNull();
+      expect(stickyFirstCell).not.toBeNull();
+      expect(targetInput).not.toBeNull();
+
+      restoreRects.push(mockElementRect(gridContainer!, makeRect({ top: 0, left: 0, width: 200, height: 200 })));
+      restoreRects.push(mockElementRect(header!, makeRect({ top: 0, left: 0, width: 200, height: 36 })));
+      restoreRects.push(mockElementRect(groupRow!, makeRect({ top: 36, left: 0, width: 200, height: 28 })));
+      restoreRects.push(mockElementRect(groupHeaderCell!, makeRect({ top: 36, left: 0, width: 80, height: 28 })));
+      restoreRects.push(mockElementRect(stickyFirstCell!, makeRect({ top: 60, left: 0, width: 80, height: 28 })));
+      restoreRects.push(mockElementRect(targetInput!, makeRect({ top: 60, left: 70, width: 70, height: 28 })));
+
+      gridContainer!.scrollTop = 50;
+      gridContainer!.scrollLeft = 30;
+
+      await act(async () => {
+        targetInput!.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      });
+
+      await waitForCondition(() => {
+        expect(gridContainer!.scrollTop).toBe(46);
+        expect(gridContainer!.scrollLeft).toBe(20);
+      });
+    } finally {
+      while (restoreRects.length > 0) restoreRects.pop()?.();
+      unmount(root, container);
+    }
+  });
+
+  it("does not scroll toward a commit target while that cell is temporarily disabled during save", async () => {
+    const { container, root } = mount(<AsyncSelectCommitHarness saveDelayMs={250} />);
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+
+    try {
+      const gridContainer = container.querySelector<HTMLDivElement>("div.overflow-auto");
+      const select = container.querySelector<HTMLSelectElement>('select[data-row-id="row-a"][data-col="0"]');
+
+      expect(gridContainer).not.toBeNull();
+      expect(select).not.toBeNull();
+
+      HTMLElement.prototype.getBoundingClientRect = function patchedGetBoundingClientRect(this: HTMLElement) {
+        if (this === gridContainer) {
+          return makeRect({ top: 0, left: 0, width: 100, height: 100 });
+        }
+
+        if (this.matches('select[data-row-id="row-a"][data-col="0"]')) {
+          if ((this as HTMLSelectElement).value === "A") {
+            return makeRect({ top: 10, left: 10, width: 40, height: 24 });
+          }
+          return makeRect({ top: 150, left: 150, width: 40, height: 24 });
+        }
+
+        return originalGetBoundingClientRect.call(this);
+      };
+
+      gridContainer!.scrollTop = 0;
+      gridContainer!.scrollLeft = 0;
+
+      await act(async () => {
+        select!.focus();
+      });
+
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 40));
+      });
+
+      await act(async () => {
+        select!.value = "C";
+        select!.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+      });
+
+      expect(gridContainer!.scrollTop).toBe(0);
+      expect(gridContainer!.scrollLeft).toBe(0);
+
+      await waitForCondition(() => {
+        const active = document.activeElement as HTMLElement | null;
+        expect(active?.tagName).toBe("SELECT");
+        expect(active?.getAttribute("data-row-id")).toBe("row-a");
+        expect(active?.getAttribute("data-col")).toBe("0");
+        expect(gridContainer!.scrollTop).toBe(74);
+        expect(gridContainer!.scrollLeft).toBe(90);
+      }, 3000);
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
       unmount(root, container);
     }
   });

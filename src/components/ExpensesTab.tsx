@@ -22,7 +22,7 @@ import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
 import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-affix-input';
 import { Plus, Trash2, MoreHorizontal, Filter, FilterX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { toMonthly, frequencyLabels, needsParam, fromMonthly } from '@/lib/frequency';
+import { FREQUENCY_OPTIONS, toMonthly, frequencyLabels, needsParam, fromMonthly } from '@/lib/frequency';
 import { DataGrid, GridCheckboxCell, GridEditableCell, GridCurrencyCell, GridPercentCell, gridMenuTriggerProps, gridNavProps, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import { EXPENSES_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH } from '@/lib/gridColumnWidths';
@@ -76,7 +76,6 @@ interface ExpensesTabProps {
   fullView?: boolean;
 }
 
-const FREQ_OPTIONS: FrequencyType[] = ['weekly', 'twice_monthly', 'monthly', 'annual', 'every_n_days', 'every_n_weeks', 'every_n_months', 'k_times_weekly', 'k_times_monthly', 'k_times_annually'];
 type GroupByOption = 'none' | 'category' | 'estimated' | 'payer' | 'payment_method';
 type AddSource =
   | { type: 'existing_expense'; expenseId: string; field: 'category_id' | 'linked_account_id' }
@@ -201,7 +200,7 @@ export function applyNewExpenseTypeToDraft(
 // ─── Cell Components ───
 
 function CategoryCell({ exp, categories, onChange, onAddNew, disabled = false }: {
-  exp: Expense; categories: Category[]; onChange: (v: string) => void; onAddNew: () => void; disabled?: boolean;
+  exp: Expense; categories: Category[]; onChange: (v: string) => void | Promise<unknown>; onAddNew: () => void; disabled?: boolean;
 }) {
   const ctx = useDataGrid();
   return (
@@ -245,7 +244,7 @@ function CategoryCell({ exp, categories, onChange, onAddNew, disabled = false }:
   );
 }
 
-function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expense; onChange: (field: string, v: string) => void; disabled?: boolean }) {
+function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expense; onChange: (field: string, v: string) => void | Promise<unknown>; disabled?: boolean }) {
   const ctx = useDataGrid();
   if (exp.value_type !== 'simple') {
     return <span className={`block px-1 text-xs ${GRID_READONLY_TEXT_CLASS}`}>{getAveragedFrequencyLabel(exp.value_type)}</span>;
@@ -276,7 +275,7 @@ function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expens
           <SelectValue />
         </SelectTrigger>
       <SelectContent>
-          {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
+          {FREQUENCY_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
         </SelectContent>
       </Select>
       {needsParam(exp.frequency_type) && (
@@ -287,7 +286,7 @@ function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expens
 }
 
 function PaymentMethodCell({ exp, linkedAccounts, partnerX, partnerY, onChange, onAddNew, disabled = false }: {
-  exp: Expense; linkedAccounts: LinkedAccount[]; partnerX: string; partnerY: string; onChange: (v: string) => void; onAddNew: () => void; disabled?: boolean;
+  exp: Expense; linkedAccounts: LinkedAccount[]; partnerX: string; partnerY: string; onChange: (v: string) => void | Promise<unknown>; onAddNew: () => void; disabled?: boolean;
 }) {
   const ctx = useDataGrid();
   return (
@@ -682,8 +681,9 @@ export function ExpensesTab({
     else if (field === 'linked_account_id') {
       updates.linked_account_id = value === '_none' ? null : value;
     } else updates[field] = value;
-    onUpdate(id, updates as Partial<Omit<Expense, 'id' | 'household_id'>>).catch((error: unknown) => {
+    return onUpdate(id, updates as Partial<Omit<Expense, 'id' | 'household_id'>>).catch((error: unknown) => {
       toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+      throw error;
     });
   };
 
@@ -1541,7 +1541,7 @@ export function ExpensesTab({
                       >
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
+                          {FREQUENCY_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       {needsParam(newExpense.frequency_type) && (

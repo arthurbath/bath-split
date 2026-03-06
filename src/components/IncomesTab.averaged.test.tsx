@@ -6,6 +6,13 @@ import { IncomesTab, applyNewIncomeTypeToDraft } from '@/components/IncomesTab';
 import type { Income } from '@/hooks/useIncomes';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
+if (typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.scrollIntoView !== 'function') {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: () => {},
+  });
+}
+
 function mount(ui: React.ReactElement) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -26,6 +33,49 @@ function unmount(root: Root, container: HTMLElement) {
 async function flushUi() {
   await act(async () => {
     await Promise.resolve();
+  });
+}
+
+async function waitForCondition(assertion: () => void, timeoutMs = 300) {
+  const start = Date.now();
+  let lastError: unknown;
+  while (Date.now() - start <= timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+    }
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 16));
+    });
+  }
+  throw lastError instanceof Error ? lastError : new Error('Condition not met before timeout');
+}
+
+async function startEditing(input: HTMLInputElement) {
+  await act(async () => {
+    input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    input.focus();
+  });
+  await waitForCondition(() => {
+    expect(input.getAttribute('data-grid-editing')).toBe('true');
+  });
+}
+
+async function dispatchInputChange(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(input, 'value')?.set;
+  const prototypeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set;
+  const setValue = prototypeSetter && valueSetter !== prototypeSetter ? prototypeSetter : valueSetter;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function dispatchEnter(input: HTMLInputElement) {
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   });
 }
 
@@ -142,6 +192,58 @@ describe('IncomesTab averaged rows', () => {
 
       expect(onUpdate).toHaveBeenCalledTimes(1);
       expect(document.body.textContent).not.toContain('Edit Yearly Records');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('rolls back the edited name when an async income save fails', async () => {
+    const onUpdate = vi.fn(async () => {
+      throw new Error('Save failed');
+    });
+    const incomes: Income[] = [
+      {
+        id: 'income-1',
+        household_id: 'h-1',
+        name: 'Salary',
+        amount: 6000,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        partner_label: 'X',
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
+      },
+    ];
+
+    const { container, root } = mount(
+      <TooltipProvider>
+        <IncomesTab
+          incomes={incomes}
+          partnerX="Partner X"
+          partnerY="Partner Y"
+          onAdd={async () => {}}
+          onUpdate={onUpdate}
+          onRemove={async () => {}}
+        />
+      </TooltipProvider>,
+    );
+
+    try {
+      const input = container.querySelector<HTMLInputElement>('input[data-row-id="income-1"][data-col="0"]');
+      expect(input).toBeTruthy();
+      expect(input?.value).toBe('Salary');
+
+      await startEditing(input!);
+      await dispatchInputChange(input!, 'Updated salary');
+      await dispatchEnter(input!);
+
+      await waitForCondition(() => {
+        const liveInput = container.querySelector<HTMLInputElement>('input[data-row-id="income-1"][data-col="0"]');
+        expect(liveInput?.value).toBe('Salary');
+      });
+
+      expect(onUpdate).toHaveBeenCalledTimes(1);
     } finally {
       unmount(root, container);
     }
