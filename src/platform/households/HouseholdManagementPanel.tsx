@@ -396,7 +396,11 @@ export function HouseholdManagementPanel({
               value={deleteConfirmText}
               onChange={(event) => setDeleteConfirmText(event.target.value)}
               placeholder={userEmail ?? ''}
+              inputMode="email"
               autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               className="border-destructive/30 focus:border-destructive"
             />
           </AlertDialogBody>

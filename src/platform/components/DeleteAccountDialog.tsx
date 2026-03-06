@@ -62,7 +62,11 @@ export function DeleteAccountDialog({ isOpen, onOpenChange }: DeleteAccountDialo
             value={confirmText}
             onChange={e => setConfirmText(e.target.value)}
             placeholder={userEmail}
+            inputMode="email"
             autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             className="border-destructive/30 focus:border-destructive"
           />
         </AlertDialogBody>

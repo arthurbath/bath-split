@@ -22,6 +22,7 @@ export function DataGridAddFormAffixInput({ prefix, suffix, className, ...props 
       <Input
         {...props}
         type="number"
+        inputMode={props.inputMode ?? 'decimal'}
         className={cn(
           'text-right',
           prefix && 'pl-4',

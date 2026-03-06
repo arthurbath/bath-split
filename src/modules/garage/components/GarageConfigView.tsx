@@ -262,11 +262,11 @@ export function GarageConfigView({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="garage-upcoming-miles">Miles</Label>
-              <Input id="garage-upcoming-miles" type="number" value={settingsMiles} onChange={(event) => setSettingsMiles(event.target.value)} />
+              <Input id="garage-upcoming-miles" type="number" inputMode="decimal" value={settingsMiles} onChange={(event) => setSettingsMiles(event.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="garage-upcoming-months">Months</Label>
-              <Input id="garage-upcoming-months" type="number" value={settingsMonths} onChange={(event) => setSettingsMonths(event.target.value)} />
+              <Input id="garage-upcoming-months" type="number" inputMode="decimal" value={settingsMonths} onChange={(event) => setSettingsMonths(event.target.value)} />
             </div>
           </div>
           <div className="flex justify-end">
@@ -340,7 +340,7 @@ export function GarageConfigView({
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="garage-vehicle-year">Model Year</Label>
-                <Input id="garage-vehicle-year" type="number" value={vehicleForm.model_year} onChange={(event) => setVehicleForm((prev) => ({ ...prev, model_year: event.target.value }))} />
+                <Input id="garage-vehicle-year" type="number" inputMode="numeric" value={vehicleForm.model_year} onChange={(event) => setVehicleForm((prev) => ({ ...prev, model_year: event.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-vehicle-date">In-service Date</Label>
@@ -386,7 +386,7 @@ export function GarageConfigView({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-vehicle-odo">Current Mileage</Label>
-                <Input id="garage-vehicle-odo" type="number" value={vehicleForm.current_odometer_miles} onChange={(event) => setVehicleForm((prev) => ({ ...prev, current_odometer_miles: event.target.value }))} />
+                <Input id="garage-vehicle-odo" type="number" inputMode="decimal" value={vehicleForm.current_odometer_miles} onChange={(event) => setVehicleForm((prev) => ({ ...prev, current_odometer_miles: event.target.value }))} />
               </div>
             </div>
           </DialogBody>

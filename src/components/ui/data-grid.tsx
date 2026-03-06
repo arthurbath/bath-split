@@ -1588,6 +1588,7 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
       <Input
         ref={ref}
         type="number"
+        inputMode="decimal"
         value={local}
         min={0}
         max={100}

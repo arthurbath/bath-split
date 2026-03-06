@@ -156,3 +156,30 @@ describe('ToplineHeader iOS standalone safe area', () => {
     }
   });
 });
+
+describe('ToplineHeader module title', () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    mockIsAdmin.mockReset();
+    mockIsMobile.mockReset();
+    mockStandaloneMode(false);
+    mockIsAdmin.mockReturnValue({ isAdmin: false, loading: false, resolved: true });
+    mockIsMobile.mockReturnValue(false);
+  });
+
+  it('renders the module title as non-selectable text', () => {
+    const { container, root } = mount(
+      <ToplineHeader title="Budget" userId="user-1" displayName="Art" onSignOut={vi.fn()} />,
+    );
+
+    try {
+      const title = Array.from(container.querySelectorAll('h1 span'))
+        .find((element) => element.textContent === 'Budget');
+
+      expect(title).toBeTruthy();
+      expect(title?.className).toContain('select-none');
+    } finally {
+      unmount(root, container);
+    }
+  });
+});

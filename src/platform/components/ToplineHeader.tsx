@@ -69,7 +69,7 @@ export function ToplineHeader({
           )}
           <h1 className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-lg font-bold tracking-tight text-foreground">
             {ModuleIcon ? <ModuleIcon className="h-5 w-5" aria-hidden="true" /> : null}
-            <span>{title}</span>
+            <span className="select-none">{title}</span>
           </h1>
           {titleAccessory ? <div className="ml-px flex min-w-0 shrink items-center">{titleAccessory}</div> : null}
         </div>
