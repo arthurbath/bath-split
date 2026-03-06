@@ -6,6 +6,59 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const FEEDBACK_TIME_ZONE = "America/Los_Angeles";
+
+function toTitleCase(value: string): string {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function prettifyContext(context: unknown): string {
+  if (typeof context !== "string" || context.length === 0) return "General";
+
+  const contextLabels: Record<string, string> = {
+    gateway: "Gateway Help Form",
+    terms_update: "Terms Update",
+    in_app_switcher: "In-App Module Switcher",
+    in_app_account: "In-App Account",
+    in_app_feedback_bug: "In-App Budget",
+  };
+
+  if (contextLabels[context]) return contextLabels[context];
+  if (context.startsWith("in_app_")) {
+    return `In-App ${toTitleCase(context.slice("in_app_".length).replaceAll("_", " "))}`;
+  }
+  return toTitleCase(context.replaceAll("_", " "));
+}
+
+function prettifySubmittedAt(value: unknown): string {
+  const parsed = typeof value === "string" || value instanceof Date
+    ? new Date(value)
+    : null;
+
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return "Unknown";
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: FEEDBACK_TIME_ZONE,
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).formatToParts(parsed);
+
+  const lookup = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${lookup("month")} ${lookup("day")}, ${lookup("year")} at ${lookup("hour")}:${lookup("minute")} ${lookup("dayPeriod")} ${lookup("timeZoneName")}`.trim();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -43,11 +96,10 @@ Deno.serve(async (req) => {
     });
   }
 
-  const userId = claimsData.claims.sub;
   const userEmail = claimsData.claims.email as string;
 
   try {
-    const { message, context, file_url } = await req.json();
+    const { message, context, submitted_at, file_url } = await req.json();
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return new Response(JSON.stringify({ error: "Message is required" }), {
@@ -63,17 +115,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Pretty-format the context for display
-    const contextLabels: Record<string, string> = {
-      terms_update: "Terms Update",
-      in_app_switcher: "In-app Module Switcher",
-      in_app_account: "In-app Account",
-      in_app_feedback_bug: "In-app Budget",
-    };
-    const prettyContext = contextLabels[context] ||
-      (typeof context === "string" && context.startsWith("in_app_")
-        ? `In-app ${context.slice("in_app_".length).replaceAll("_", " ")}`
-        : context || "General");
+    const prettyContext = prettifyContext(context);
+    const prettySubmittedAt = prettifySubmittedAt(submitted_at);
 
     // If a file path was provided, generate a signed URL using the service role client
     let attachmentUrl: string | undefined;
@@ -91,7 +134,14 @@ Deno.serve(async (req) => {
     }
 
     // Build email body
-    let body = `From: ${userEmail} (${userId})\nContext: ${prettyContext}\n\n${message.trim()}`;
+    let body = [
+      `Email: ${userEmail}`,
+      `Context: ${prettyContext}`,
+      `Submitted: ${prettySubmittedAt}`,
+      "",
+      "Feedback:",
+      message.trim(),
+    ].join("\n");
     if (attachmentUrl) {
       body += `\n\nAttachment (expires in 7 days): ${attachmentUrl}`;
     }
@@ -104,9 +154,9 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "BathOS <noreply@bath.garden>",
+        from: "BathOS <webmaster@bath.garden>",
         to: ["webmaster@bath.garden"],
-        subject: `[BathOS Feedback] ${prettyContext}`,
+        subject: "BathOS Feedback",
         text: body,
       }),
     });

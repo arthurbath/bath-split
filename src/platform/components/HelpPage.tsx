@@ -94,7 +94,11 @@ export default function HelpPage() {
           <Card>
             <CardHeader className="text-center">
               <CardTitle className="text-2xl font-bold tracking-tight">Need Help?</CardTitle>
-              <CardDescription>Question, issue, or suggestion? Tell me about it.</CardDescription>
+              <CardDescription>
+                Question, issue, or suggestion?
+                <br />
+                Tell me about it.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">

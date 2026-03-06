@@ -68,7 +68,7 @@ Deno.serve(async (req: Request) => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "BathOS <notifications@bath.garden>",
+        from: "BathOS <webmaster@bath.garden>",
         to: [ADMIN_EMAIL],
         subject: `New signup: ${displayName}`,
         html: emailHtml,
