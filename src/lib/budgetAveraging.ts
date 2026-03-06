@@ -1,3 +1,5 @@
+import type { FrequencyType } from '@/types/fairshare';
+
 export type BudgetValueType = 'simple' | 'monthly_averaged' | 'yearly_averaged';
 
 export interface BudgetAverageRecord {
@@ -162,10 +164,18 @@ export function enforceExpenseTypeInvariants(
     is_estimate: boolean;
     average_records: BudgetAverageRecord[];
   },
-) {
+): {
+  amount: number;
+  frequency_type: FrequencyType;
+  frequency_param: number | null;
+  is_estimate: boolean;
+  value_type: BudgetValueType;
+  average_records: BudgetAverageRecord[];
+} {
   if (valueType === 'simple') {
     return {
       ...input,
+      frequency_type: input.frequency_type as FrequencyType,
       value_type: valueType,
       average_records: [],
     };
@@ -177,7 +187,7 @@ export function enforceExpenseTypeInvariants(
     value_type: valueType,
     amount,
     average_records: normalizeAverageRecords(input.average_records, valueType),
-    frequency_type: valueType === 'monthly_averaged' ? 'monthly' : 'annual',
+    frequency_type: (valueType === 'monthly_averaged' ? 'monthly' : 'annual') as FrequencyType,
     frequency_param: null,
     is_estimate: true,
   };
@@ -192,10 +202,18 @@ export function enforceIncomeTypeInvariants(
     is_estimate: boolean;
     average_records: BudgetAverageRecord[];
   },
-) {
+): {
+  amount: number;
+  frequency_type: FrequencyType;
+  frequency_param: number | null;
+  is_estimate: boolean;
+  value_type: BudgetValueType;
+  average_records: BudgetAverageRecord[];
+} {
   if (valueType === 'simple') {
     return {
       ...input,
+      frequency_type: input.frequency_type as FrequencyType,
       value_type: valueType,
       average_records: [],
     };
@@ -207,7 +225,7 @@ export function enforceIncomeTypeInvariants(
     value_type: valueType,
     amount,
     average_records: normalizeAverageRecords(input.average_records, valueType),
-    frequency_type: valueType === 'monthly_averaged' ? 'monthly' : 'annual',
+    frequency_type: (valueType === 'monthly_averaged' ? 'monthly' : 'annual') as FrequencyType,
     frequency_param: null,
     is_estimate: true,
   };
