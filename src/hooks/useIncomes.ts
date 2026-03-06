@@ -94,7 +94,8 @@ export function useIncomes(householdId: string) {
               id,
               household_id: householdId,
               ...income,
-            })
+              average_records: income.average_records as unknown as import('@/integrations/supabase/types').Json,
+            } as any)
             .select('*')
             .single(),
         );
@@ -129,7 +130,7 @@ export function useIncomes(householdId: string) {
         const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_income_streams')
-            .update(updates)
+            .update(updates as any)
             .eq('id', id)
             .select('*')
             .single(),
