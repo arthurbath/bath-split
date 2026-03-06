@@ -41,14 +41,14 @@ export default function ForgotPasswordPage() {
         <div className="flex flex-1 items-center justify-center p-4">
           <Card className="w-full max-w-md text-center">
             <CardHeader>
-              <CardTitle>Check your email</CardTitle>
+              <CardTitle>Check Your Email</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 If an account exists for <strong>{email}</strong>, we sent password reset instructions.
               </p>
               <Button variant="outline" className="w-full" onClick={() => window.location.href = '/signin'}>
-                Back to sign in
+                Back to Sign In
               </Button>
             </CardContent>
           </Card>
@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
       <div className="flex flex-1 items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle>Forgot password</CardTitle>
+            <CardTitle>Forgot Password</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -76,12 +76,12 @@ export default function ForgotPasswordPage() {
                 autoFocus
               />
               <Button type="submit" className="w-full" disabled={loading || !email.trim()}>
-                {loading ? 'Sending...' : 'Send reset link'}
+                {loading ? 'Sending...' : 'Send Reset Link'}
               </Button>
             </form>
             <div className="mt-4 text-center">
               <a href="/signin" className="text-sm text-muted-foreground hover:text-foreground underline">
-                Back to sign in
+                Back to Sign In
               </a>
             </div>
           </CardContent>

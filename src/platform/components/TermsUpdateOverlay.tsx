@@ -61,19 +61,25 @@ export function TermsUpdateOverlay({ latestVersion, pendingVersions, onAgree }: 
     setIsSendingFeedback(true);
     try {
       // Save to DB
-      const { error } = await supabase
+      const { data: insertedFeedback, error } = await supabase
         .from('bathos_feedback')
         .insert({
           user_id: user.id,
           email: userEmail,
           message: feedbackMessage.trim(),
           context: 'terms_update',
-        });
+        })
+        .select('created_at')
+        .single();
       if (error) throw error;
 
       // Send email notification
       await supabase.functions.invoke('send-feedback-email', {
-        body: { message: feedbackMessage.trim(), context: 'terms_update' },
+        body: {
+          message: feedbackMessage.trim(),
+          context: 'terms_update',
+          submitted_at: insertedFeedback.created_at,
+        },
       });
 
       setFeedbackSent(true);

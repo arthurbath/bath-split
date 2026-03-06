@@ -93,17 +93,26 @@ export function FeedbackDialog({ userId, trigger }: FeedbackDialogProps) {
       }
 
       // Save to DB
-      const { error: insertErr } = await supabase.from('bathos_feedback').insert({
-        user_id: userId,
-        email: userEmail,
-        message: trimmed,
-        context: feedbackContext,
-      });
+      const { data: insertedFeedback, error: insertErr } = await supabase
+        .from('bathos_feedback')
+        .insert({
+          user_id: userId,
+          email: userEmail,
+          message: trimmed,
+          context: feedbackContext,
+        })
+        .select('created_at')
+        .single();
       if (insertErr) throw insertErr;
 
       // Send email
       await supabase.functions.invoke('send-feedback-email', {
-        body: { message: trimmed, context: feedbackContext, file_url: fileUrl },
+        body: {
+          message: trimmed,
+          context: feedbackContext,
+          submitted_at: insertedFeedback.created_at,
+          file_url: fileUrl,
+        },
       });
 
       toast({ title: 'Feedback sent' });
