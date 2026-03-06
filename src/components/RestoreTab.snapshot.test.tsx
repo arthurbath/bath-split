@@ -38,6 +38,7 @@ describe('RestoreTab snapshot payload', () => {
         partner_label: 'X',
         is_estimate: true,
         value_type: 'yearly_averaged',
+        current_period_handling: 'exclude_current_period_until_closed',
         average_records: [{ year: 2024, month: null, amount: 12000, date: '2024-04-15' }],
       },
     ];
@@ -56,6 +57,7 @@ describe('RestoreTab snapshot payload', () => {
         linked_account_id: null,
         is_estimate: true,
         value_type: 'monthly_averaged',
+        current_period_handling: 'include_current_period',
         average_records: [{ year: 2026, month: 2, amount: 950, date: '2026-02-11' }],
       },
     ];
@@ -95,8 +97,10 @@ describe('RestoreTab snapshot payload', () => {
       const snapshot = captured?.snapshot as { incomes?: Array<Record<string, unknown>>; expenses?: Array<Record<string, unknown>> } | undefined;
       expect(snapshot?.incomes?.[0]?.is_estimate).toBe(true);
       expect(snapshot?.incomes?.[0]?.value_type).toBe('yearly_averaged');
+      expect(snapshot?.incomes?.[0]?.current_period_handling).toBe('exclude_current_period_until_closed');
       expect(snapshot?.incomes?.[0]?.average_records).toEqual([{ year: 2024, month: null, amount: 12000, date: '2024-04-15' }]);
       expect(snapshot?.expenses?.[0]?.value_type).toBe('monthly_averaged');
+      expect(snapshot?.expenses?.[0]?.current_period_handling).toBe('include_current_period');
       expect(snapshot?.expenses?.[0]?.average_records).toEqual([{ year: 2026, month: 2, amount: 950, date: '2026-02-11' }]);
     } finally {
       unmount(root, container);

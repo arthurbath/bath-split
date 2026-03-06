@@ -192,7 +192,7 @@ export function HouseholdManagementPanel({
           <CardTitle>Household</CardTitle>
           <CardDescription className="flex items-center gap-1.5">
             <span>People who currently have access to this {moduleName} household.</span>
-            <TooltipProvider delayDuration={150}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button

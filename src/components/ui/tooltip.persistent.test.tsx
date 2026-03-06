@@ -1,8 +1,8 @@
 import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { describe, expect, it } from 'vitest';
-import { PersistentTooltipText, TooltipProvider } from '@/components/ui/tooltip';
+import { describe, expect, it, vi } from 'vitest';
+import { PersistentTooltipText, TOOLTIP_HOVER_DELAY_MS, TooltipProvider } from '@/components/ui/tooltip';
 
 function mount(ui: React.ReactElement) {
   const container = document.createElement('div');
@@ -37,6 +37,7 @@ async function flushUi() {
 
 describe('PersistentTooltipText', () => {
   it('opens on hover and closes on mouse leave', async () => {
+    vi.useFakeTimers();
     const { container, root } = mount(
       <TooltipProvider>
         <PersistentTooltipText content="Help text">Monthly Settlement</PersistentTooltipText>
@@ -51,6 +52,18 @@ describe('PersistentTooltipText', () => {
         trigger?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       });
       await flushUi();
+      expect(tooltipText()).toBe('');
+
+      act(() => {
+        vi.advanceTimersByTime(TOOLTIP_HOVER_DELAY_MS - 1);
+      });
+      await flushUi();
+      expect(tooltipText()).toBe('');
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      await flushUi();
       expect(tooltipText()).toContain('Help text');
 
       act(() => {
@@ -60,6 +73,7 @@ describe('PersistentTooltipText', () => {
       expect(tooltipText()).toBe('');
     } finally {
       unmount(root, container);
+      vi.useRealTimers();
     }
   });
 
@@ -99,6 +113,7 @@ describe('PersistentTooltipText', () => {
   });
 
   it('applies viewport-aware width clamping to tooltip content', async () => {
+    vi.useFakeTimers();
     const { container, root } = mount(
       <TooltipProvider>
         <PersistentTooltipText content="A somewhat longer help message">Monthly Settlement</PersistentTooltipText>
@@ -111,6 +126,9 @@ describe('PersistentTooltipText', () => {
       act(() => {
         trigger?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       });
+      act(() => {
+        vi.advanceTimersByTime(TOOLTIP_HOVER_DELAY_MS);
+      });
       await flushUi();
       const tooltipContent = tooltipContentElement();
       expect(tooltipContent).toBeTruthy();
@@ -118,6 +136,7 @@ describe('PersistentTooltipText', () => {
       expect(tooltipContent?.style.maxWidth).toContain('1rem');
     } finally {
       unmount(root, container);
+      vi.useRealTimers();
     }
   });
 });

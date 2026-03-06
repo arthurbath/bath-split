@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { BudgetAverageRecord } from '@/lib/budgetAveraging';
 
 function mount(ui: React.ReactElement) {
@@ -10,7 +11,11 @@ function mount(ui: React.ReactElement) {
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
-    root.render(ui);
+    root.render(
+      <TooltipProvider>
+        {ui}
+      </TooltipProvider>,
+    );
   });
   return { container, root };
 }
@@ -291,6 +296,60 @@ describe('AverageRecordsEditor', () => {
     try {
       const amountInput = container.querySelector('input[type="number"]') as HTMLInputElement | null;
       expect(amountInput?.value).toBe('');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('shows exclusion summary text when current-period records are skipped', () => {
+    const { container, root } = mount(
+      <AverageRecordsEditor
+        valueType="monthly_averaged"
+        records={[
+          { year: 2026, month: 2, amount: 900, date: '2026-02-11' },
+          { year: 2026, month: 3, amount: 1000, date: '2026-03-02' },
+        ]}
+        currentPeriodHandling="exclude_current_period_until_closed"
+        onCurrentPeriodHandlingChange={() => {}}
+        currentDate={new Date('2026-03-20T12:00:00-08:00')}
+        onChange={() => {}}
+      />,
+    );
+
+    try {
+      expect(container.textContent).toContain("Don't count records from the current month in average");
+      expect(container.textContent).toContain('Monthly average:');
+      expect(container.textContent).toContain('$900.00');
+      expect(container.textContent).toContain('from 1 included month');
+      expect(container.textContent).not.toContain('Current month excluded');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('shows the current-period tooltip from the checkbox label', async () => {
+    const { container, root } = mount(
+      <AverageRecordsEditor
+        valueType="yearly_averaged"
+        records={[{ year: 2025, month: null, amount: 12000, date: '2025-04-15' }]}
+        currentPeriodHandling="include_current_period"
+        onCurrentPeriodHandlingChange={() => {}}
+        onChange={() => {}}
+      />,
+    );
+
+    try {
+      const tooltipTrigger = Array.from(container.querySelectorAll('[role="button"]'))
+        .find((element) => element.textContent?.includes("Don't count records from the current year in average")) as HTMLElement | undefined;
+      expect(tooltipTrigger).toBeTruthy();
+
+      act(() => {
+        tooltipTrigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushUi();
+
+      expect(document.body.textContent).toContain('If you plan to track multiple records per year');
+      expect(document.body.textContent).toContain('Excluding the records from the in-progress year prevents that deflation.');
     } finally {
       unmount(root, container);
     }

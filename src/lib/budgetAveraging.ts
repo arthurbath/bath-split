@@ -1,6 +1,9 @@
 import type { FrequencyType } from '@/types/fairshare';
 
 export type BudgetValueType = 'simple' | 'monthly_averaged' | 'yearly_averaged';
+export type BudgetCurrentPeriodHandling = 'include_current_period' | 'exclude_current_period_until_closed';
+
+export const DEFAULT_CURRENT_PERIOD_HANDLING: BudgetCurrentPeriodHandling = 'include_current_period';
 
 export interface BudgetAverageRecord {
   year: number;
@@ -10,6 +13,10 @@ export interface BudgetAverageRecord {
 }
 
 const VALUE_TYPES: BudgetValueType[] = ['simple', 'monthly_averaged', 'yearly_averaged'];
+const CURRENT_PERIOD_HANDLING_VALUES: BudgetCurrentPeriodHandling[] = [
+  'include_current_period',
+  'exclude_current_period_until_closed',
+];
 
 export function isBudgetValueType(value: unknown): value is BudgetValueType {
   return typeof value === 'string' && VALUE_TYPES.includes(value as BudgetValueType);
@@ -17,6 +24,14 @@ export function isBudgetValueType(value: unknown): value is BudgetValueType {
 
 export function normalizeBudgetValueType(value: unknown): BudgetValueType {
   return isBudgetValueType(value) ? value : 'simple';
+}
+
+export function isBudgetCurrentPeriodHandling(value: unknown): value is BudgetCurrentPeriodHandling {
+  return typeof value === 'string' && CURRENT_PERIOD_HANDLING_VALUES.includes(value as BudgetCurrentPeriodHandling);
+}
+
+export function normalizeCurrentPeriodHandling(value: unknown): BudgetCurrentPeriodHandling {
+  return isBudgetCurrentPeriodHandling(value) ? value : DEFAULT_CURRENT_PERIOD_HANDLING;
 }
 
 function normalizeYear(raw: unknown): number | null {
@@ -108,37 +123,115 @@ export function normalizeAverageRecords(
   return normalized;
 }
 
-export function calculateMonthlyAveragedAmount(records: BudgetAverageRecord[]): number {
-  const totalsByMonth = new Map<string, number>();
-  for (const record of records) {
-    if (record.month == null) continue;
-    const key = `${record.year}-${String(record.month).padStart(2, '0')}`;
-    totalsByMonth.set(key, (totalsByMonth.get(key) ?? 0) + record.amount);
+function getRecordDateForValueType(
+  record: BudgetAverageRecord,
+  valueType: Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>,
+): Date {
+  const normalizedDate = normalizeDate(record.date);
+  if (normalizedDate) {
+    return new Date(`${normalizedDate}T00:00:00`);
   }
-  if (totalsByMonth.size === 0) return 0;
-
-  const total = Array.from(totalsByMonth.values()).reduce((sum, value) => sum + value, 0);
-  return total / totalsByMonth.size;
+  return new Date(record.year, valueType === 'monthly_averaged' ? ((record.month ?? 1) - 1) : 0, 1);
 }
 
-export function calculateYearlyAveragedAmount(records: BudgetAverageRecord[]): number {
+function isRecordInCurrentPeriod(
+  record: BudgetAverageRecord,
+  valueType: Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>,
+  currentDate: Date,
+): boolean {
+  const recordDate = getRecordDateForValueType(record, valueType);
+  if (valueType === 'monthly_averaged') {
+    return (
+      recordDate.getFullYear() === currentDate.getFullYear()
+      && recordDate.getMonth() === currentDate.getMonth()
+    );
+  }
+
+  return recordDate.getFullYear() === currentDate.getFullYear();
+}
+
+export function filterAverageRecordsForCalculation(
+  valueType: BudgetValueType,
+  records: BudgetAverageRecord[],
+  currentPeriodHandling: BudgetCurrentPeriodHandling = DEFAULT_CURRENT_PERIOD_HANDLING,
+  currentDate: Date = new Date(),
+): BudgetAverageRecord[] {
+  if (
+    valueType === 'simple'
+    || currentPeriodHandling !== 'exclude_current_period_until_closed'
+  ) {
+    return records;
+  }
+
+  return records.filter((record) => !isRecordInCurrentPeriod(record, valueType, currentDate));
+}
+
+function summarizeAverageTotals(
+  valueType: Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>,
+  records: BudgetAverageRecord[],
+): { amount: number; includedPeriodCount: number } {
+  if (valueType === 'monthly_averaged') {
+    const totalsByMonth = new Map<string, number>();
+    for (const record of records) {
+      if (record.month == null) continue;
+      const key = `${record.year}-${String(record.month).padStart(2, '0')}`;
+      totalsByMonth.set(key, (totalsByMonth.get(key) ?? 0) + record.amount);
+    }
+    if (totalsByMonth.size === 0) return { amount: 0, includedPeriodCount: 0 };
+
+    const total = Array.from(totalsByMonth.values()).reduce((sum, value) => sum + value, 0);
+    return { amount: total / totalsByMonth.size, includedPeriodCount: totalsByMonth.size };
+  }
+
   const totalsByYear = new Map<number, number>();
   for (const record of records) {
     totalsByYear.set(record.year, (totalsByYear.get(record.year) ?? 0) + record.amount);
   }
-  if (totalsByYear.size === 0) return 0;
+  if (totalsByYear.size === 0) return { amount: 0, includedPeriodCount: 0 };
 
   const total = Array.from(totalsByYear.values()).reduce((sum, value) => sum + value, 0);
-  return total / totalsByYear.size;
+  return { amount: total / totalsByYear.size, includedPeriodCount: totalsByYear.size };
+}
+
+export function getAverageCalculationDetails(
+  valueType: BudgetValueType,
+  records: BudgetAverageRecord[],
+  currentPeriodHandling: BudgetCurrentPeriodHandling = DEFAULT_CURRENT_PERIOD_HANDLING,
+  currentDate: Date = new Date(),
+): {
+  amount: number;
+  includedPeriodCount: number;
+  excludedCurrentPeriodRecordCount: number;
+} {
+  if (valueType === 'simple') {
+    return { amount: 0, includedPeriodCount: 0, excludedCurrentPeriodRecordCount: 0 };
+  }
+
+  const includedRecords = filterAverageRecordsForCalculation(valueType, records, currentPeriodHandling, currentDate);
+  const excludedCurrentPeriodRecordCount = records.length - includedRecords.length;
+  const summary = summarizeAverageTotals(valueType, includedRecords);
+  return {
+    amount: summary.amount,
+    includedPeriodCount: summary.includedPeriodCount,
+    excludedCurrentPeriodRecordCount,
+  };
+}
+
+export function calculateMonthlyAveragedAmount(records: BudgetAverageRecord[]): number {
+  return summarizeAverageTotals('monthly_averaged', records).amount;
+}
+
+export function calculateYearlyAveragedAmount(records: BudgetAverageRecord[]): number {
+  return summarizeAverageTotals('yearly_averaged', records).amount;
 }
 
 export function calculateAmountFromAverageRecords(
   valueType: BudgetValueType,
   records: BudgetAverageRecord[],
+  currentPeriodHandling: BudgetCurrentPeriodHandling = DEFAULT_CURRENT_PERIOD_HANDLING,
+  currentDate: Date = new Date(),
 ): number {
-  if (valueType === 'monthly_averaged') return calculateMonthlyAveragedAmount(records);
-  if (valueType === 'yearly_averaged') return calculateYearlyAveragedAmount(records);
-  return 0;
+  return getAverageCalculationDetails(valueType, records, currentPeriodHandling, currentDate).amount;
 }
 
 export function getAveragedFrequencyLabel(valueType: BudgetValueType): string {
@@ -205,6 +298,7 @@ export function enforceExpenseTypeInvariants(
     frequency_type: string;
     frequency_param: number | null;
     is_estimate: boolean;
+    current_period_handling: BudgetCurrentPeriodHandling;
     average_records: BudgetAverageRecord[];
   },
 ): {
@@ -212,6 +306,7 @@ export function enforceExpenseTypeInvariants(
   frequency_type: FrequencyType;
   frequency_param: number | null;
   is_estimate: boolean;
+  current_period_handling: BudgetCurrentPeriodHandling;
   value_type: BudgetValueType;
   average_records: BudgetAverageRecord[];
 } {
@@ -219,17 +314,21 @@ export function enforceExpenseTypeInvariants(
     return {
       ...input,
       frequency_type: input.frequency_type as FrequencyType,
+      current_period_handling: DEFAULT_CURRENT_PERIOD_HANDLING,
       value_type: valueType,
       average_records: [],
     };
   }
 
-  const amount = calculateAmountFromAverageRecords(valueType, input.average_records);
+  const currentPeriodHandling = normalizeCurrentPeriodHandling(input.current_period_handling);
+  const averageRecords = normalizeAverageRecords(input.average_records, valueType);
+  const amount = calculateAmountFromAverageRecords(valueType, averageRecords, currentPeriodHandling);
   return {
     ...input,
     value_type: valueType,
     amount,
-    average_records: normalizeAverageRecords(input.average_records, valueType),
+    average_records: averageRecords,
+    current_period_handling: currentPeriodHandling,
     frequency_type: (valueType === 'monthly_averaged' ? 'monthly' : 'annual') as FrequencyType,
     frequency_param: null,
     is_estimate: true,
@@ -243,6 +342,7 @@ export function enforceIncomeTypeInvariants(
     frequency_type: string;
     frequency_param: number | null;
     is_estimate: boolean;
+    current_period_handling: BudgetCurrentPeriodHandling;
     average_records: BudgetAverageRecord[];
   },
 ): {
@@ -250,6 +350,7 @@ export function enforceIncomeTypeInvariants(
   frequency_type: FrequencyType;
   frequency_param: number | null;
   is_estimate: boolean;
+  current_period_handling: BudgetCurrentPeriodHandling;
   value_type: BudgetValueType;
   average_records: BudgetAverageRecord[];
 } {
@@ -257,17 +358,21 @@ export function enforceIncomeTypeInvariants(
     return {
       ...input,
       frequency_type: input.frequency_type as FrequencyType,
+      current_period_handling: DEFAULT_CURRENT_PERIOD_HANDLING,
       value_type: valueType,
       average_records: [],
     };
   }
 
-  const amount = calculateAmountFromAverageRecords(valueType, input.average_records);
+  const currentPeriodHandling = normalizeCurrentPeriodHandling(input.current_period_handling);
+  const averageRecords = normalizeAverageRecords(input.average_records, valueType);
+  const amount = calculateAmountFromAverageRecords(valueType, averageRecords, currentPeriodHandling);
   return {
     ...input,
     value_type: valueType,
     amount,
-    average_records: normalizeAverageRecords(input.average_records, valueType),
+    average_records: averageRecords,
+    current_period_handling: currentPeriodHandling,
     frequency_type: (valueType === 'monthly_averaged' ? 'monthly' : 'annual') as FrequencyType,
     frequency_param: null,
     is_estimate: true,

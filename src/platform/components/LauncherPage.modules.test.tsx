@@ -2,6 +2,7 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import LauncherPage from '@/platform/components/LauncherPage';
 
 const mockNavigate = vi.fn();
@@ -38,7 +39,11 @@ function renderLauncher() {
   const root = createRoot(container);
 
   act(() => {
-    root.render(<LauncherPage />);
+    root.render(
+      <MemoryRouter initialEntries={['/']}>
+        <LauncherPage />
+      </MemoryRouter>,
+    );
   });
 
   return { container, root };
