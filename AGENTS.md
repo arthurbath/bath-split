@@ -46,6 +46,14 @@ Split shared expenses fairly between two partners. Combines per-expense benefit 
 - **Adding a module**: See `docs/agents/MODULE_GUIDE.md` for the full checklist (namespace, tables, files, routes, launcher registration).
 - **Testing**: Run existing tests before submitting changes. Write tests for new logic when practical.
 
+### Common Local Commands
+
+- `npm run dev` — Start the Vite dev server. Browser console logs/errors are mirrored to the terminal in local dev.
+- `npm run test` — Run the full Vitest suite once.
+- `npm run test:watch` — Run Vitest in watch mode during iterative work.
+- `npm run lint` — Run ESLint across the repo.
+- `npm run build` — Produce a production build with Vite.
+
 ## File References
 
 - `docs/agents/ARCHITECTURE.md` — detailed architecture
