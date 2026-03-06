@@ -165,6 +165,8 @@ describe('HouseholdManagementPanel', () => {
       expect(confirmButton).toBeTruthy();
       expect(emailInput).toBeTruthy();
       expect(confirmButton.disabled).toBe(true);
+      expect(emailInput.inputMode).toBe('email');
+      expect(emailInput.autocomplete).toBe('off');
 
       await act(async () => {
         setInputValue(emailInput, 'wrong@example.com');

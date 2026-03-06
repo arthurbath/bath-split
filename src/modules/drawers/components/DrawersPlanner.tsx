@@ -855,6 +855,7 @@ export function DrawersPlanner({
                   <Input
                     id="unitWidth"
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     max={6}
                     value={unitWidthDraft}
@@ -867,6 +868,7 @@ export function DrawersPlanner({
                   <Input
                     id="unitHeight"
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     max={6}
                     value={unitHeightDraft}

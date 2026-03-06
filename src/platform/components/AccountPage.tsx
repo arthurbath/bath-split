@@ -299,6 +299,11 @@ export default function AccountPage() {
                       value={deleteConfirmText}
                       onChange={e => setDeleteConfirmText(e.target.value)}
                       placeholder={userEmail}
+                      inputMode="email"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                     />
                   </AlertDialogBody>
                   <AlertDialogFooter>

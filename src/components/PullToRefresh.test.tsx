@@ -75,11 +75,41 @@ describe('PullToRefresh', () => {
           touches: [{ clientY: 250 } as Touch],
         }));
       });
+
+      expect(container.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('83');
+
       act(() => {
         wrapper.dispatchEvent(new TouchEvent('touchend', { bubbles: true }));
       });
 
       expect(onRefresh).not.toHaveBeenCalled();
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('fills the ring to 100% once the refresh threshold is reached', () => {
+    const { container, root } = mount(
+      <PullToRefresh onRefresh={() => {}}>
+        <div>Content</div>
+      </PullToRefresh>,
+    );
+
+    try {
+      const wrapper = container.firstElementChild as HTMLElement;
+
+      act(() => {
+        wrapper.dispatchEvent(new TouchEvent('touchstart', {
+          bubbles: true,
+          touches: [{ clientY: 0 } as Touch],
+        }));
+        wrapper.dispatchEvent(new TouchEvent('touchmove', {
+          bubbles: true,
+          touches: [{ clientY: PULL_TO_REFRESH_TRIGGER_DISTANCE / 0.4 } as Touch],
+        }));
+      });
+
+      expect(container.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('100');
     } finally {
       unmount(root, container);
     }

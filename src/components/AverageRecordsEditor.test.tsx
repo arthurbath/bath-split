@@ -98,6 +98,24 @@ describe('AverageRecordsEditor', () => {
     }
   });
 
+  it('uses a decimal keyboard hint for amount inputs', () => {
+    const { container, root } = mount(
+      <AverageRecordsEditor
+        valueType="monthly_averaged"
+        records={[{ year: 2026, month: 3, amount: 100, date: '2026-03-02' }]}
+        onChange={() => {}}
+      />,
+    );
+
+    try {
+      const amountInput = container.querySelector('input[type="number"]') as HTMLInputElement | null;
+      expect(amountInput).toBeTruthy();
+      expect(amountInput?.inputMode).toBe('decimal');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
   it('clears the final monthly record to todays date, keeps amount input blank, and refocuses primary input', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-02T12:00:00-08:00'));

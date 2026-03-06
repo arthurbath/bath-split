@@ -94,6 +94,58 @@ function mockElementRect(element: Element, rect: DOMRect) {
 }
 
 describe('GarageServicesGrid focus scrolling', () => {
+  it('uses decimal keyboard hints for cadence inputs in the add-service dialog', async () => {
+    const services: GarageService[] = [];
+
+    const { container, root } = mount(
+      <GarageServicesGrid
+        userId=""
+        services={services}
+        servicings={[]}
+        loading={false}
+        vehicleName="Test Car"
+        onAddService={async () => ({
+          id: 'service-1',
+          user_id: 'user-1',
+          vehicle_id: 'vehicle-1',
+          name: 'Oil Change',
+          type: 'replacement',
+          monitoring: true,
+          cadence_type: 'recurring',
+          every_miles: 5000,
+          every_months: 6,
+          sort_order: 0,
+          notes: null,
+          created_at: '2026-01-01T00:00:00.000Z',
+          updated_at: '2026-01-01T00:00:00.000Z',
+        })}
+        onUpdateService={async () => {}}
+        onDeleteService={async () => {}}
+      />,
+    );
+
+    try {
+      const addButton = document.body.querySelector('button[aria-label="Add service"]') as HTMLButtonElement | null;
+      expect(addButton).toBeTruthy();
+
+      await act(async () => {
+        addButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      await waitForCondition(() => {
+        expect(document.body.querySelector('[role="dialog"]')).toBeTruthy();
+      });
+
+      const milesInput = document.body.querySelector('#garage-service-miles') as HTMLInputElement | null;
+      const monthsInput = document.body.querySelector('#garage-service-months') as HTMLInputElement | null;
+
+      expect(milesInput?.inputMode).toBe('decimal');
+      expect(monthsInput?.inputMode).toBe('decimal');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
   it('keeps a focused notes cell fully visible in full-view grouped mode', async () => {
     localStorage.setItem('garage_services_groupBy', 'type');
     localStorage.setItem('garage_services_cadenceFilter', 'all');

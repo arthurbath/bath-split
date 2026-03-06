@@ -638,11 +638,11 @@ export function GarageServicesGrid({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="garage-service-miles">Every (Miles)</Label>
-                <Input id="garage-service-miles" type="number" value={addMiles} onChange={(event) => setAddMiles(event.target.value)} placeholder="10,000" />
+                <Input id="garage-service-miles" type="number" inputMode="decimal" value={addMiles} onChange={(event) => setAddMiles(event.target.value)} placeholder="10,000" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-service-months">Every (Months)</Label>
-                <Input id="garage-service-months" type="number" value={addMonths} onChange={(event) => setAddMonths(event.target.value)} placeholder="12" />
+                <Input id="garage-service-months" type="number" inputMode="decimal" value={addMonths} onChange={(event) => setAddMonths(event.target.value)} placeholder="12" />
               </div>
             </div>
             <div className="space-y-2">

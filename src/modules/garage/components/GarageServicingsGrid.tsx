@@ -345,6 +345,7 @@ export function GarageServicingsGrid({
   const servicePickerItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const servicePickerAddNewRef = useRef<HTMLButtonElement | null>(null);
   const serviceOutcomeAddButtonRef = useRef<HTMLButtonElement | null>(null);
+  const serviceDateButtonRef = useRef<HTMLButtonElement | null>(null);
   const shopInputRef = useRef<HTMLInputElement | null>(null);
   const shopSuggestionItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const notesInputRef = useRef<HTMLInputElement | null>(null);
@@ -579,6 +580,13 @@ export function GarageServicingsGrid({
     }));
   }, []);
 
+  const removeReceiptFile = useCallback((index: number) => {
+    setFormState((prev) => ({
+      ...prev,
+      newFiles: prev.newFiles.filter((_, fileIndex) => fileIndex !== index),
+    }));
+  }, []);
+
   useEffect(() => {
     if (!servicePickerOpen) return;
     const frame = window.requestAnimationFrame(() => {
@@ -611,7 +619,7 @@ export function GarageServicingsGrid({
     if (!dialogOpen) return;
     if (formState.id) return;
     const frame = window.requestAnimationFrame(() => {
-      notesInputRef.current?.focus();
+      serviceDateButtonRef.current?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
   }, [dialogOpen, formState.id]);
@@ -891,6 +899,7 @@ export function GarageServicingsGrid({
                 >
                   <PopoverTrigger asChild>
                     <Button
+                      ref={serviceDateButtonRef}
                       id="garage-servicing-date"
                       type="button"
                       variant="outline"
@@ -912,7 +921,11 @@ export function GarageServicingsGrid({
                       month={serviceDatePickerMonth}
                       onMonthChange={setServiceDatePickerMonth}
                       onSelect={(date) => {
-                        setFormState((prev) => ({ ...prev, service_date: date ? toDateInputValue(date) : '' }));
+                        if (!date) {
+                          setServiceDatePickerOpen(false);
+                          return;
+                        }
+                        setFormState((prev) => ({ ...prev, service_date: toDateInputValue(date) }));
                         setServiceDatePickerOpen(false);
                       }}
                       initialFocus
@@ -922,7 +935,7 @@ export function GarageServicingsGrid({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-servicing-mileage">Mileage</Label>
-                <Input id="garage-servicing-mileage" type="number" value={formState.odometer_miles} onChange={(event) => setFormState((prev) => ({ ...prev, odometer_miles: event.target.value }))} />
+                <Input id="garage-servicing-mileage" type="number" inputMode="decimal" value={formState.odometer_miles} onChange={(event) => setFormState((prev) => ({ ...prev, odometer_miles: event.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="garage-servicing-shop">Shop</Label>
@@ -951,12 +964,6 @@ export function GarageServicingsGrid({
                       setShopSuggestionsOpen(true);
                     }}
                     onKeyDown={(event) => {
-                      if (event.key === 'Tab' && !event.shiftKey) {
-                        event.preventDefault();
-                        setShopSuggestionsOpen(false);
-                        notesInputRef.current?.focus();
-                        return;
-                      }
                       if (event.key !== 'ArrowDown') return;
                       if (!shopSuggestionsVisible) return;
                       event.preventDefault();
@@ -1019,11 +1026,6 @@ export function GarageServicingsGrid({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="garage-servicing-notes">Notes</Label>
-              <Input ref={notesInputRef} id="garage-servicing-notes" value={formState.notes} onChange={(event) => setFormState((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional" />
-            </div>
-
-            <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <Label>Service Outcomes</Label>
                 <Popover
@@ -1049,12 +1051,16 @@ export function GarageServicingsGrid({
                   <PopoverContent
                     className="w-[min(480px,calc(100vw-2rem))] p-0"
                     align="end"
-                    onOpenAutoFocus={(event) => event.preventDefault()}
+                    onOpenAutoFocus={(event) => {
+                      event.preventDefault();
+                      servicePickerSearchRef.current?.focus({ preventScroll: true });
+                    }}
                   >
                     <div className="max-h-72 overflow-y-auto">
                       <div className="sticky top-0 z-10 rounded-tl-md rounded-tr-md border-b bg-popover p-2">
                         <Input
                           ref={servicePickerSearchRef}
+                          autoFocus
                           value={servicePickerQuery}
                           onChange={(event) => setServicePickerQuery(event.target.value)}
                           placeholder="Type to find a service..."
@@ -1299,10 +1305,35 @@ export function GarageServicingsGrid({
                 }}
               />
               {formState.newFiles.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {formState.newFiles.length} new file{formState.newFiles.length === 1 ? '' : 's'} pending upload
-                </p>
+                <div className="space-y-2">
+                  {formState.newFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${file.lastModified}-${file.size}-${index}`}
+                      className="flex items-center justify-between rounded-md border px-3 py-2"
+                    >
+                      <div className="inline-flex min-w-0 items-center gap-2 text-sm">
+                        <FileText className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{file.name}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline-destructive"
+                        className="h-7 w-7 p-0"
+                        onClick={() => removeReceiptFile(index)}
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="garage-servicing-notes">Notes</Label>
+              <Input ref={notesInputRef} id="garage-servicing-notes" value={formState.notes} onChange={(event) => setFormState((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional" />
             </div>
           </DialogBody>
 
