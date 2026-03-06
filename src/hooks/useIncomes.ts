@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database, Json } from '@/integrations/supabase/types';
 import type { FrequencyType } from '@/types/fairshare';
 import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
@@ -29,6 +30,9 @@ export interface Income {
   average_records: BudgetAverageRecord[];
 }
 
+type BudgetIncomeInsert = Database['public']['Tables']['budget_income_streams']['Insert'];
+type BudgetIncomeUpdate = Database['public']['Tables']['budget_income_streams']['Update'];
+
 function sortByCreatedAt(rows: Income[]): Income[] {
   return [...rows].sort((a, b) => {
     const aCreated = (a as unknown as { created_at?: string }).created_at ?? '';
@@ -56,6 +60,13 @@ function normalizeIncomeRow(raw: unknown): Income {
     value_type: valueType,
     current_period_handling: currentPeriodHandling,
     average_records: averageRecords,
+  };
+}
+
+function toIncomeUpdateRow(updates: Partial<Omit<Income, 'id' | 'household_id'>>): BudgetIncomeUpdate {
+  return {
+    ...updates,
+    average_records: updates.average_records == null ? undefined : updates.average_records as unknown as Json,
   };
 }
 
@@ -96,15 +107,16 @@ export function useIncomes(householdId: string) {
     setPending(id, true);
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'incomes.add' }, async () => {
+        const insertRow: BudgetIncomeInsert = {
+          id,
+          household_id: householdId,
+          ...income,
+          average_records: income.average_records as unknown as Json,
+        };
         const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_income_streams')
-            .insert({
-              id,
-              household_id: householdId,
-              ...income,
-              average_records: income.average_records as unknown as import('@/integrations/supabase/types').Json,
-            } as any)
+            .insert(insertRow)
             .select('*')
             .single(),
         );
@@ -124,22 +136,35 @@ export function useIncomes(householdId: string) {
     if (pendingById[id]) return;
 
     let previousIncome: Income | null = null;
-    setPending(id, true);
-    queryClient.setQueryData<Income[]>(queryKey, (current) => {
-      const next = (current ?? []).map((income) => {
-        if (income.id !== id) return income;
-        previousIncome = income;
-        return normalizeIncomeRow({ ...income, ...updates });
+    let optimisticUpdateApplied = false;
+    let optimisticUpdateTimer: number | null = null;
+    const applyOptimisticUpdate = () => {
+      if (optimisticUpdateApplied) return;
+      optimisticUpdateApplied = true;
+      queryClient.setQueryData<Income[]>(queryKey, (current) => {
+        const next = (current ?? []).map((income) => {
+          if (income.id !== id) return income;
+          previousIncome = income;
+          return normalizeIncomeRow({ ...income, ...updates });
+        });
+        return sortByCreatedAt(next);
       });
-      return sortByCreatedAt(next);
-    });
+    };
+
+    setPending(id, true);
+    // Let the pending state render before the full optimistic grid recompute.
+    optimisticUpdateTimer = window.setTimeout(() => {
+      optimisticUpdateTimer = null;
+      applyOptimisticUpdate();
+    }, 0);
 
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'incomes.update' }, async () => {
+        const updateRow = toIncomeUpdateRow(updates);
         const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_income_streams')
-            .update(updates as any)
+            .update(updateRow)
             .eq('id', id)
             .select('*')
             .single(),
@@ -147,11 +172,21 @@ export function useIncomes(householdId: string) {
         return normalizeIncomeRow(row);
       });
 
+      if (optimisticUpdateTimer != null) {
+        window.clearTimeout(optimisticUpdateTimer);
+        optimisticUpdateTimer = null;
+      }
+
       queryClient.setQueryData<Income[]>(queryKey, (current) =>
         sortByCreatedAt((current ?? []).map((income) => (income.id === id ? saved : income))),
       );
     } catch (error: unknown) {
-      if (previousIncome) {
+      if (optimisticUpdateTimer != null) {
+        window.clearTimeout(optimisticUpdateTimer);
+        optimisticUpdateTimer = null;
+      }
+
+      if (optimisticUpdateApplied && previousIncome) {
         queryClient.setQueryData<Income[]>(queryKey, (current) =>
           sortByCreatedAt((current ?? []).map((income) => (income.id === id ? previousIncome : income))),
         );

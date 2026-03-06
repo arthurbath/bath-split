@@ -8,14 +8,23 @@ import { fromMonthly } from '@/lib/frequency';
 import type { Expense } from '@/hooks/useExpenses';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
 
+if (typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.scrollIntoView !== 'function') {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: () => {},
+  });
+}
+
 function renderExpensesTab({
   expenses,
   linkedAccounts = [],
   filterPayer = 'all',
+  onUpdate = async () => {},
 }: {
   expenses: Expense[];
   linkedAccounts?: LinkedAccount[];
   filterPayer?: 'all' | 'X' | 'Y' | 'unassigned';
+  onUpdate?: (id: string, updates: Partial<Omit<Expense, 'id' | 'household_id'>>) => Promise<void>;
 }) {
   localStorage.setItem('expenses_filterPayer', filterPayer);
 
@@ -34,7 +43,7 @@ function renderExpensesTab({
           partnerX="Partner X"
           partnerY="Partner Y"
           onAdd={async () => {}}
-          onUpdate={async () => {}}
+          onUpdate={onUpdate}
           onRemove={async () => {}}
           onAddCategory={async () => {}}
           onAddLinkedAccount={async () => {}}
@@ -60,6 +69,49 @@ function tooltipText() {
 async function flushUi() {
   await act(async () => {
     await Promise.resolve();
+  });
+}
+
+async function waitForCondition(assertion: () => void, timeoutMs = 300) {
+  const start = Date.now();
+  let lastError: unknown;
+  while (Date.now() - start <= timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+    }
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 16));
+    });
+  }
+  throw lastError instanceof Error ? lastError : new Error('Condition not met before timeout');
+}
+
+async function startEditing(input: HTMLInputElement) {
+  await act(async () => {
+    input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    input.focus();
+  });
+  await waitForCondition(() => {
+    expect(input.getAttribute('data-grid-editing')).toBe('true');
+  });
+}
+
+async function dispatchInputChange(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(input, 'value')?.set;
+  const prototypeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set;
+  const setValue = prototypeSetter && valueSetter !== prototypeSetter ? prototypeSetter : valueSetter;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function dispatchEnter(input: HTMLInputElement) {
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   });
 }
 
@@ -190,6 +242,48 @@ describe('ExpensesTab empty message', () => {
         amountButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
       expect(document.body.textContent).toContain('Edit Monthly Records');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('rolls back the edited name when an async expense save fails', async () => {
+    const expense: Expense = {
+      id: 'expense-1',
+      name: 'Rent',
+      amount: 1200,
+      frequency_type: 'monthly',
+      frequency_param: null,
+      benefit_x: 50,
+      category_id: null,
+      household_id: 'household-1',
+      is_estimate: false,
+      budget_id: null,
+      linked_account_id: null,
+      value_type: 'simple',
+      average_records: [],
+    };
+
+    const onUpdate = vi.fn(async () => {
+      throw new Error('Save failed');
+    });
+
+    const { container, root } = renderExpensesTab({ expenses: [expense], onUpdate });
+    try {
+      const input = container.querySelector<HTMLInputElement>('input[data-row-id="expense-1"][data-col="0"]');
+      expect(input).toBeTruthy();
+      expect(input?.value).toBe('Rent');
+
+      await startEditing(input!);
+      await dispatchInputChange(input!, 'Updated rent');
+      await dispatchEnter(input!);
+
+      await waitForCondition(() => {
+        const liveInput = container.querySelector<HTMLInputElement>('input[data-row-id="expense-1"][data-col="0"]');
+        expect(liveInput?.value).toBe('Rent');
+      });
+
+      expect(onUpdate).toHaveBeenCalledTimes(1);
     } finally {
       unmount(root, container);
     }

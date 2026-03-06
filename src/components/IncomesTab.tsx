@@ -18,7 +18,7 @@ import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
 import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-affix-input';
 import { Plus, Trash2, MoreHorizontal } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
+import { FREQUENCY_OPTIONS, toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
 import {
   DataGrid,
   GridEditableCell,
@@ -48,7 +48,6 @@ import {
 } from '@/lib/budgetAveraging';
 import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
 
-const FREQ_OPTIONS: FrequencyType[] = ['weekly', 'twice_monthly', 'monthly', 'annual', 'every_n_days', 'every_n_weeks', 'every_n_months', 'k_times_weekly', 'k_times_monthly', 'k_times_annually'];
 type NewIncomeDraft = Omit<Income, 'id' | 'household_id'>;
 type AveragedValueType = Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>;
 
@@ -144,7 +143,7 @@ function PartnerCell({
   value: string;
   partnerX: string;
   partnerY: string;
-  onChange: (v: string) => void;
+  onChange: (v: string) => void | Promise<unknown>;
   disabled?: boolean;
 }) {
   const ctx = useDataGrid();
@@ -185,7 +184,7 @@ function FrequencyCell({
   disabled = false,
 }: {
   income: Income;
-  onChange: (field: string, v: string) => void;
+  onChange: (field: string, v: string) => void | Promise<unknown>;
   disabled?: boolean;
 }) {
   const ctx = useDataGrid();
@@ -218,7 +217,7 @@ function FrequencyCell({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
+          {FREQUENCY_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
         </SelectContent>
       </Select>
       {needsParam(income.frequency_type) && (
@@ -460,8 +459,9 @@ export function IncomesTab({
     else if (field === 'amount') updates.amount = Number(value) || 0;
     else if (field === 'frequency_param') updates.frequency_param = value ? Number(value) : null;
     else updates[field] = value;
-    onUpdate(id, updates as Partial<Omit<Income, 'id' | 'household_id'>>).catch((error: unknown) => {
+    return onUpdate(id, updates as Partial<Omit<Income, 'id' | 'household_id'>>).catch((error: unknown) => {
       toast({ title: 'Error saving', description: getErrorMessage(error), variant: 'destructive' });
+      throw error;
     });
   };
 
@@ -838,7 +838,7 @@ export function IncomesTab({
                         >
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {FREQ_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
+                            {FREQUENCY_OPTIONS.map(f => <SelectItem key={f} value={f}>{frequencyLabels[f]}</SelectItem>)}
                           </SelectContent>
                         </Select>
                         {needsParam(newIncome.frequency_type) && (

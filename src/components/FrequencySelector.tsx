@@ -1,7 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { frequencyLabels, needsParam } from '@/lib/frequency';
+import { FREQUENCY_OPTIONS, frequencyLabels, needsParam } from '@/lib/frequency';
 import type { FrequencyType } from '@/types/fairshare';
 
 interface FrequencySelectorProps {
@@ -21,8 +21,8 @@ export function FrequencySelector({ type, param, onTypeChange, onParamChange }: 
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(frequencyLabels).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
+            {FREQUENCY_OPTIONS.map((frequencyType) => (
+              <SelectItem key={frequencyType} value={frequencyType}>{frequencyLabels[frequencyType]}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -30,7 +30,7 @@ export function FrequencySelector({ type, param, onTypeChange, onParamChange }: 
       {needsParam(type) && (
         <div className="w-20 space-y-1">
           <Label className="text-xs text-muted-foreground">
-            {type === 'every_n_weeks' ? 'N' : 'K'}
+            {type.startsWith('every_n_') ? 'N' : 'K'}
           </Label>
           <Input
             type="number"

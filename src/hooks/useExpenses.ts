@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database, Json } from '@/integrations/supabase/types';
 import type { FrequencyType } from '@/types/fairshare';
 import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { withMutationTiming } from '@/lib/mutationTiming';
@@ -32,6 +33,9 @@ export interface Expense {
   average_records: BudgetAverageRecord[];
 }
 
+type BudgetExpenseInsert = Database['public']['Tables']['budget_expenses']['Insert'];
+type BudgetExpenseUpdate = Database['public']['Tables']['budget_expenses']['Update'];
+
 function sortByCreatedAt(rows: Expense[]): Expense[] {
   return [...rows].sort((a, b) => {
     const aCreated = (a as unknown as { created_at?: string }).created_at ?? '';
@@ -62,6 +66,13 @@ function normalizeExpenseRow(raw: unknown): Expense {
     value_type: valueType,
     current_period_handling: currentPeriodHandling,
     average_records: averageRecords,
+  };
+}
+
+function toExpenseUpdateRow(updates: Partial<Omit<Expense, 'id' | 'household_id'>>): BudgetExpenseUpdate {
+  return {
+    ...updates,
+    average_records: updates.average_records == null ? undefined : updates.average_records as unknown as Json,
   };
 }
 
@@ -102,15 +113,16 @@ export function useExpenses(householdId: string) {
     setPending(id, true);
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'expenses.add' }, async () => {
+        const insertRow: BudgetExpenseInsert = {
+          id,
+          household_id: householdId,
+          ...expense,
+          average_records: expense.average_records as unknown as Json,
+        };
         const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_expenses')
-            .insert({
-              id,
-              household_id: householdId,
-              ...expense,
-              average_records: expense.average_records as unknown as import('@/integrations/supabase/types').Json,
-            } as any)
+            .insert(insertRow)
             .select('*')
             .single(),
         );
@@ -130,22 +142,35 @@ export function useExpenses(householdId: string) {
     if (pendingById[id]) return;
 
     let previousExpense: Expense | null = null;
-    setPending(id, true);
-    queryClient.setQueryData<Expense[]>(queryKey, (current) => {
-      const next = (current ?? []).map((expense) => {
-        if (expense.id !== id) return expense;
-        previousExpense = expense;
-        return normalizeExpenseRow({ ...expense, ...updates });
+    let optimisticUpdateApplied = false;
+    let optimisticUpdateTimer: number | null = null;
+    const applyOptimisticUpdate = () => {
+      if (optimisticUpdateApplied) return;
+      optimisticUpdateApplied = true;
+      queryClient.setQueryData<Expense[]>(queryKey, (current) => {
+        const next = (current ?? []).map((expense) => {
+          if (expense.id !== id) return expense;
+          previousExpense = expense;
+          return normalizeExpenseRow({ ...expense, ...updates });
+        });
+        return sortByCreatedAt(next);
       });
-      return sortByCreatedAt(next);
-    });
+    };
+
+    setPending(id, true);
+    // Let the pending state render before the full optimistic grid recompute.
+    optimisticUpdateTimer = window.setTimeout(() => {
+      optimisticUpdateTimer = null;
+      applyOptimisticUpdate();
+    }, 0);
 
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'expenses.update' }, async () => {
+        const updateRow = toExpenseUpdateRow(updates);
         const row = await supabaseRequest(async () =>
           await supabase
             .from('budget_expenses')
-            .update(updates as any)
+            .update(updateRow)
             .eq('id', id)
             .select('*')
             .single(),
@@ -153,11 +178,21 @@ export function useExpenses(householdId: string) {
         return normalizeExpenseRow(row);
       });
 
+      if (optimisticUpdateTimer != null) {
+        window.clearTimeout(optimisticUpdateTimer);
+        optimisticUpdateTimer = null;
+      }
+
       queryClient.setQueryData<Expense[]>(queryKey, (current) =>
         sortByCreatedAt((current ?? []).map((expense) => (expense.id === id ? saved : expense))),
       );
     } catch (error: unknown) {
-      if (previousExpense) {
+      if (optimisticUpdateTimer != null) {
+        window.clearTimeout(optimisticUpdateTimer);
+        optimisticUpdateTimer = null;
+      }
+
+      if (optimisticUpdateApplied && previousExpense) {
         queryClient.setQueryData<Expense[]>(queryKey, (current) =>
           sortByCreatedAt((current ?? []).map((expense) => (expense.id === id ? previousExpense : expense))),
         );

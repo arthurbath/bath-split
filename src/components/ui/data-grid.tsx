@@ -107,6 +107,110 @@ interface GridNavTarget {
   rowId: string | null;
 }
 
+interface StickyViewportInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+function rectsOverlap(startA: number, endA: number, startB: number, endB: number) {
+  return endA > startB && startA < endB;
+}
+
+function getStickyViewportInsets(container: HTMLElement, cell: HTMLElement, cellRect: DOMRect): StickyViewportInsets {
+  const containerRect = container.getBoundingClientRect();
+  let top = 0;
+  let right = 0;
+  let bottom = 0;
+  let left = 0;
+  const stickyRects: DOMRect[] = [];
+
+  for (const stickyElement of container.querySelectorAll<HTMLElement>('.sticky')) {
+    if (stickyElement === container || stickyElement.contains(cell)) continue;
+
+    const stickyRect = stickyElement.getBoundingClientRect();
+    if (stickyRect.width <= 0 || stickyRect.height <= 0) continue;
+    if (!rectsOverlap(stickyRect.left, stickyRect.right, containerRect.left, containerRect.right)) continue;
+    if (!rectsOverlap(stickyRect.top, stickyRect.bottom, containerRect.top, containerRect.bottom)) continue;
+    stickyRects.push(stickyRect);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const stickyRect of stickyRects) {
+      const overlapsCellHorizontally = rectsOverlap(stickyRect.left, stickyRect.right, cellRect.left, cellRect.right);
+      const overlapsCellVertically = rectsOverlap(stickyRect.top, stickyRect.bottom, cellRect.top, cellRect.bottom);
+      const spansCellHorizontally = stickyRect.left <= cellRect.left + 1 && stickyRect.right >= cellRect.right - 1;
+      const spansCellVertically = stickyRect.top <= cellRect.top + 1 && stickyRect.bottom >= cellRect.bottom - 1;
+
+      if (
+        overlapsCellHorizontally &&
+        spansCellHorizontally &&
+        stickyRect.top <= containerRect.top + top + 1 &&
+        stickyRect.bottom > containerRect.top + top
+      ) {
+        const nextTop = stickyRect.bottom - containerRect.top;
+        if (nextTop > top) {
+          top = nextTop;
+          changed = true;
+        }
+      }
+
+      if (
+        overlapsCellHorizontally &&
+        spansCellHorizontally &&
+        stickyRect.bottom >= containerRect.bottom - bottom - 1 &&
+        stickyRect.top < containerRect.bottom - bottom
+      ) {
+        const nextBottom = containerRect.bottom - stickyRect.top;
+        if (nextBottom > bottom) {
+          bottom = nextBottom;
+          changed = true;
+        }
+      }
+
+      if (
+        overlapsCellVertically &&
+        spansCellVertically &&
+        stickyRect.left <= containerRect.left + left + 1 &&
+        stickyRect.right > containerRect.left + left
+      ) {
+        const nextLeft = stickyRect.right - containerRect.left;
+        if (nextLeft > left) {
+          left = nextLeft;
+          changed = true;
+        }
+      }
+
+      if (
+        overlapsCellVertically &&
+        spansCellVertically &&
+        stickyRect.right >= containerRect.right - right - 1 &&
+        stickyRect.left < containerRect.right - right
+      ) {
+        const nextRight = containerRect.right - stickyRect.left;
+        if (nextRight > right) {
+          right = nextRight;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return { top, right, bottom, left };
+}
+
+function focusElementWithoutScroll(target: HTMLElement) {
+  try {
+    target.focus({ preventScroll: true });
+  } catch {
+    target.focus();
+  }
+}
+
 // ─── Keyboard Navigation ───
 function useGridNav(
   containerRef: React.RefObject<HTMLDivElement | null>,
@@ -124,12 +228,11 @@ function useGridNav(
 
     const containerRect = container.getBoundingClientRect();
     const cellRect = cell.getBoundingClientRect();
-    const stickyHeader = container.querySelector<HTMLElement>('thead.sticky');
-    const stickyFooter = container.querySelector<HTMLElement>('tfoot.sticky');
-    const headerHeight = stickyHeader?.getBoundingClientRect().height ?? 0;
-    const footerHeight = stickyFooter?.getBoundingClientRect().height ?? 0;
-    const viewTop = containerRect.top + headerHeight;
-    const viewBottom = containerRect.bottom - footerHeight;
+    const { top, right, bottom, left } = getStickyViewportInsets(container, cell, cellRect);
+    const viewTop = containerRect.top + top;
+    const viewRight = containerRect.right - right;
+    const viewBottom = containerRect.bottom - bottom;
+    const viewLeft = containerRect.left + left;
 
     if (cellRect.top < viewTop) {
       container.scrollTop += cellRect.top - viewTop;
@@ -137,10 +240,10 @@ function useGridNav(
       container.scrollTop += cellRect.bottom - viewBottom;
     }
 
-    if (cellRect.left < containerRect.left) {
-      container.scrollLeft += cellRect.left - containerRect.left;
-    } else if (cellRect.right > containerRect.right) {
-      container.scrollLeft += cellRect.right - containerRect.right;
+    if (cellRect.left < viewLeft) {
+      container.scrollLeft += cellRect.left - viewLeft;
+    } else if (cellRect.right > viewRight) {
+      container.scrollLeft += cellRect.right - viewRight;
     }
   }, [containerRef]);
 
@@ -150,9 +253,12 @@ function useGridNav(
     return false;
   }, []);
 
-  const focusCellElement = useCallback((target: HTMLElement) => {
-    scheduleInNextFrame(() => scrollCellIntoView(target));
+  const isTargetFocused = useCallback((target: HTMLElement) => {
+    const active = document.activeElement;
+    return active === target || (active instanceof HTMLElement && target.contains(active));
+  }, []);
 
+  const focusCellElement = useCallback((target: HTMLElement) => {
     if (isCellTemporarilyUnfocusable(target)) return false;
 
     const role = target.getAttribute('role');
@@ -164,14 +270,21 @@ function useGridNav(
       !hasPopup &&
       target.dataset.gridFocusOnly !== 'true'
     ) {
+      scheduleInNextFrame(() => scrollCellIntoView(target));
       target.click();
       return true;
     }
 
-    target.focus();
-    const active = document.activeElement;
-    return active === target || (active instanceof HTMLElement && target.contains(active));
-  }, [isCellTemporarilyUnfocusable, scrollCellIntoView]);
+    const wasAlreadyFocused = isTargetFocused(target);
+    focusElementWithoutScroll(target);
+    const focused = isTargetFocused(target);
+
+    if (focused && wasAlreadyFocused) {
+      scheduleInNextFrame(() => scrollCellIntoView(target));
+    }
+
+    return focused;
+  }, [isCellTemporarilyUnfocusable, isTargetFocused, scrollCellIntoView]);
 
   const focusCell = useCallback((row: number, col: number) => {
     const cells = getEditableCells();
@@ -564,14 +677,6 @@ export function DataGrid<TData>({
       if (retryTimer != null) window.clearTimeout(retryTimer);
     };
   }, [currentGroupKeys, focusCellByRowId, renderedRowIds, scrollCellIntoView]);
-
-  useEffect(() => {
-    const active = document.activeElement;
-    if (!(active instanceof HTMLElement)) return;
-    if (!containerRef.current?.contains(active)) return;
-    if (active.dataset.row == null || active.dataset.col == null) return;
-    scheduleInNextFrame(() => scrollCellIntoView(active));
-  }, [renderedRowIds, scrollCellIntoView]);
 
   useEffect(() => {
     const container = containerRef.current;
