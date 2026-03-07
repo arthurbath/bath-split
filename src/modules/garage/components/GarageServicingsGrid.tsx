@@ -48,6 +48,8 @@ interface ServicingFormState {
   deletedReceipts: Array<{ id: string; storagePath: string }>;
 }
 
+type ServicingDialogFocusTarget = 'default' | 'outcomes' | 'receipts';
+
 function buildDefaultOutcomeMap(services: GarageService[], servicing?: GarageServicingWithRelations | null): Record<string, OutcomeDraftValue> {
   const map: Record<string, OutcomeDraftValue> = {};
   for (const outcome of servicing?.outcomes ?? []) {
@@ -337,6 +339,7 @@ export function GarageServicingsGrid({
   const [sessionAddedServices, setSessionAddedServices] = useState<GarageService[]>([]);
   const [shopSuggestionsOpen, setShopSuggestionsOpen] = useState(false);
   const [receiptDropActive, setReceiptDropActive] = useState(false);
+  const [dialogFocusTarget, setDialogFocusTarget] = useState<ServicingDialogFocusTarget>('default');
   const [formState, setFormState] = useState<ServicingFormState>(createDefaultFormState);
   const [serviceDatePickerMonth, setServiceDatePickerMonth] = useState<Date>(
     () => getCalendarMonthForDateInput(new Date().toISOString().slice(0, 10)),
@@ -350,6 +353,7 @@ export function GarageServicingsGrid({
   const shopSuggestionItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const notesInputRef = useRef<HTMLInputElement | null>(null);
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
+  const receiptAddButtonRef = useRef<HTMLButtonElement | null>(null);
   const dialogBodyRef = useRef<HTMLDivElement | null>(null);
   const dialogBodyScrollTopRef = useRef(0);
 
@@ -370,12 +374,17 @@ export function GarageServicingsGrid({
 
   const openCreateDialog = () => {
     dialogBodyScrollTopRef.current = 0;
+    setDialogFocusTarget('default');
     resetForm();
     setDialogOpen(true);
   };
 
-  const openEditDialog = useCallback((servicing: GarageServicingWithRelations) => {
+  const openEditDialog = useCallback((
+    servicing: GarageServicingWithRelations,
+    focusTarget: ServicingDialogFocusTarget = 'default',
+  ) => {
     dialogBodyScrollTopRef.current = 0;
+    setDialogFocusTarget(focusTarget);
     setServiceDatePickerOpen(false);
     setServicePickerOpen(false);
     setServicePickerQuery('');
@@ -617,12 +626,23 @@ export function GarageServicingsGrid({
 
   useEffect(() => {
     if (!dialogOpen) return;
-    if (formState.id) return;
     const frame = window.requestAnimationFrame(() => {
-      serviceDateButtonRef.current?.focus();
+      if (!formState.id) {
+        serviceDateButtonRef.current?.focus();
+        return;
+      }
+
+      if (dialogFocusTarget === 'outcomes') {
+        serviceOutcomeAddButtonRef.current?.focus();
+        return;
+      }
+
+      if (dialogFocusTarget === 'receipts') {
+        receiptAddButtonRef.current?.focus();
+      }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [dialogOpen, formState.id]);
+  }, [dialogFocusTarget, dialogOpen, formState.id]);
 
   const buildOutcomePayload = () =>
     Object.entries(formState.outcomes)
@@ -751,7 +771,7 @@ export function GarageServicingsGrid({
             <button
               type="button"
               className="flex h-full w-full items-center gap-1.5 text-left"
-              onClick={() => openEditDialog(row.original)}
+              onClick={() => openEditDialog(row.original, 'outcomes')}
               aria-label={`Open servicing detail for ${row.original.service_date}`}
             >
               <span className={getOutcomeBadgeClass(performed, 'success')} title="Performed services">{performed}</span>
@@ -770,7 +790,7 @@ export function GarageServicingsGrid({
           <button
             type="button"
             className="h-full w-full text-left text-xs text-foreground"
-            onClick={() => openEditDialog(row.original)}
+            onClick={() => openEditDialog(row.original, 'receipts')}
             aria-label={`Open servicing detail for ${row.original.service_date}`}
           >
             {row.original.receipts.length}
@@ -1056,7 +1076,7 @@ export function GarageServicingsGrid({
                       servicePickerSearchRef.current?.focus({ preventScroll: true });
                     }}
                   >
-                    <div className="max-h-72 overflow-y-auto">
+                    <div className="max-h-48 overflow-y-auto sm:max-h-72">
                       <div className="sticky top-0 z-10 rounded-tl-md rounded-tr-md border-b bg-popover p-2">
                         <Input
                           ref={servicePickerSearchRef}
@@ -1260,7 +1280,33 @@ export function GarageServicingsGrid({
                   ))}
                 </div>
               )}
+              {formState.newFiles.length > 0 && (
+                <div className="space-y-2">
+                  {formState.newFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${file.lastModified}-${file.size}-${index}`}
+                      className="flex items-center justify-between rounded-md border px-3 py-2"
+                    >
+                      <div className="inline-flex min-w-0 items-center gap-2 text-sm">
+                        <FileText className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{file.name}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline-destructive"
+                        className="h-7 w-7 p-0"
+                        onClick={() => removeReceiptFile(index)}
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <button
+                ref={receiptAddButtonRef}
                 type="button"
                 className={cn(
                   'flex w-full flex-col items-center justify-center rounded-md border border-dashed px-3 py-5 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-2 focus:ring-offset-background focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
@@ -1304,31 +1350,6 @@ export function GarageServicingsGrid({
                   event.currentTarget.value = '';
                 }}
               />
-              {formState.newFiles.length > 0 && (
-                <div className="space-y-2">
-                  {formState.newFiles.map((file, index) => (
-                    <div
-                      key={`${file.name}-${file.lastModified}-${file.size}-${index}`}
-                      className="flex items-center justify-between rounded-md border px-3 py-2"
-                    >
-                      <div className="inline-flex min-w-0 items-center gap-2 text-sm">
-                        <FileText className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{file.name}</span>
-                      </div>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="outline-destructive"
-                        className="h-7 w-7 p-0"
-                        onClick={() => removeReceiptFile(index)}
-                        aria-label={`Remove ${file.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -1339,7 +1360,7 @@ export function GarageServicingsGrid({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={dialogBusy}>Cancel</Button>
-            <Button type="button" onClick={() => { void submit(); }} disabled={dialogBusy}>{dialogBusy ? 'Saving…' : 'Save'}</Button>
+            <Button data-dialog-confirm="true" type="button" onClick={() => { void submit(); }} disabled={dialogBusy}>{dialogBusy ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1404,7 +1425,7 @@ export function GarageServicingsGrid({
           </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setAddServiceDialogOpen(false)} disabled={addServiceBusy}>Cancel</Button>
-            <Button type="button" onClick={() => { void submitAddService(); }} disabled={addServiceBusy}>{addServiceBusy ? 'Saving…' : 'Save'}</Button>
+            <Button data-dialog-confirm="true" type="button" onClick={() => { void submitAddService(); }} disabled={addServiceBusy}>{addServiceBusy ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

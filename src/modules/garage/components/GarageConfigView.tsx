@@ -258,7 +258,7 @@ export function GarageConfigView({
             The mileage and time windows used to mark services as upcoming.
           </p>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent data-command-enter-scope="true" className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="garage-upcoming-miles">Miles</Label>
@@ -270,7 +270,7 @@ export function GarageConfigView({
             </div>
           </div>
           <div className="flex justify-end">
-            <Button type="button" onClick={() => { void saveSettings(); }} disabled={settingsSaving || !thresholdsChanged}>{settingsSaving ? 'Saving…' : 'Save'}</Button>
+            <Button data-command-enter-confirm="true" type="button" onClick={() => { void saveSettings(); }} disabled={settingsSaving || !thresholdsChanged}>{settingsSaving ? 'Saving…' : 'Save'}</Button>
           </div>
         </CardContent>
       </Card>
@@ -392,7 +392,7 @@ export function GarageConfigView({
           </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)} disabled={formBusy}>Cancel</Button>
-            <Button type="button" onClick={() => { void saveVehicle(); }} disabled={formBusy}>{formBusy ? 'Saving…' : 'Save'}</Button>
+            <Button data-dialog-confirm="true" type="button" onClick={() => { void saveVehicle(); }} disabled={formBusy}>{formBusy ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -16,6 +16,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import TermsGate from "@/platform/components/TermsGate";
 import AuthCallbackToasts from "@/platform/components/AuthCallbackToasts";
 import { useDocumentHead } from "@/platform/hooks/useDocumentHead";
+import { useCommandEnterSubmit } from "@/platform/hooks/useCommandEnterSubmit";
 import { isLikelyNetworkError } from "@/lib/networkErrors";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import Index from "./pages/Index";
@@ -62,9 +63,26 @@ function DocumentHead() {
   return null;
 }
 
+function GlobalCommandEnterSubmit() {
+  useCommandEnterSubmit();
+  return null;
+}
+
+export function ScrollToTopOnPathnameChange() {
+  const location = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  return null;
+}
+
 function AppRoutes() {
   return (
     <PullToRefresh>
+      <GlobalCommandEnterSubmit />
+      <ScrollToTopOnPathnameChange />
       <Routes>
         <Route path="/" element={<LauncherPage />} />
         <Route path="/signin" element={<LauncherPage />} />

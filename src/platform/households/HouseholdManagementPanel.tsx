@@ -335,6 +335,7 @@ export function HouseholdManagementPanel({
             <Button
               type="button"
               variant="warning"
+              data-dialog-confirm="true"
               onClick={handleConfirmRemoveMember}
               disabled={pendingMemberId !== null}
             >
@@ -364,6 +365,7 @@ export function HouseholdManagementPanel({
             <Button
               type="button"
               variant="warning"
+              data-dialog-confirm="true"
               onClick={handleLeaveHousehold}
               disabled={leavingHousehold}
             >

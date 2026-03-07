@@ -399,7 +399,7 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
             >
               Cancel
             </Button>
-            <Button variant="outline-success" onClick={() => void handleSave()} disabled={saving}>
+            <Button data-dialog-confirm="true" variant="outline-success" onClick={() => void handleSave()} disabled={saving}>
               {saving ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>

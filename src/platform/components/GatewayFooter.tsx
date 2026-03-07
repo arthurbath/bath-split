@@ -11,7 +11,10 @@ export default function GatewayFooter() {
     <>
       <footer
         className="px-4 pt-4 border-t border-muted"
-        style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+        style={{
+          ['--gateway-footer-bottom-space' as string]: '1rem',
+          paddingBottom: 'calc(var(--gateway-footer-bottom-space) + env(safe-area-inset-bottom, 0px))',
+        }}
       >
         <div className="max-w-md mx-auto flex items-center justify-between text-muted-foreground text-xs">
           <div className="flex items-center gap-3">
@@ -32,8 +35,8 @@ export default function GatewayFooter() {
       </footer>
 
       <Dialog open={showTerms} onOpenChange={setShowTerms}>
-        <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-4xl flex-col overflow-hidden p-0">
-          <DialogHeader className="shrink-0 border-b px-6 py-4">
+        <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b px-6 py-4 pb-4">
             <DialogTitle>Terms of Service and Privacy Policy</DialogTitle>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 md:px-8 md:py-6">

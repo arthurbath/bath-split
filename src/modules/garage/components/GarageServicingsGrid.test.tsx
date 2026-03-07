@@ -5,13 +5,65 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GarageServicingsGrid } from '@/modules/garage/components/GarageServicingsGrid';
 import type { GarageService, GarageServicingWithRelations } from '@/modules/garage/types/garage';
 
+type MockDataGridTable = {
+  getHeaderGroups: () => Array<{
+    id: string;
+    headers: Array<{
+      id: string;
+      isPlaceholder?: boolean;
+      column: { columnDef: { header?: unknown } };
+    }>;
+  }>;
+  getRowModel: () => {
+    rows: Array<{
+      id: string;
+      getVisibleCells: () => Array<{
+        id: string;
+        column: { columnDef: { cell?: unknown } };
+        getContext: () => unknown;
+      }>;
+    }>;
+  };
+};
+
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
   useToast: () => ({ toast: vi.fn() }),
 }));
 
 vi.mock('@/components/ui/data-grid', () => ({
-  DataGrid: () => <div data-testid="garage-servicings-grid" />,
+  DataGrid: ({ table }: { table: MockDataGridTable }) => (
+    <table data-testid="garage-servicings-grid">
+      <thead>
+        {table.getHeaderGroups().map((group) => (
+          <tr key={group.id}>
+            {group.headers.map((header) => (
+              <th key={header.id}>
+                {header.isPlaceholder ? null : (
+                  typeof header.column.columnDef.header === 'function'
+                    ? (header.column.columnDef.header as (context: unknown) => React.ReactNode)({})
+                    : header.column.columnDef.header as React.ReactNode
+                )}
+              </th>
+            ))}
+          </tr>
+        ))}
+      </thead>
+      <tbody>
+        {table.getRowModel().rows.map((row) => (
+          <tr key={row.id}>
+            {row.getVisibleCells().map((cell) => (
+              <td key={cell.id}>
+                {cell.column.columnDef.cell
+                  ? (cell.column.columnDef.cell as (context: unknown) => React.ReactNode)(cell.getContext())
+                  : null}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ),
   GridEditableCell: () => null,
   gridMenuTriggerProps: () => ({}),
   gridNavProps: () => ({}),
@@ -134,6 +186,31 @@ function buildProps(overrides: Partial<React.ComponentProps<typeof GarageServici
   };
 }
 
+function buildServicing(overrides: Partial<GarageServicingWithRelations> = {}): GarageServicingWithRelations {
+  return {
+    id: 'servicing-1',
+    user_id: 'user-1',
+    vehicle_id: 'vehicle-1',
+    service_date: '2026-03-02',
+    odometer_miles: 123000,
+    shop_name: 'Test Shop',
+    notes: null,
+    created_at: '2026-03-02T00:00:00.000Z',
+    updated_at: '2026-03-02T00:00:00.000Z',
+    outcomes: [{
+      id: 'outcome-1',
+      service_id: 'service-1',
+      status: 'performed',
+      created_at: '2026-03-02T00:00:00.000Z',
+      user_id: 'user-1',
+      vehicle_id: 'vehicle-1',
+      servicing_id: 'servicing-1',
+    }],
+    receipts: [],
+    ...overrides,
+  };
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -244,6 +321,81 @@ describe('GarageServicingsGrid servicing dialog', () => {
 
       await waitForCondition(() => {
         expect((document.body.querySelector('#garage-servicing-date') as HTMLButtonElement | null)?.textContent?.trim()).toBe(initialLabel);
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('focuses the service outcome add button when opened from the Outcomes column', async () => {
+    const services: GarageService[] = [
+      buildProps().services[0]!,
+      {
+        id: 'service-2',
+        user_id: 'user-1',
+        vehicle_id: 'vehicle-1',
+        name: 'Air Filter',
+        type: 'replacement',
+        monitoring: true,
+        cadence_type: 'recurring',
+        every_miles: 15000,
+        every_months: 12,
+        sort_order: 1,
+        notes: null,
+        created_at: '2026-03-01T00:00:00.000Z',
+        updated_at: '2026-03-01T00:00:00.000Z',
+      },
+    ];
+    const { container, root } = mount(
+      <GarageServicingsGrid {...buildProps({ services, servicings: [buildServicing()] })} />,
+    );
+
+    try {
+      const outcomesButton = Array.from(document.body.querySelectorAll('button[aria-label="Open servicing detail for 2026-03-02"]'))
+        .find((button) => button.textContent?.trim() === '100') as HTMLButtonElement | undefined;
+      expect(outcomesButton).toBeTruthy();
+
+      click(outcomesButton!);
+
+      await waitForCondition(() => {
+        const addOutcomeButton = document.body.querySelector('button[aria-label="Add service outcome"]') as HTMLButtonElement | null;
+        expect(addOutcomeButton).toBeTruthy();
+        expect(document.activeElement).toBe(addOutcomeButton);
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('focuses the receipt add area when opened from the Receipts column', async () => {
+    const servicing = buildServicing({
+      receipts: [{
+        id: 'receipt-1',
+        user_id: 'user-1',
+        vehicle_id: 'vehicle-1',
+        servicing_id: 'servicing-1',
+        filename: 'receipt.pdf',
+        storage_object_path: 'garage-receipts/receipt.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 123,
+        created_at: '2026-03-02T00:00:00.000Z',
+      }],
+    });
+    const { container, root } = mount(
+      <GarageServicingsGrid {...buildProps({ servicings: [servicing] })} />,
+    );
+
+    try {
+      const receiptButton = Array.from(document.body.querySelectorAll('button[aria-label="Open servicing detail for 2026-03-02"]'))
+        .find((button) => button.textContent?.trim() === '1') as HTMLButtonElement | undefined;
+      expect(receiptButton).toBeTruthy();
+
+      click(receiptButton!);
+
+      await waitForCondition(() => {
+        const receiptAddButton = document.body.querySelector('button[aria-label="Add receipts"]') as HTMLButtonElement | null;
+        expect(receiptAddButton).toBeTruthy();
+        expect(document.activeElement).toBe(receiptAddButton);
       });
     } finally {
       unmount(root, container);

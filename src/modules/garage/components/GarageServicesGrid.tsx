@@ -607,7 +607,7 @@ export function GarageServicesGrid({
             <Button type="button" variant="outline" onClick={() => setViewControlsOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={applyViewControls}>
+            <Button data-dialog-confirm="true" type="button" onClick={applyViewControls}>
               Save
             </Button>
           </DialogFooter>
@@ -652,7 +652,7 @@ export function GarageServicesGrid({
           </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setAddOpen(false)} disabled={saving}>Cancel</Button>
-            <Button type="button" onClick={() => { void submitAdd(); }} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+            <Button data-dialog-confirm="true" type="button" onClick={() => { void submitAdd(); }} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

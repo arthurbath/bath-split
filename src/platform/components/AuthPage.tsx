@@ -13,7 +13,7 @@ import { isWeakOrLeakedPasswordError, WEAK_PASSWORD_MESSAGE } from '@/lib/authEr
 import { isPasswordValid } from '@/lib/passwordValidation';
 import { PasswordRequirements } from '@/components/PasswordRequirements';
 import { checkAuthRateLimit, formatRetryAfter } from '@/lib/authRateLimit';
-import GatewayFooter from '@/platform/components/GatewayFooter';
+import GatewayPageLayout from '@/platform/components/GatewayPageLayout';
 
 export default function AuthPage() {
   const { signIn, signUp } = useAuthContext();
@@ -96,62 +96,59 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <div className="flex flex-1 items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold tracking-tight">BathOS</CardTitle>
-            <CardDescription>A bunch of hyper-specific apps for Art and his friends</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login">Sign In</TabsTrigger>
-                <TabsTrigger value="signup">Sign Up</TabsTrigger>
-              </TabsList>
+    <GatewayPageLayout contentClassName="max-w-md">
+      <Card className="w-full">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold tracking-tight">BathOS</CardTitle>
+          <CardDescription>A bunch of hyper-specific apps for Art and his friends</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Sign In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
 
-              <TabsContent value="login">
-                <form onSubmit={handleLogin} className="space-y-4 pt-2">
-                  <Input placeholder="Email" type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
-                  <Input placeholder="Password" type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
-                  <Button type="submit" className="w-full" disabled={loading}>Sign In</Button>
-                </form>
-                <div className="mt-3 text-center">
-                  <Link to="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground underline">
-                    Forgot Password
-                  </Link>
-                </div>
-              </TabsContent>
+            <TabsContent value="login">
+              <form onSubmit={handleLogin} className="space-y-4 pt-2">
+                <Input placeholder="Email" type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
+                <Input placeholder="Password" type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
+                <Button type="submit" className="w-full" disabled={loading}>Sign In</Button>
+              </form>
+              <div className="mt-3 text-center">
+                <Link to="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground underline">
+                  Forgot Password
+                </Link>
+              </div>
+            </TabsContent>
 
-              <TabsContent value="signup">
-                <form onSubmit={handleSignup} className="space-y-4 pt-2">
-                  <Input placeholder="Display name" value={signupName} onChange={e => setSignupName(e.target.value)} required />
-                  <Input placeholder="Email" type="email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} required />
-                  <Input placeholder="Password" type="password" value={signupPassword} onChange={e => setSignupPassword(e.target.value)} required minLength={8} />
-                  <PasswordRequirements password={signupPassword} />
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id="terms"
-                      checked={termsAccepted}
-                      onCheckedChange={(checked) => setTermsAccepted(checked === true)}
-                    />
-                    <div className="text-sm leading-relaxed">
-                      <Label htmlFor="terms" className="cursor-pointer">
-                        I agree to the{' '}
-                      </Label>
-                      <Link to="/terms" className="underline hover:text-primary transition-colors">
-                        Terms of Service and Privacy Policy
-                      </Link>
-                    </div>
+            <TabsContent value="signup">
+              <form onSubmit={handleSignup} className="space-y-4 pt-2">
+                <Input placeholder="Display name" value={signupName} onChange={e => setSignupName(e.target.value)} required />
+                <Input placeholder="Email" type="email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} required />
+                <Input placeholder="Password" type="password" value={signupPassword} onChange={e => setSignupPassword(e.target.value)} required minLength={8} />
+                <PasswordRequirements password={signupPassword} />
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="terms"
+                    checked={termsAccepted}
+                    onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+                  />
+                  <div className="text-sm leading-relaxed">
+                    <Label htmlFor="terms" className="cursor-pointer">
+                      I agree to the{' '}
+                    </Label>
+                    <Link to="/terms" className="underline hover:text-primary transition-colors">
+                      Terms of Service and Privacy Policy
+                    </Link>
                   </div>
-                  <Button type="submit" className="w-full" disabled={loading || !termsAccepted || !isPasswordValid(signupPassword)}>Sign Up</Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
-      <GatewayFooter />
-    </div>
+                </div>
+                <Button type="submit" className="w-full" disabled={loading || !termsAccepted || !isPasswordValid(signupPassword)}>Sign Up</Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </GatewayPageLayout>
   );
 }

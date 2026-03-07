@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { checkAuthRateLimit, formatRetryAfter } from '@/lib/authRateLimit';
-import GatewayFooter from '@/platform/components/GatewayFooter';
+import GatewayPageLayout from '@/platform/components/GatewayPageLayout';
 
 const MAX_CHARS = 200;
 const MIN_CHARS = 5;
@@ -79,74 +79,71 @@ export default function HelpPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <div className="flex flex-1 items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-3">
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={handleBack}
-          >
-            ← Back
-          </Button>
+    <GatewayPageLayout contentClassName="max-w-md">
+      <div className="space-y-3">
+        <Button
+          type="button"
+          variant="ghost"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={handleBack}
+        >
+          ← Back
+        </Button>
 
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold tracking-tight">Need Help?</CardTitle>
-              <CardDescription>
-                Question, issue, or suggestion?
-                <br />
-                Tell me about it.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label htmlFor="help-email" className="mb-1 block text-sm font-medium">
-                    Email Address
-                  </label>
-                  <Input
-                    id="help-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    disabled={submitting}
-                    autoCapitalize="none"
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">I'll reply to this address</p>
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold tracking-tight">Need Help?</CardTitle>
+            <CardDescription>
+              Question, issue, or suggestion?
+              <br />
+              Tell me about it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="help-email" className="mb-1 block text-sm font-medium">
+                  Email Address
+                </label>
+                <Input
+                  id="help-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  disabled={submitting}
+                  autoCapitalize="none"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">I'll reply to this address</p>
+              </div>
+
+              <div>
+                <label htmlFor="help-message" className="mb-1 block text-sm font-medium">
+                  Message
+                </label>
+                <Textarea
+                  id="help-message"
+                  value={message}
+                  onChange={handleMessageChange}
+                  placeholder="What's up?"
+                  className="min-h-[120px] resize-none"
+                  disabled={submitting}
+                />
+                <div className="mt-1 text-right text-xs text-muted-foreground">
+                  <span className={message.length < MIN_CHARS ? 'text-destructive' : ''}>
+                    {message.length}
+                  </span>{' '}
+                  / {MAX_CHARS}
                 </div>
+              </div>
 
-                <div>
-                  <label htmlFor="help-message" className="mb-1 block text-sm font-medium">
-                    Message
-                  </label>
-                  <Textarea
-                    id="help-message"
-                    value={message}
-                    onChange={handleMessageChange}
-                    placeholder="What's up?"
-                    className="min-h-[120px] resize-none"
-                    disabled={submitting}
-                  />
-                  <div className="mt-1 text-right text-xs text-muted-foreground">
-                    <span className={message.length < MIN_CHARS ? 'text-destructive' : ''}>
-                      {message.length}
-                    </span>{' '}
-                    / {MAX_CHARS}
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full" disabled={!canSubmit || submitting}>
-                  {submitting ? 'Sending...' : 'Send Message'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+              <Button type="submit" className="w-full" disabled={!canSubmit || submitting}>
+                {submitting ? 'Sending...' : 'Send Message'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
-      <GatewayFooter />
-    </div>
+    </GatewayPageLayout>
   );
 }

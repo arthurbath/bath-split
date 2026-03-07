@@ -1580,7 +1580,7 @@ export function ExpensesTab({
             >
               Cancel
             </Button>
-            <Button variant="outline-success" onClick={handleSaveNewExpense} disabled={savingExpense}>{savingExpense ? 'Saving...' : 'Add'}</Button>
+            <Button data-dialog-confirm="true" variant="outline-success" onClick={handleSaveNewExpense} disabled={savingExpense}>{savingExpense ? 'Saving...' : 'Add'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1624,7 +1624,7 @@ export function ExpensesTab({
             >
               Cancel
             </Button>
-            <Button variant="outline-success" onClick={handleSaveAverageEditor} disabled={savingAverageEditor}>{savingAverageEditor ? 'Saving...' : 'Save'}</Button>
+            <Button data-dialog-confirm="true" variant="outline-success" onClick={handleSaveAverageEditor} disabled={savingAverageEditor}>{savingAverageEditor ? 'Saving...' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1688,7 +1688,7 @@ export function ExpensesTab({
             <Button type="button" variant="outline" onClick={() => setViewControlsOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={applyViewControls}>
+            <Button data-dialog-confirm="true" type="button" onClick={applyViewControls}>
               Save
             </Button>
           </DialogFooter>
@@ -1730,7 +1730,7 @@ export function ExpensesTab({
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setAddDialog(null); setAddSource(null); }} disabled={savingItem}>Cancel</Button>
-            <Button variant="outline-success" onClick={handleSaveNewItem} disabled={savingItem || !newItemName.trim()}>{savingItem ? 'Saving...' : 'Add'}</Button>
+            <Button data-dialog-confirm="true" variant="outline-success" onClick={handleSaveNewItem} disabled={savingItem || !newItemName.trim()}>{savingItem ? 'Saving...' : 'Add'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
