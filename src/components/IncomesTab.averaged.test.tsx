@@ -1,7 +1,7 @@
 import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IncomesTab, applyNewIncomeTypeToDraft } from '@/components/IncomesTab';
 import type { Income } from '@/hooks/useIncomes';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -79,7 +79,25 @@ async function dispatchEnter(input: HTMLInputElement) {
   });
 }
 
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+}
+
+function getVisibleIncomeNames(container: HTMLElement) {
+  return Array.from(container.querySelectorAll<HTMLInputElement>('tbody input[data-col="0"]'))
+    .map((input) => input.value);
+}
+
 describe('IncomesTab averaged rows', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.body.innerHTML = '';
+  });
+
   it('shows static averaged frequency and opens the records editor from amount', () => {
     const incomes: Income[] = [
       {
@@ -244,6 +262,141 @@ describe('IncomesTab averaged rows', () => {
       });
 
       expect(onUpdate).toHaveBeenCalledTimes(1);
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('filters incomes live by name on desktop', async () => {
+    setViewportWidth(1200);
+
+    const incomes: Income[] = [
+      {
+        id: 'income-1',
+        household_id: 'h-1',
+        name: 'Salary',
+        amount: 6000,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        partner_label: 'X',
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
+      },
+      {
+        id: 'income-2',
+        household_id: 'h-1',
+        name: 'Freelance',
+        amount: 1500,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        partner_label: 'Y',
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
+      },
+    ];
+
+    const { container, root } = mount(
+      <TooltipProvider>
+        <IncomesTab
+          incomes={incomes}
+          partnerX="Partner X"
+          partnerY="Partner Y"
+          onAdd={async () => {}}
+          onUpdate={async () => {}}
+          onRemove={async () => {}}
+        />
+      </TooltipProvider>,
+    );
+
+    try {
+      const filterInput = container.querySelector<HTMLInputElement>('input[placeholder="Income"]');
+      expect(filterInput).toBeTruthy();
+
+      await dispatchInputChange(filterInput!, 'free');
+
+      await waitForCondition(() => {
+        expect(getVisibleIncomeNames(container)).toEqual(['Freelance']);
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('applies the mobile name filter only after saving the filters modal', async () => {
+    setViewportWidth(500);
+
+    const incomes: Income[] = [
+      {
+        id: 'income-1',
+        household_id: 'h-1',
+        name: 'Salary',
+        amount: 6000,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        partner_label: 'X',
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
+      },
+      {
+        id: 'income-2',
+        household_id: 'h-1',
+        name: 'Freelance',
+        amount: 1500,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        partner_label: 'Y',
+        is_estimate: false,
+        value_type: 'simple',
+        average_records: [],
+      },
+    ];
+
+    const { container, root } = mount(
+      <TooltipProvider>
+        <IncomesTab
+          incomes={incomes}
+          partnerX="Partner X"
+          partnerY="Partner Y"
+          onAdd={async () => {}}
+          onUpdate={async () => {}}
+          onRemove={async () => {}}
+        />
+      </TooltipProvider>,
+    );
+
+    try {
+      await waitForCondition(() => {
+        expect(Array.from(document.body.querySelectorAll('button')).some((button) => button.textContent?.trim() === 'Filters')).toBe(true);
+      });
+
+      const filtersButton = Array.from(document.body.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === 'Filters') as HTMLButtonElement | undefined;
+      expect(filtersButton).toBeTruthy();
+
+      await act(async () => {
+        filtersButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      const modalInput = document.body.querySelector<HTMLInputElement>('#incomes-filter-query');
+      expect(modalInput).toBeTruthy();
+
+      await dispatchInputChange(modalInput!, 'free');
+
+      expect(getVisibleIncomeNames(container).sort()).toEqual(['Freelance', 'Salary']);
+
+      const saveButton = document.body.querySelector<HTMLButtonElement>('button[data-dialog-confirm="true"]');
+      expect(saveButton).toBeTruthy();
+
+      await act(async () => {
+        saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      await waitForCondition(() => {
+        expect(getVisibleIncomeNames(container)).toEqual(['Freelance']);
+      });
     } finally {
       unmount(root, container);
     }

@@ -18,6 +18,7 @@ import { GarageServicesGrid } from '@/modules/garage/components/GarageServicesGr
 import { GarageServicingsGrid } from '@/modules/garage/components/GarageServicingsGrid';
 import { GarageConfigView } from '@/modules/garage/components/GarageConfigView';
 import { handleClientSideLinkNavigation } from '@/lib/navigation';
+import { CARD_PAGE_BOTTOM_PADDING_CLASS, FULL_VIEW_PAGE_BOTTOM_PADDING_CLASS } from '@/lib/pageLayout';
 
 interface GarageShellProps {
   userId: string;
@@ -187,7 +188,7 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
   }
 
   return (
-    <div className={`relative isolate bg-background ${isFullViewGridRoute ? 'h-dvh overflow-y-hidden overflow-x-visible flex flex-col' : 'min-h-screen pb-24 md:pb-4'}`}>
+    <div className={`relative isolate bg-background ${isFullViewGridRoute ? 'h-dvh overflow-y-hidden overflow-x-visible flex flex-col' : 'min-h-screen'}`}>
       <ToplineHeader
         title="Garage"
         moduleId="garage"
@@ -238,7 +239,7 @@ export function GarageShell({ userId, displayName, onSignOut }: GarageShellProps
         </nav>
       </div>
 
-      <main className={isFullViewGridRoute ? 'flex w-full flex-1 min-h-0 flex-col gap-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+3.75rem)] md:pt-6 md:pb-0' : 'mx-auto max-w-5xl space-y-4 px-4 py-4 md:py-6'}>
+      <main className={isFullViewGridRoute ? `flex w-full flex-1 min-h-0 flex-col gap-4 pt-0 md:pt-6 ${FULL_VIEW_PAGE_BOTTOM_PADDING_CLASS}` : `mx-auto max-w-5xl space-y-4 px-4 pt-4 md:pt-6 ${CARD_PAGE_BOTTOM_PADDING_CLASS}`}>
         {!selectedVehicle && !isConfigRoute ? (
           <div className={isFullViewGridRoute ? 'mx-auto w-full max-w-5xl px-4' : ''}>
             <Card>

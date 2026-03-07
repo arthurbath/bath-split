@@ -3,7 +3,7 @@ import { createColumnHelper, getCoreRowModel, getSortedRowModel, type Row, type 
 import { format, parseISO } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DataGrid, GridCheckboxCell, GridEditableCell, gridMenuTriggerProps, useDataGrid } from '@/components/ui/data-grid';
+import { DataGrid, GridCheckboxCell, GridEditableCell, gridMenuTriggerProps, gridSelectTriggerProps, useDataGrid } from '@/components/ui/data-grid';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,6 +23,15 @@ const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring
 const SERVICE_ACTIONS_NAV_COL = 7;
 type GroupByOption = 'none' | 'type';
 type CadenceFilterOption = 'all' | 'recurring' | 'one_off';
+
+function normalizeNameFilterValue(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function matchesNameFilter(name: string, filterValue: string) {
+  const normalizedFilter = normalizeNameFilterValue(filterValue);
+  return normalizedFilter.length === 0 || name.toLocaleLowerCase().includes(normalizedFilter);
+}
 
 function normalizePositiveInt(value: string): number | null {
   const trimmed = value.trim();
@@ -52,18 +61,7 @@ function ServiceTypeCell({
     }}>
       <SelectTrigger
         className={`h-7 border-transparent bg-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${GRID_CONTROL_FOCUS_CLASS}`}
-        data-row={ctx?.rowIndex}
-        data-row-id={ctx?.rowId}
-        data-col={1}
-        onMouseDown={ctx?.onCellMouseDown}
-        onKeyDown={(event) => {
-          if (!ctx) return;
-          const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
-          if (expanded) return;
-          if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Tab') {
-            ctx.onCellKeyDown(event);
-          }
-        }}
+        {...gridSelectTriggerProps(ctx, 1)}
       >
         <SelectValue />
       </SelectTrigger>
@@ -90,6 +88,7 @@ function MonitoringCell({
       checked={value}
       onChange={onChange}
       navCol={navCol}
+      deleteResetChecked={false}
       className="ml-1"
     />
   );
@@ -188,11 +187,13 @@ export function GarageServicesGrid({
   const [addMonths, setAddMonths] = useState('');
   const [addNotes, setAddNotes] = useState('');
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
+  const [nameFilter, setNameFilter] = useState(() => localStorage.getItem('garage_services_nameFilter') ?? '');
   const [cadenceFilter, setCadenceFilter] = useState<CadenceFilterOption>(() => (localStorage.getItem('garage_services_cadenceFilter') as CadenceFilterOption) || 'all');
   const [groupBy, setGroupBy] = useState<GroupByOption>(() => (localStorage.getItem('garage_services_groupBy') as GroupByOption) || 'none');
+  const [draftNameFilter, setDraftNameFilter] = useState(nameFilter);
   const [draftCadenceFilter, setDraftCadenceFilter] = useState<CadenceFilterOption>(cadenceFilter);
   const [draftGroupBy, setDraftGroupBy] = useState<GroupByOption>(groupBy);
-  const hasActiveViewControls = groupBy !== 'none' || cadenceFilter !== 'all';
+  const hasActiveViewControls = normalizeNameFilterValue(nameFilter).length > 0 || groupBy !== 'none' || cadenceFilter !== 'all';
 
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }]);
   const {
@@ -219,6 +220,9 @@ export function GarageServicesGrid({
   useEffect(() => {
     localStorage.setItem('garage_services_groupBy', groupBy);
   }, [groupBy]);
+  useEffect(() => {
+    localStorage.setItem('garage_services_nameFilter', nameFilter);
+  }, [nameFilter]);
   useEffect(() => {
     localStorage.setItem('garage_services_cadenceFilter', cadenceFilter);
   }, [cadenceFilter]);
@@ -256,12 +260,13 @@ export function GarageServicesGrid({
 
   const hasInterval = (service: GarageService) => Boolean(service.every_miles || service.every_months);
   const filteredServices = useMemo(() => {
-    if (cadenceFilter === 'all') return services;
-    if (cadenceFilter === 'recurring') {
-      return services.filter((service) => hasInterval(service));
-    }
-    return services.filter((service) => !hasInterval(service));
-  }, [cadenceFilter, services]);
+    return services.filter((service) => {
+      if (!matchesNameFilter(service.name, nameFilter)) return false;
+      if (cadenceFilter === 'all') return true;
+      if (cadenceFilter === 'recurring') return hasInterval(service);
+      return !hasInterval(service);
+    });
+  }, [cadenceFilter, nameFilter, services]);
 
   const latestOutcomeByServiceId = useMemo(() => {
     const byService = new Map<string, { status: GarageServiceStatus; serviceDate: string; mileage: number; createdAt: string }>();
@@ -337,6 +342,7 @@ export function GarageServicesGrid({
             }}
             type="number"
             navCol={2}
+            deleteResetValue=""
           />
         ),
       }),
@@ -353,6 +359,7 @@ export function GarageServicesGrid({
             }}
             type="number"
             navCol={3}
+            deleteResetValue=""
           />
         ),
       }),
@@ -419,6 +426,7 @@ export function GarageServicesGrid({
               return onUpdateService(row.original.id, { notes: value.trim() || null });
             }}
             navCol={6}
+            deleteResetValue=""
           />
         ),
       }),
@@ -475,7 +483,14 @@ export function GarageServicesGrid({
         notes: addNotes.trim() || null,
       });
       setAddOpen(false);
-      toast({ title: 'Service added' });
+      if (!matchesNameFilter(name, nameFilter)) {
+        toast({
+          title: 'Service added but hidden by filters',
+          description: 'The service was added, but it is not visible because of the current filters.',
+        });
+      } else {
+        toast({ title: 'Service added' });
+      }
     } catch (error) {
       toast({
         title: 'Failed to add service',
@@ -488,18 +503,22 @@ export function GarageServicesGrid({
   };
 
   const openViewControlsModal = () => {
+    setDraftNameFilter(nameFilter);
     setDraftCadenceFilter(cadenceFilter);
     setDraftGroupBy(groupBy);
     setViewControlsOpen(true);
   };
 
   const applyViewControls = () => {
+    setNameFilter(draftNameFilter);
     setCadenceFilter(draftCadenceFilter);
     setGroupBy(draftGroupBy);
     setViewControlsOpen(false);
   };
 
   const clearViewControls = () => {
+    setNameFilter('');
+    setDraftNameFilter('');
     setCadenceFilter('all');
     setDraftCadenceFilter('all');
     setGroupBy('none');
@@ -509,17 +528,43 @@ export function GarageServicesGrid({
   const gridCardContentClassName = fullView ? 'px-0 pb-0 flex-1 min-h-0' : 'space-y-3 px-0';
 
   return (
-    <Card className={`max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 ${fullView ? 'h-full min-h-0 flex flex-col border-t-0 md:border-t' : ''}`}>
+    <Card className={`max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 ${fullView ? 'h-full min-h-0 flex flex-col border-t-0 border-b-0 md:border-t' : ''}`}>
       <CardHeader className="flex flex-row items-center justify-between gap-4">
         <CardTitle>Services</CardTitle>
         <div className="ml-auto flex items-center gap-2">
           {isMobile ? (
-            <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={openViewControlsModal}>
-              <Filter className="h-4 w-4" />
-              Filters
-            </Button>
+            <>
+              <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={openViewControlsModal}>
+                <Filter className="h-4 w-4" />
+                Filters
+              </Button>
+              {hasActiveViewControls && (
+                <Button
+                  type="button"
+                  variant="outline-warning"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={clearViewControls}
+                  aria-label="Clear filters and groupings"
+                >
+                  <FilterX className="h-4 w-4" />
+                </Button>
+              )}
+            </>
           ) : (
             <>
+              <Input
+                name="garage-services-filter-query"
+                value={nameFilter}
+                onChange={(event) => setNameFilter(event.target.value)}
+                placeholder="Service"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="h-8 w-36 text-xs"
+                aria-label="Filter"
+              />
               <Select value={cadenceFilter} onValueChange={(value) => setCadenceFilter(value as CadenceFilterOption)}>
                 <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Cadence…" /></SelectTrigger>
                 <SelectContent>
@@ -537,7 +582,7 @@ export function GarageServicesGrid({
               </Select>
             </>
           )}
-          {hasActiveViewControls && (
+          {!isMobile && (
             <Button
               type="button"
               variant="outline-warning"
@@ -545,6 +590,7 @@ export function GarageServicesGrid({
               className="h-8 w-8 p-0"
               onClick={clearViewControls}
               aria-label="Clear filters and groupings"
+              disabled={!hasActiveViewControls}
             >
               <FilterX className="h-4 w-4" />
             </Button>
@@ -568,7 +614,7 @@ export function GarageServicesGrid({
           fullView={fullView}
           maxHeight={fullView ? 'none' : undefined}
           className={fullView ? 'h-full min-h-0' : undefined}
-          emptyMessage={loading ? 'Loading services…' : 'No services yet.'}
+          emptyMessage={loading ? 'Loading services…' : services.length === 0 ? 'No services yet.' : 'No services match the filter'}
           groupBy={groupBy === 'none' ? undefined : getGroupKey}
           renderGroupHeader={groupBy === 'none' ? undefined : renderGroupHeader}
           groupOrder={groupBy === 'none' ? undefined : groupOrder}
@@ -581,6 +627,20 @@ export function GarageServicesGrid({
             <DialogTitle>Filters & View Settings</DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="garage-services-filter-query">Filter</Label>
+              <Input
+                id="garage-services-filter-query"
+                name="garage-services-filter-query-modal"
+                value={draftNameFilter}
+                onChange={(event) => setDraftNameFilter(event.target.value)}
+                placeholder="Service"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+            </div>
             <div className="space-y-1.5">
               <Label>Cadence</Label>
               <Select value={draftCadenceFilter} onValueChange={(value) => setDraftCadenceFilter(value as CadenceFilterOption)}>

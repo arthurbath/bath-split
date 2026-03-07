@@ -11,12 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
 import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-affix-input';
-import { Plus, Trash2, MoreHorizontal } from 'lucide-react';
+import { Plus, Trash2, MoreHorizontal, Filter, FilterX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { FREQUENCY_OPTIONS, toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
 import {
@@ -26,6 +27,7 @@ import {
   GridCheckboxCell,
   gridMenuTriggerProps,
   gridNavProps,
+  gridSelectTriggerProps,
   useDataGrid,
   GRID_HEADER_TONE_CLASS,
   GRID_READONLY_TEXT_CLASS,
@@ -47,6 +49,7 @@ import {
   type BudgetValueType,
 } from '@/lib/budgetAveraging';
 import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 type NewIncomeDraft = Omit<Income, 'id' | 'household_id'>;
 type AveragedValueType = Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>;
@@ -133,6 +136,15 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unexpected error';
 }
 
+function normalizeNameFilterValue(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function matchesNameFilter(name: string, filterValue: string) {
+  const normalizedFilter = normalizeNameFilterValue(filterValue);
+  return normalizedFilter.length === 0 || name.toLocaleLowerCase().includes(normalizedFilter);
+}
+
 function PartnerCell({
   value,
   partnerX,
@@ -155,18 +167,7 @@ function PartnerCell({
       <SelectTrigger
         disabled={disabled}
         className={`h-7 border-transparent bg-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${GRID_CONTROL_FOCUS_CLASS}`}
-        data-row={ctx?.rowIndex}
-        data-row-id={ctx?.rowId}
-        data-col={1}
-        onMouseDown={ctx?.onCellMouseDown}
-        onKeyDown={(e) => {
-          if (!ctx) return;
-          const expanded = e.currentTarget.getAttribute('aria-expanded') === 'true';
-          if (expanded) return;
-          if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Tab') {
-            ctx.onCellKeyDown(e);
-          }
-        }}
+        {...gridSelectTriggerProps(ctx, 1, { disabled })}
       >
         <SelectValue />
       </SelectTrigger>
@@ -201,18 +202,7 @@ function FrequencyCell({
         <SelectTrigger
           disabled={disabled}
           className={`h-7 min-w-0 border-transparent bg-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${GRID_CONTROL_FOCUS_CLASS}`}
-          data-row={ctx?.rowIndex}
-          data-row-id={ctx?.rowId}
-          data-col={4}
-          onMouseDown={ctx?.onCellMouseDown}
-          onKeyDown={(e) => {
-            if (!ctx) return;
-            const expanded = e.currentTarget.getAttribute('aria-expanded') === 'true';
-            if (expanded) return;
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Tab') {
-              ctx.onCellKeyDown(e);
-            }
-          }}
+          {...gridSelectTriggerProps(ctx, 4, { disabled })}
         >
           <SelectValue />
         </SelectTrigger>
@@ -221,7 +211,7 @@ function FrequencyCell({
         </SelectContent>
       </Select>
       {needsParam(income.frequency_type) && (
-        <GridEditableCell value={income.frequency_param ?? ''} onChange={v => onChange('frequency_param', v)} type="number" navCol={5} placeholder="X" className="text-left w-8 shrink-0" disabled={disabled} />
+        <GridEditableCell value={income.frequency_param ?? ''} onChange={v => onChange('frequency_param', v)} type="number" navCol={5} placeholder="X" className="text-left w-8 shrink-0" disabled={disabled} deleteResetValue="" />
       )}
     </div>
   );
@@ -246,6 +236,7 @@ function EstimateCell({
       }}
       navCol={3}
       disabled={disabled || isAveraged}
+      deleteResetChecked={false}
       className={isAveraged ? 'ml-1 opacity-60' : 'ml-1 hover:border-[hsl(var(--grid-sticky-line))]'}
     />
   );
@@ -267,6 +258,7 @@ function AveragedAmountCell({
       <button
         type="button"
         disabled={disabled}
+        data-grid-focus-only="true"
         className={`h-7 w-full rounded-md border border-transparent bg-transparent pl-4 pr-2 text-right tabular-nums text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))] ${GRID_CONTROL_FOCUS_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
         onClick={onEdit}
         {...gridNavProps(ctx, 2)}
@@ -356,9 +348,13 @@ export function IncomesTab({
   onRemove,
   fullView = false,
 }: IncomesTabProps) {
+  const isMobile = useIsMobile();
   const [addIncomeOpen, setAddIncomeOpen] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [newIncome, setNewIncome] = useState<NewIncomeDraft>(createDefaultIncomeDraft);
+  const [filterName, setFilterName] = useState(() => localStorage.getItem('incomes_filterName') ?? '');
+  const [viewControlsOpen, setViewControlsOpen] = useState(false);
+  const [draftFilterName, setDraftFilterName] = useState('');
 
   const [averageEditorState, setAverageEditorState] = useState<{
     income: Income;
@@ -380,6 +376,7 @@ export function IncomesTab({
     try { const s = localStorage.getItem('incomes_sorting'); return s ? JSON.parse(s) : [{ id: 'name', desc: false }]; }
     catch { return [{ id: 'name', desc: false }]; }
   });
+  useEffect(() => { localStorage.setItem('incomes_filterName', filterName); }, [filterName]);
   useEffect(() => { localStorage.setItem('incomes_sorting', JSON.stringify(sorting)); }, [sorting]);
 
   const {
@@ -397,6 +394,25 @@ export function IncomesTab({
   const openAddIncomeModal = () => {
     setNewIncome(createDefaultIncomeDraft());
     setAddIncomeOpen(true);
+  };
+  const hasNameFilter = normalizeNameFilterValue(filterName).length > 0;
+  const filteredIncomes = useMemo(
+    () => incomes.filter((income) => matchesNameFilter(income.name, filterName)),
+    [filterName, incomes],
+  );
+
+  const openViewControlsModal = () => {
+    setDraftFilterName(filterName);
+    setViewControlsOpen(true);
+  };
+
+  const applyViewControls = () => {
+    setFilterName(draftFilterName);
+    setViewControlsOpen(false);
+  };
+
+  const clearViewControls = () => {
+    setFilterName('');
   };
 
   const openAverageEditor = (
@@ -423,15 +439,15 @@ export function IncomesTab({
     if (savingIncome) return;
     setSavingIncome(true);
     try {
+      let payload: NewIncomeDraft;
       if (newIncome.value_type === 'simple') {
-        const payload: NewIncomeDraft = {
+        payload = {
           ...newIncome,
           frequency_param: needsParam(newIncome.frequency_type) ? newIncome.frequency_param : null,
           average_records: [],
         };
-        await onAdd(payload);
       } else {
-        const payload = enforceIncomeTypeInvariants(newIncome.value_type, {
+        const averagedPayload = enforceIncomeTypeInvariants(newIncome.value_type, {
           amount: newIncome.amount,
           frequency_type: newIncome.frequency_type,
           frequency_param: newIncome.frequency_param,
@@ -439,14 +455,22 @@ export function IncomesTab({
           current_period_handling: newIncome.current_period_handling,
           average_records: newIncome.average_records,
         });
-        await onAdd({
+        payload = {
           ...newIncome,
-          ...payload,
-        });
+          ...averagedPayload,
+        };
       }
+      const isVisibleInGrid = matchesNameFilter(payload.name, filterName);
+      await onAdd(payload);
 
       setAddIncomeOpen(false);
       setNewIncome(createDefaultIncomeDraft());
+      if (!isVisibleInGrid) {
+        toast({
+          title: 'Income added but hidden by filters',
+          description: 'The income was added, but it is not visible because of the current filters.',
+        });
+      }
     } catch (error: unknown) {
       toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
@@ -562,7 +586,7 @@ export function IncomesTab({
       size: INCOMES_GRID_DEFAULT_WIDTHS.name,
       minSize: GRID_MIN_COLUMN_WIDTH,
       meta: { containsEditableInput: true },
-      cell: ({ row }) => <GridEditableCell value={row.original.name} onChange={v => handleUpdate(row.original.id, 'name', v)} navCol={0} disabled={!!pendingById[row.original.id]} />,
+      cell: ({ row }) => <GridEditableCell value={row.original.name} onChange={v => handleUpdate(row.original.id, 'name', v)} navCol={0} disabled={!!pendingById[row.original.id]} deleteResetValue="" />,
     }),
     columnHelper.accessor('partner_label', {
       id: 'partner_label',
@@ -580,7 +604,7 @@ export function IncomesTab({
       meta: { headerClassName: 'text-right', containsEditableInput: true },
       cell: ({ row }) => {
         if (row.original.value_type === 'simple') {
-          return <GridCurrencyCell value={Number(row.original.amount)} onChange={v => handleUpdate(row.original.id, 'amount', v)} navCol={2} disabled={!!pendingById[row.original.id]} />;
+          return <GridCurrencyCell value={Number(row.original.amount)} onChange={v => handleUpdate(row.original.id, 'amount', v)} navCol={2} disabled={!!pendingById[row.original.id]} deleteResetValue="0" />;
         }
 
         return (
@@ -654,7 +678,7 @@ export function IncomesTab({
   ], [partnerX, partnerY, pendingById]);
 
   const table = useReactTable({
-    data: incomes,
+    data: filteredIncomes,
     columns,
     defaultColumn: { minSize: GRID_MIN_COLUMN_WIDTH },
     state: { sorting, columnSizing, columnSizingInfo },
@@ -674,23 +698,74 @@ export function IncomesTab({
   const ratioX = total > 0 ? (xTotal / total * 100) : 50;
   const ratioTooltipText = 'These percentages are raw income ratios and are not adjusted for wage gaps. Wage gap-adjusted ratios appear on the Summary view.';
   const gridCardContentClassName = fullView ? 'px-0 pb-0 flex-1 min-h-0' : 'px-0 pb-2.5';
+  const emptyIncomeMessage = incomes.length === 0
+    ? 'No income yet. Click "Add" to start.'
+    : 'No incomes match the filter';
 
   return (
     <>
-      <Card className={fullView ? 'max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 border-t-0 md:border-t h-full min-h-0 flex flex-col' : undefined}>
+      <Card className={fullView ? 'max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 border-t-0 border-b-0 md:border-t h-full min-h-0 flex flex-col' : undefined}>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <CardTitle>Incomes</CardTitle>
-            <Button
-              onClick={openAddIncomeModal}
-              disabled={savingIncome}
-              variant="outline-success"
-              size="sm"
-              className="h-8 w-8 p-0"
-              aria-label="Add income"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              {isMobile ? (
+                <>
+                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={openViewControlsModal}>
+                    <Filter className="h-4 w-4" />
+                    Filters
+                  </Button>
+                  {hasNameFilter && (
+                    <Button
+                      type="button"
+                      variant="outline-warning"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={clearViewControls}
+                      aria-label="Clear filters"
+                    >
+                      <FilterX className="h-4 w-4" />
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Input
+                    name="incomes-filter-query"
+                    value={filterName}
+                    onChange={(event) => setFilterName(event.target.value)}
+                    placeholder="Income"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    className="h-8 w-36 text-xs"
+                    aria-label="Filter"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline-warning"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={clearViewControls}
+                    aria-label="Clear filters"
+                    disabled={!hasNameFilter}
+                  >
+                    <FilterX className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              <Button
+                onClick={openAddIncomeModal}
+                disabled={savingIncome}
+                variant="outline-success"
+                size="sm"
+                className="h-8 w-8 p-0"
+                aria-label="Add income"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className={gridCardContentClassName}>
@@ -699,7 +774,7 @@ export function IncomesTab({
             fullView={fullView}
             maxHeight={fullView ? 'none' : undefined}
             className={fullView ? 'h-full min-h-0' : undefined}
-            emptyMessage='No income yet. Click "Add" to start.'
+            emptyMessage={emptyIncomeMessage}
             footer={incomes.length > 0 ? (
               <>
                 <tr className={`${GRID_HEADER_TONE_CLASS} ${GRID_READONLY_TEXT_CLASS}`}>
@@ -882,6 +957,38 @@ export function IncomesTab({
           </DialogContent>
         </Dialog>
       </Card>
+
+      <Dialog open={viewControlsOpen} onOpenChange={setViewControlsOpen}>
+        <DialogContent className="w-screen max-w-none rounded-none sm:w-full sm:max-w-sm sm:rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Filters</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="incomes-filter-query">Filter</Label>
+              <Input
+                id="incomes-filter-query"
+                name="incomes-filter-query-modal"
+                value={draftFilterName}
+                onChange={(event) => setDraftFilterName(event.target.value)}
+                placeholder="Income"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setViewControlsOpen(false)}>
+              Cancel
+            </Button>
+            <Button data-dialog-confirm="true" type="button" onClick={applyViewControls}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={averageEditorState !== null}

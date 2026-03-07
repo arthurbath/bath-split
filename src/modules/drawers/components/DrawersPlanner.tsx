@@ -19,6 +19,7 @@ import { useModuleBasePath } from '@/platform/hooks/useHostModule';
 import { MobileBottomNav } from '@/platform/components/MobileBottomNav';
 import { handleClientSideLinkNavigation } from '@/lib/navigation';
 import { HouseholdManagementPanel, type HouseholdMember } from '@/platform/households';
+import { CARD_PAGE_BOTTOM_PADDING_CLASS } from '@/lib/pageLayout';
 
 interface DrawersPlannerProps {
   household: DrawersHouseholdData;
@@ -525,7 +526,7 @@ export function DrawersPlanner({
       />
 
       {isPlannerRoute && (
-      <main className="mx-auto max-w-5xl px-4 pt-6 pb-24 md:pb-6">
+      <main className={`mx-auto max-w-5xl px-4 pt-6 ${CARD_PAGE_BOTTOM_PADDING_CLASS}`}>
         <div className="mb-4 space-y-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -739,7 +740,7 @@ export function DrawersPlanner({
       )}
 
       {isConfigRoute && (
-      <main className="mx-auto max-w-5xl px-4 pt-6 pb-24 md:pb-6">
+      <main className={`mx-auto max-w-5xl px-4 pt-6 ${CARD_PAGE_BOTTOM_PADDING_CLASS}`}>
         <HouseholdManagementPanel
           moduleName="Drawer Planner"
           userEmail={userEmail}

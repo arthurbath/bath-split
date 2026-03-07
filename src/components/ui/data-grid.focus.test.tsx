@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ColorPicker } from "@/components/ManagedListSection";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DataGrid, GridCheckboxCell, GridEditableCell, gridMenuTriggerProps, useDataGrid } from "@/components/ui/data-grid";
+import { DataGrid, GridCheckboxCell, GridEditableCell, gridMenuTriggerProps, gridNavProps, gridSelectTriggerProps, useDataGrid } from "@/components/ui/data-grid";
 
 if (typeof HTMLElement !== "undefined" && typeof HTMLElement.prototype.scrollIntoView !== "function") {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -49,6 +49,11 @@ type SelectRowData = {
   owner: "X" | "Y";
 };
 
+type NullableSelectRowData = {
+  id: string;
+  owner: "X" | "Y" | null;
+};
+
 type NumberRowData = {
   id: string;
   amount: number;
@@ -62,6 +67,15 @@ type AsyncNoteRowData = {
 type AsyncCheckboxRowData = {
   id: string;
   monitoring: boolean;
+};
+
+type DeleteResetRowData = {
+  id: string;
+  optionalText: string | null;
+  requiredText: string;
+  zeroableNumber: number;
+  protectedNumber: number | null;
+  checked: boolean;
 };
 
 
@@ -382,6 +396,58 @@ function MenuTriggerHarness({ onTriggerClick }: { onTriggerClick: () => void }) 
   return <DataGrid table={table} />;
 }
 
+function FocusOnlyButtonHarness({ onOpen }: { onOpen: () => void }) {
+  const [rows] = React.useState<MenuRowData[]>([
+    { id: "row-a", name: "Alpha" },
+  ]);
+  const buttonColumnHelper = createColumnHelper<MenuRowData>();
+  const columns = React.useMemo(
+    () => [
+      buttonColumnHelper.accessor("name", {
+        id: "name",
+        header: "Name",
+        cell: ({ row, getValue }) => (
+          <GridEditableCell
+            value={getValue()}
+            navCol={0}
+            onChange={() => {}}
+            cellId={`name-${row.original.id}`}
+          />
+        ),
+      }),
+      buttonColumnHelper.display({
+        id: "amount",
+        header: "Amount",
+        meta: { containsButton: true },
+        cell: () => {
+          const ctx = useDataGrid();
+          return (
+            <button
+              type="button"
+              data-grid-focus-only="true"
+              aria-label="Edit averaged records for Alpha"
+              onClick={onOpen}
+              {...gridNavProps(ctx, 1)}
+            >
+              123
+            </button>
+          );
+        },
+      }),
+    ],
+    [buttonColumnHelper, onOpen],
+  );
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  return <DataGrid table={table} />;
+}
+
 function DropdownMenuHarness() {
   const [rows] = React.useState<MenuRowData[]>([
     { id: "row-a", name: "Alpha" },
@@ -487,24 +553,7 @@ function GridSelectHarness() {
               }}
             >
               <SelectTrigger
-                data-row={ctx?.rowIndex}
-                data-row-id={ctx?.rowId}
-                data-col={0}
-                onMouseDown={ctx?.onCellMouseDown}
-                onKeyDown={(event) => {
-                  if (!ctx) return;
-                  const expanded = event.currentTarget.getAttribute("aria-expanded") === "true";
-                  if (expanded) return;
-                  if (
-                    event.key === "ArrowUp" ||
-                    event.key === "ArrowDown" ||
-                    event.key === "ArrowLeft" ||
-                    event.key === "ArrowRight" ||
-                    event.key === "Tab"
-                  ) {
-                    ctx.onCellKeyDown(event);
-                  }
-                }}
+                {...gridSelectTriggerProps(ctx, 0)}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -518,6 +567,186 @@ function GridSelectHarness() {
       }),
     ],
     [selectColumnHelper],
+  );
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  return <DataGrid table={table} />;
+}
+
+function NullableGridSelectHarness() {
+  const [rows, setRows] = React.useState<NullableSelectRowData[]>([
+    { id: "row-a", owner: "X" },
+  ]);
+  const selectColumnHelper = createColumnHelper<NullableSelectRowData>();
+  const columns = React.useMemo(
+    () => [
+      selectColumnHelper.accessor("owner", {
+        id: "owner",
+        header: "Owner",
+        cell: ({ row, getValue }) => {
+          const ctx = useDataGrid();
+          return (
+            <Select
+              value={getValue() ?? "_none"}
+              onValueChange={(next) => {
+                setRows((prev) => prev.map((entry) => (
+                  entry.id === row.original.id
+                    ? { ...entry, owner: next === "_none" ? null : (next as "X" | "Y") }
+                    : entry
+                )));
+              }}
+            >
+              <SelectTrigger
+                {...gridSelectTriggerProps(ctx, 0, {
+                  onDeleteReset: () => {
+                    setRows((prev) => prev.map((entry) => (
+                      entry.id === row.original.id
+                        ? { ...entry, owner: null }
+                        : entry
+                    )));
+                  },
+                })}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">None</SelectItem>
+                <SelectItem value="X">X</SelectItem>
+                <SelectItem value="Y">Y</SelectItem>
+              </SelectContent>
+            </Select>
+          );
+        },
+      }),
+    ],
+    [selectColumnHelper],
+  );
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  return <DataGrid table={table} />;
+}
+
+function DeleteResetHarness() {
+  const [rows, setRows] = React.useState<DeleteResetRowData[]>([
+    {
+      id: "row-a",
+      optionalText: "Optional note",
+      requiredText: "Required name",
+      zeroableNumber: 42,
+      protectedNumber: 7,
+      checked: true,
+    },
+  ]);
+  const deleteResetColumnHelper = createColumnHelper<DeleteResetRowData>();
+  const columns = React.useMemo(
+    () => [
+      deleteResetColumnHelper.accessor("optionalText", {
+        id: "optionalText",
+        header: "Optional Text",
+        cell: ({ row, getValue }) => (
+          <GridEditableCell
+            value={getValue() ?? ""}
+            navCol={0}
+            deleteResetValue=""
+            onChange={(next) => {
+              setRows((prev) => prev.map((entry) => (
+                entry.id === row.original.id
+                  ? { ...entry, optionalText: next.trim() ? next : null }
+                  : entry
+              )));
+            }}
+          />
+        ),
+      }),
+      deleteResetColumnHelper.accessor("requiredText", {
+        id: "requiredText",
+        header: "Required Text",
+        cell: ({ row, getValue }) => (
+          <GridEditableCell
+            value={getValue()}
+            navCol={1}
+            onChange={(next) => {
+              setRows((prev) => prev.map((entry) => (
+                entry.id === row.original.id
+                  ? { ...entry, requiredText: next.trim() || entry.requiredText }
+                  : entry
+              )));
+            }}
+          />
+        ),
+      }),
+      deleteResetColumnHelper.accessor("zeroableNumber", {
+        id: "zeroableNumber",
+        header: "Zeroable Number",
+        cell: ({ row, getValue }) => (
+          <GridEditableCell
+            value={getValue()}
+            navCol={2}
+            type="number"
+            deleteResetValue="0"
+            onChange={(next) => {
+              const parsed = Number(next);
+              if (!Number.isFinite(parsed)) return;
+              setRows((prev) => prev.map((entry) => (
+                entry.id === row.original.id
+                  ? { ...entry, zeroableNumber: parsed }
+                  : entry
+              )));
+            }}
+          />
+        ),
+      }),
+      deleteResetColumnHelper.accessor("protectedNumber", {
+        id: "protectedNumber",
+        header: "Protected Number",
+        cell: ({ row, getValue }) => (
+          <GridEditableCell
+            value={getValue() ?? ""}
+            navCol={3}
+            type="number"
+            onChange={(next) => {
+              const parsed = Number(next);
+              setRows((prev) => prev.map((entry) => (
+                entry.id === row.original.id
+                  ? { ...entry, protectedNumber: Number.isFinite(parsed) && parsed > 0 ? parsed : entry.protectedNumber }
+                  : entry
+              )));
+            }}
+          />
+        ),
+      }),
+      deleteResetColumnHelper.accessor("checked", {
+        id: "checked",
+        header: "Checked",
+        cell: ({ row, getValue }) => (
+          <GridCheckboxCell
+            checked={getValue()}
+            navCol={4}
+            deleteResetChecked={false}
+            onChange={(next) => {
+              setRows((prev) => prev.map((entry) => (
+                entry.id === row.original.id
+                  ? { ...entry, checked: next }
+                  : entry
+              )));
+            }}
+          />
+        ),
+      }),
+    ],
+    [deleteResetColumnHelper],
   );
 
   const table = useReactTable({
@@ -757,6 +986,12 @@ async function dispatchEnter(input: HTMLInputElement) {
 async function dispatchEnterOnElement(element: HTMLElement) {
   await act(async () => {
     element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+}
+
+async function dispatchDeleteOnElement(element: HTMLElement, key: "Backspace" | "Delete" = "Backspace") {
+  await act(async () => {
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
   });
 }
 
@@ -1208,6 +1443,34 @@ describe("DataGrid menu trigger keyboard navigation", () => {
       unmount(root, container);
     }
   });
+
+  it("focuses focus-only buttons without auto-clicking when tabbing from the prior cell, then opens on Enter", async () => {
+    const onOpen = vi.fn();
+    const { container, root } = mount(<FocusOnlyButtonHarness onOpen={onOpen} />);
+    try {
+      const nameInput = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]');
+      expect(nameInput).not.toBeNull();
+
+      await act(async () => {
+        nameInput!.focus();
+      });
+
+      await dispatchTab(nameInput!);
+      await waitForCondition(() => {
+        const active = document.activeElement as HTMLElement | null;
+        expect(active?.getAttribute("data-row-id")).toBe("row-a");
+        expect(active?.getAttribute("data-col")).toBe("1");
+      });
+
+      expect(onOpen).toHaveBeenCalledTimes(0);
+
+      const trigger = document.activeElement as HTMLElement;
+      await dispatchEnterOnElement(trigger);
+      expect(onOpen).toHaveBeenCalledTimes(1);
+    } finally {
+      unmount(root, container);
+    }
+  });
 });
 
 describe("DataGrid escape cancellation", () => {
@@ -1290,6 +1553,128 @@ describe("DataGrid escape cancellation", () => {
         const active = document.activeElement as HTMLElement | null;
         expect(active?.getAttribute("data-row-id")).toBe("row-a");
         expect(active?.getAttribute("data-col")).toBe("0");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+});
+
+describe("DataGrid delete reset behavior", () => {
+  it("clears nullable text inputs when Backspace is pressed while the cell is focused", async () => {
+    const { container, root } = mount(<DeleteResetHarness />);
+    try {
+      const input = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]');
+      expect(input).not.toBeNull();
+      expect(input!.value).toBe("Optional note");
+
+      await act(async () => {
+        input!.focus();
+      });
+      await dispatchDeleteOnElement(input!, "Backspace");
+
+      await waitForCondition(() => {
+        const liveInput = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]');
+        expect(liveInput).not.toBeNull();
+        expect(liveInput!.value).toBe("");
+        expect(document.activeElement).toBe(liveInput);
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("resets zeroable numeric inputs to 0 when Delete is pressed while the cell is focused", async () => {
+    const { container, root } = mount(<DeleteResetHarness />);
+    try {
+      const input = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="2"]');
+      expect(input).not.toBeNull();
+      expect(input!.value).toBe("42");
+
+      await act(async () => {
+        input!.focus();
+      });
+      await dispatchDeleteOnElement(input!, "Delete");
+
+      await waitForCondition(() => {
+        const liveInput = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="2"]');
+        expect(liveInput).not.toBeNull();
+        expect(liveInput!.value).toBe("0");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("unchecks checkbox cells when Backspace is pressed while the cell is focused", async () => {
+    const { container, root } = mount(<DeleteResetHarness />);
+    try {
+      const checkbox = container.querySelector<HTMLElement>('button[role="checkbox"][data-row-id="row-a"][data-col="4"]');
+      expect(checkbox).not.toBeNull();
+      expect(checkbox?.getAttribute("aria-checked")).toBe("true");
+
+      await act(async () => {
+        checkbox!.focus();
+      });
+      await dispatchDeleteOnElement(checkbox!, "Backspace");
+
+      await waitForCondition(() => {
+        const liveCheckbox = container.querySelector<HTMLElement>('button[role="checkbox"][data-row-id="row-a"][data-col="4"]');
+        expect(liveCheckbox).not.toBeNull();
+        expect(liveCheckbox?.getAttribute("aria-checked")).toBe("false");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("resets selects with a null option when Delete is pressed on the trigger", async () => {
+    const { container, root } = mount(<NullableGridSelectHarness />);
+    try {
+      const trigger = container.querySelector<HTMLElement>('[data-row-id="row-a"][data-col="0"]');
+      expect(trigger).not.toBeNull();
+      expect(trigger?.textContent).toContain("X");
+
+      await act(async () => {
+        trigger!.focus();
+      });
+      await dispatchDeleteOnElement(trigger!, "Delete");
+
+      await waitForCondition(() => {
+        const liveTrigger = container.querySelector<HTMLElement>('[data-row-id="row-a"][data-col="0"]');
+        expect(liveTrigger).not.toBeNull();
+        expect(liveTrigger?.textContent).toContain("None");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("ignores delete reset on controls that do not declare an allowed reset target", async () => {
+    const { container, root } = mount(<DeleteResetHarness />);
+    try {
+      const requiredText = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="1"]');
+      const protectedNumber = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="3"]');
+      expect(requiredText).not.toBeNull();
+      expect(protectedNumber).not.toBeNull();
+
+      await act(async () => {
+        requiredText!.focus();
+      });
+      await dispatchDeleteOnElement(requiredText!, "Backspace");
+
+      await act(async () => {
+        protectedNumber!.focus();
+      });
+      await dispatchDeleteOnElement(protectedNumber!, "Delete");
+
+      await waitForCondition(() => {
+        const liveRequiredText = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="1"]');
+        const liveProtectedNumber = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="3"]');
+        expect(liveRequiredText).not.toBeNull();
+        expect(liveProtectedNumber).not.toBeNull();
+        expect(liveRequiredText!.value).toBe("Required name");
+        expect(liveProtectedNumber!.value).toBe("7");
       });
     } finally {
       unmount(root, container);

@@ -101,6 +101,54 @@ export function gridMenuTriggerProps(
   };
 }
 
+function isGridNavigationKey(key: string) {
+  return (
+    key === 'Tab'
+    || key === 'ArrowUp'
+    || key === 'ArrowDown'
+    || key === 'ArrowLeft'
+    || key === 'ArrowRight'
+  );
+}
+
+function isGridDeleteResetKey(event: Pick<React.KeyboardEvent<HTMLElement>, 'key' | 'altKey' | 'ctrlKey' | 'metaKey'>) {
+  return (
+    (event.key === 'Backspace' || event.key === 'Delete')
+    && !event.altKey
+    && !event.ctrlKey
+    && !event.metaKey
+  );
+}
+
+export function gridSelectTriggerProps(
+  ctx: DataGridContextValue | null,
+  navCol: number,
+  options?: {
+    disabled?: boolean;
+    onDeleteReset?: () => void | Promise<unknown>;
+  },
+): Record<string, unknown> {
+  return {
+    'data-row': ctx?.rowIndex,
+    'data-row-id': ctx?.rowId,
+    'data-col': navCol,
+    onMouseDown: ctx?.onCellMouseDown,
+    onPointerDown: ctx?.onCellPointerDown,
+    onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+      if (!ctx) return;
+      const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
+      if (!expanded && !options?.disabled && options?.onDeleteReset && isGridDeleteResetKey(event)) {
+        event.preventDefault();
+        void options.onDeleteReset();
+        return;
+      }
+      if (!expanded && isGridNavigationKey(event.key)) {
+        ctx.onCellKeyDown(event);
+      }
+    },
+  };
+}
+
 interface GridNavTarget {
   row: number;
   col: number;
@@ -253,6 +301,10 @@ function useGridNav(
     return false;
   }, []);
 
+  const getFocusableCells = useCallback(() => {
+    return getEditableCells().filter((cell) => !isCellTemporarilyUnfocusable(cell));
+  }, [getEditableCells, isCellTemporarilyUnfocusable]);
+
   const isTargetFocused = useCallback((target: HTMLElement) => {
     const active = document.activeElement;
     return active === target || (active instanceof HTMLElement && target.contains(active));
@@ -307,17 +359,17 @@ function useGridNav(
   }, [getEditableCells]);
 
   const findNextCol = useCallback((row: number, currentCol: number) => {
-    const cells = getEditableCells();
+    const cells = getFocusableCells();
     const cols = cells.filter(c => Number(c.dataset.row) === row).map(c => Number(c.dataset.col)).sort((a, b) => a - b);
     return cols.find(c => c > currentCol) ?? null;
-  }, [getEditableCells]);
+  }, [getFocusableCells]);
 
   const findPrevCol = useCallback((row: number, currentCol: number) => {
-    const cells = getEditableCells();
+    const cells = getFocusableCells();
     const cols = cells.filter(c => Number(c.dataset.row) === row).map(c => Number(c.dataset.col)).sort((a, b) => a - b);
     const prev = cols.filter(c => c < currentCol);
     return prev.length > 0 ? prev[prev.length - 1] : null;
-  }, [getEditableCells]);
+  }, [getFocusableCells]);
 
   const findTargetBeforeSort = useCallback((nextRow: number, nextCol: number) => {
     const cells = getEditableCells();
@@ -330,7 +382,7 @@ function useGridNav(
   }, [getEditableCells]);
 
   const resolveColInRow = useCallback((targetRow: number, preferredCol: number) => {
-    const cells = getEditableCells();
+    const cells = getFocusableCells();
     const cols = cells
       .filter(c => Number(c.dataset.row) === targetRow)
       .map(c => Number(c.dataset.col))
@@ -344,7 +396,7 @@ function useGridNav(
 
     const higher = cols.find(c => c > preferredCol);
     return higher ?? null;
-  }, [getEditableCells]);
+  }, [getFocusableCells]);
 
   const focusWithRetry = useCallback((target: { row: number; col: number; rowId: string | null }, attempts = 120) => {
     let tries = 0;
@@ -533,12 +585,13 @@ export function DataGrid<TData>({
   );
   const tableWidth = totalColumnWidth + trailingExtraWidth;
   const hasFooter = Boolean(footer);
+  const isEmptyState = rows.length === 0;
   const bodyClassName = hasFooter
     ? '[&_tr:last-child]:border-0'
     : cn(
         '[&_tr:last-child]:border-0 [&>tr:last-child>td]:shadow-[inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]',
-        stickyFirstColumn && '[&>tr:last-child>td:first-child]:shadow-[inset_-1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]',
-        showActionsColumn && '[&>tr:last-child>td:last-child]:shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]',
+        stickyFirstColumn && !isEmptyState && '[&>tr:last-child>td:first-child]:shadow-[inset_-1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]',
+        showActionsColumn && !isEmptyState && '[&>tr:last-child>td:last-child]:shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]',
       );
   const sortableColumns = React.useMemo(
     () => visibleLeafColumns.filter((column) => column.getCanSort()),
@@ -1002,7 +1055,7 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   );
 }
 
-export function GridEditableCell({ value, onChange, navCol, type = 'text', className, placeholder, cellId, disabled = false }: {
+export function GridEditableCell({ value, onChange, navCol, type = 'text', className, placeholder, cellId, disabled = false, deleteResetValue }: {
   value: string | number;
   onChange: (v: string) => void | Promise<unknown>;
   navCol: number;
@@ -1011,6 +1064,7 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
   placeholder?: string;
   cellId?: string;
   disabled?: boolean;
+  deleteResetValue?: string;
 }) {
   const ctx = useDataGrid();
   const [local, setLocal] = useState(String(value));
@@ -1062,14 +1116,15 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
     }
   }, [value, focused, editing]);
 
-  const commit = () => {
+  const commitValue = (nextValue: string) => {
     if (disabled) return;
     const currentValue = String(value);
-    if (local !== currentValue) {
-      pendingCommittedValueRef.current = local;
+    if (nextValue !== currentValue) {
+      setLocal(nextValue);
+      pendingCommittedValueRef.current = nextValue;
       commitBaseValueRef.current = currentValue;
       ctx?.onCellCommit(navCol);
-      const maybePendingChange = onChange(local);
+      const maybePendingChange = onChange(nextValue);
       if (isPromiseLike(maybePendingChange)) {
         awaitingAsyncCommitRef.current = true;
         void Promise.resolve(maybePendingChange).then(() => {
@@ -1101,6 +1156,10 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
         awaitingAsyncCommitRef.current = false;
       }
     }
+  };
+
+  const commit = () => {
+    commitValue(local);
   };
 
   const handlePressStart = () => {
@@ -1182,6 +1241,12 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
               }
               return;
             }
+            if (!editing && deleteResetValue !== undefined && isGridDeleteResetKey(e)) {
+              e.preventDefault();
+              commitValue(deleteResetValue);
+              scheduleInNextFrame(() => focusInputAtStart(ref.current));
+              return;
+            }
             if (!editing && (type === 'number' ? isNumberEntryKey(e) : isPrintableEntryKey(e))) {
               e.preventDefault();
               startEditingWithKey(e.key);
@@ -1195,6 +1260,12 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
               editStartValueRef.current = local;
               setEditing(true);
               scheduleInNextFrame(() => focusInputAtEnd(ref.current));
+              return;
+            }
+            if (deleteResetValue !== undefined && isGridDeleteResetKey(e)) {
+              e.preventDefault();
+              commitValue(deleteResetValue);
+              scheduleInNextFrame(() => focusInputAtStart(ref.current));
               return;
             }
             if (type === 'number' ? isNumberEntryKey(e) : isPrintableEntryKey(e)) {
@@ -1237,12 +1308,13 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', class
   );
 }
 
-export function GridCurrencyCell({ value, onChange, navCol, className, disabled = false }: {
+export function GridCurrencyCell({ value, onChange, navCol, className, disabled = false, deleteResetValue }: {
   value: number;
   onChange: (v: string) => void | Promise<unknown>;
   navCol: number;
   className?: string;
   disabled?: boolean;
+  deleteResetValue?: string;
 }) {
   const ctx = useDataGrid();
   const [local, setLocal] = useState(String(value));
@@ -1291,14 +1363,15 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
     }
   }, [value, focused, editing]);
 
-  const commit = () => {
+  const commitValue = (nextValue: string) => {
     if (disabled) return;
     const currentValue = String(value);
-    if (local !== currentValue) {
-      pendingCommittedValueRef.current = local;
+    if (nextValue !== currentValue) {
+      setLocal(nextValue);
+      pendingCommittedValueRef.current = nextValue;
       commitBaseValueRef.current = currentValue;
       ctx?.onCellCommit(navCol);
-      const maybePendingChange = onChange(local);
+      const maybePendingChange = onChange(nextValue);
       if (isPromiseLike(maybePendingChange)) {
         awaitingAsyncCommitRef.current = true;
         void Promise.resolve(maybePendingChange).then(() => {
@@ -1330,6 +1403,10 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
         awaitingAsyncCommitRef.current = false;
       }
     }
+  };
+
+  const commit = () => {
+    commitValue(local);
   };
 
   const handlePressStart = () => {
@@ -1417,6 +1494,12 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
               }
               return;
             }
+            if (!editing && deleteResetValue !== undefined && isGridDeleteResetKey(e)) {
+              e.preventDefault();
+              commitValue(deleteResetValue);
+              scheduleInNextFrame(() => focusInputAtStart(ref.current));
+              return;
+            }
             if (!editing && isNumberEntryKey(e)) {
               e.preventDefault();
               startEditingWithKey(e.key);
@@ -1436,6 +1519,12 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
                   focusInputAtStart(ref.current);
                 }
               });
+              return;
+            }
+            if (deleteResetValue !== undefined && isGridDeleteResetKey(e)) {
+              e.preventDefault();
+              commitValue(deleteResetValue);
+              scheduleInNextFrame(() => focusInputAtStart(ref.current));
               return;
             }
             if (isNumberEntryKey(e)) {
@@ -1479,12 +1568,13 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
   );
 }
 
-export function GridPercentCell({ value, onChange, navCol, className, disabled = false }: {
+export function GridPercentCell({ value, onChange, navCol, className, disabled = false, deleteResetValue }: {
   value: number;
   onChange: (v: string) => void | Promise<unknown>;
   navCol: number;
   className?: string;
   disabled?: boolean;
+  deleteResetValue?: string;
 }) {
   const ctx = useDataGrid();
   const [local, setLocal] = useState(String(value));
@@ -1533,14 +1623,15 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
     }
   }, [value, focused, editing]);
 
-  const commit = () => {
+  const commitValue = (nextValue: string) => {
     if (disabled) return;
     const currentValue = String(value);
-    if (local !== currentValue) {
-      pendingCommittedValueRef.current = local;
+    if (nextValue !== currentValue) {
+      setLocal(nextValue);
+      pendingCommittedValueRef.current = nextValue;
       commitBaseValueRef.current = currentValue;
       ctx?.onCellCommit(navCol);
-      const maybePendingChange = onChange(local);
+      const maybePendingChange = onChange(nextValue);
       if (isPromiseLike(maybePendingChange)) {
         awaitingAsyncCommitRef.current = true;
         void Promise.resolve(maybePendingChange).then(() => {
@@ -1572,6 +1663,10 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
         awaitingAsyncCommitRef.current = false;
       }
     }
+  };
+
+  const commit = () => {
+    commitValue(local);
   };
 
   const handlePressStart = () => {
@@ -1655,6 +1750,12 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
               }
               return;
             }
+            if (!editing && deleteResetValue !== undefined && isGridDeleteResetKey(e)) {
+              e.preventDefault();
+              commitValue(deleteResetValue);
+              scheduleInNextFrame(() => focusInputAtStart(ref.current));
+              return;
+            }
             if (!editing && isNumberEntryKey(e)) {
               e.preventDefault();
               startEditingWithKey(e.key);
@@ -1674,6 +1775,12 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
                   focusInputAtStart(ref.current);
                 }
               });
+              return;
+            }
+            if (deleteResetValue !== undefined && isGridDeleteResetKey(e)) {
+              e.preventDefault();
+              commitValue(deleteResetValue);
+              scheduleInNextFrame(() => focusInputAtStart(ref.current));
               return;
             }
             if (isNumberEntryKey(e)) {
@@ -1717,12 +1824,13 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
   );
 }
 
-export function GridCheckboxCell({ checked, onChange, navCol, className, disabled = false }: {
+export function GridCheckboxCell({ checked, onChange, navCol, className, disabled = false, deleteResetChecked }: {
   checked: boolean;
   onChange: (next: boolean) => void | Promise<unknown>;
   navCol: number;
   className?: string;
   disabled?: boolean;
+  deleteResetChecked?: boolean;
 }) {
   const ctx = useDataGrid();
   const [localChecked, setLocalChecked] = useState(checked);
@@ -1815,6 +1923,11 @@ export function GridCheckboxCell({ checked, onChange, navCol, className, disable
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           commit(!localChecked);
+          return;
+        }
+        if (deleteResetChecked !== undefined && isGridDeleteResetKey(event)) {
+          event.preventDefault();
+          commit(deleteResetChecked);
           return;
         }
         ctx?.onCellKeyDown(event);

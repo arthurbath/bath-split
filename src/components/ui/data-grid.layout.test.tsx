@@ -18,18 +18,17 @@ function GridLayoutHarness({
   fullView = false,
   showFooter = true,
   showRowActions = true,
+  rows = [
+    { id: "row-a", name: "Alpha", amount: 12 },
+    { id: "row-b", name: "Bravo", amount: 18 },
+  ],
 }: {
   fullView?: boolean;
   showFooter?: boolean;
   showRowActions?: boolean;
+  rows?: RowData[];
 }) {
-  const rows = React.useMemo<RowData[]>(
-    () => [
-      { id: "row-a", name: "Alpha", amount: 12 },
-      { id: "row-b", name: "Bravo", amount: 18 },
-    ],
-    [],
-  );
+  const gridRows = React.useMemo<RowData[]>(() => rows, [rows]);
 
   const columns = React.useMemo(
     () => [
@@ -63,16 +62,17 @@ function GridLayoutHarness({
   );
 
   const table = useReactTable({
-    data: rows,
+    data: gridRows,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
 
   return (
-    <DataGrid
-      table={table}
-      fullView={fullView}
-      footer={showFooter ? (
+      <DataGrid
+        table={table}
+        fullView={fullView}
+        emptyMessage="No expenses match the filter"
+        footer={showFooter ? (
         <tr>
           <td className="h-9 px-2">Totals</td>
           <td className="h-9 px-2 text-right">30</td>
@@ -246,6 +246,23 @@ describe("DataGrid layout affordances", () => {
       expect(tbody.className).toContain("[&>tr:last-child>td]:shadow-[inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]");
       expect(tbody.className).toContain("[&>tr:last-child>td:last-child]:shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]");
       expect(lastBodyCell.className).toContain("shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line))]");
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("does not apply sticky edge dividers to the empty-state body row", () => {
+    const { container, root } = mount(<GridLayoutHarness fullView showFooter={false} rows={[]} />);
+    try {
+      const tbody = container.querySelector("tbody") as HTMLElement;
+      const emptyCell = container.querySelector("tbody tr td") as HTMLElement;
+
+      expect(tbody.className).toContain("[&>tr:last-child>td]:shadow-[inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]");
+      expect(tbody.className).not.toContain("[&>tr:last-child>td:first-child]:shadow-[inset_-1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]");
+      expect(tbody.className).not.toContain("[&>tr:last-child>td:last-child]:shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line)),inset_0_-1px_0_0_hsl(var(--grid-sticky-line))]");
+      expect(emptyCell.textContent).toContain("No expenses match the filter");
+      expect(emptyCell.className).not.toContain("shadow-[inset_-1px_0_0_0_hsl(var(--grid-sticky-line))]");
+      expect(emptyCell.className).not.toContain("shadow-[inset_1px_0_0_0_hsl(var(--grid-sticky-line))]");
     } finally {
       unmount(root, container);
     }
