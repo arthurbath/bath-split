@@ -723,6 +723,7 @@ export function GarageServicingsGrid({
             value={row.original.odometer_miles}
             type="number"
             navCol={1}
+            deleteResetValue="0"
             onChange={(value) => {
               return onUpdateServicing(row.original.id, {
                 service_date: row.original.service_date,
@@ -745,6 +746,7 @@ export function GarageServicingsGrid({
           <GridEditableCell
             value={row.original.shop_name ?? ''}
             navCol={2}
+            deleteResetValue=""
             onChange={(value) => {
               return onUpdateServicing(row.original.id, {
                 service_date: row.original.service_date,
@@ -806,6 +808,7 @@ export function GarageServicingsGrid({
           <GridEditableCell
             value={row.original.notes ?? ''}
             navCol={5}
+            deleteResetValue=""
             onChange={(value) => {
               return onUpdateServicing(row.original.id, {
                 service_date: row.original.service_date,
@@ -858,7 +861,7 @@ export function GarageServicingsGrid({
   const gridCardContentClassName = fullView ? 'px-0 pb-0 flex-1 min-h-0' : 'space-y-3 px-0';
 
   return (
-    <Card className={`max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 ${fullView ? 'h-full min-h-0 flex flex-col border-t-0 md:border-t' : ''}`}>
+    <Card className={`max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 ${fullView ? 'h-full min-h-0 flex flex-col border-t-0 border-b-0 md:border-t' : ''}`}>
       <CardHeader className="flex flex-row items-center justify-between gap-4">
         <CardTitle>Servicings</CardTitle>
         <Button

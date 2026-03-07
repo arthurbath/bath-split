@@ -23,7 +23,7 @@ import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-af
 import { Plus, Trash2, MoreHorizontal, Filter, FilterX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { FREQUENCY_OPTIONS, toMonthly, frequencyLabels, needsParam, fromMonthly } from '@/lib/frequency';
-import { DataGrid, GridCheckboxCell, GridEditableCell, GridCurrencyCell, GridPercentCell, gridMenuTriggerProps, gridNavProps, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
+import { DataGrid, GridCheckboxCell, GridEditableCell, GridCurrencyCell, GridPercentCell, gridMenuTriggerProps, gridNavProps, gridSelectTriggerProps, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
 import { EXPENSES_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH } from '@/lib/gridColumnWidths';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -107,6 +107,15 @@ const EXPENSE_ACTIONS_NAV_COL = 12;
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unexpected error';
+}
+
+function normalizeNameFilterValue(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function matchesNameFilter(name: string, filterValue: string) {
+  const normalizedFilter = normalizeNameFilterValue(filterValue);
+  return normalizedFilter.length === 0 || name.toLocaleLowerCase().includes(normalizedFilter);
 }
 
 function DropdownOptionColorSwatch({ color }: { color?: string | null }) {
@@ -216,18 +225,13 @@ function CategoryCell({ exp, categories, onChange, onAddNew, disabled = false }:
         disabled={disabled}
         className={`h-7 border-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm ${GRID_CONTROL_FOCUS_CLASS}`}
         style={{ backgroundColor: normalizePaletteColor(categories.find(c => c.id === exp.category_id)?.color) || 'transparent' }}
-        data-row={ctx?.rowIndex}
-        data-row-id={ctx?.rowId}
-        data-col={1}
-        onMouseDown={ctx?.onCellMouseDown}
-        onKeyDown={(e) => {
-          if (!ctx) return;
-          const expanded = e.currentTarget.getAttribute('aria-expanded') === 'true';
-          if (expanded) return;
-          if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Tab') {
-            ctx.onCellKeyDown(e);
-          }
-        }}
+        {...gridSelectTriggerProps(ctx, 1, {
+          disabled,
+          onDeleteReset: () => {
+            ctx?.onCellCommit(1);
+            onChange('_none');
+          },
+        })}
       >
         <SelectValue />
       </SelectTrigger>
@@ -259,18 +263,7 @@ function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expens
         <SelectTrigger
           disabled={disabled}
           className={`h-7 min-w-0 border-transparent bg-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${GRID_CONTROL_FOCUS_CLASS}`}
-          data-row={ctx?.rowIndex}
-          data-row-id={ctx?.rowId}
-          data-col={4}
-          onMouseDown={ctx?.onCellMouseDown}
-          onKeyDown={(e) => {
-            if (!ctx) return;
-            const expanded = e.currentTarget.getAttribute('aria-expanded') === 'true';
-            if (expanded) return;
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Tab') {
-              ctx.onCellKeyDown(e);
-            }
-          }}
+          {...gridSelectTriggerProps(ctx, 4, { disabled })}
         >
           <SelectValue />
         </SelectTrigger>
@@ -279,7 +272,7 @@ function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expens
         </SelectContent>
       </Select>
       {needsParam(exp.frequency_type) && (
-        <GridEditableCell value={exp.frequency_param ?? ''} onChange={v => onChange('frequency_param', v)} type="number" navCol={5} placeholder="X" className="text-left w-8 shrink-0" disabled={disabled} />
+        <GridEditableCell value={exp.frequency_param ?? ''} onChange={v => onChange('frequency_param', v)} type="number" navCol={5} placeholder="X" className="text-left w-8 shrink-0" disabled={disabled} deleteResetValue="" />
       )}
     </div>
   );
@@ -302,18 +295,13 @@ function PaymentMethodCell({ exp, linkedAccounts, partnerX, partnerY, onChange, 
         disabled={disabled}
         className={`h-7 border-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 rounded-sm ${GRID_CONTROL_FOCUS_CLASS}`}
         style={{ backgroundColor: normalizePaletteColor(linkedAccounts.find(la => la.id === exp.linked_account_id)?.color) || 'transparent' }}
-        data-row={ctx?.rowIndex}
-        data-row-id={ctx?.rowId}
-        data-col={6}
-        onMouseDown={ctx?.onCellMouseDown}
-        onKeyDown={(e) => {
-          if (!ctx) return;
-          const expanded = e.currentTarget.getAttribute('aria-expanded') === 'true';
-          if (expanded) return;
-          if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Tab') {
-            ctx.onCellKeyDown(e);
-          }
-        }}
+        {...gridSelectTriggerProps(ctx, 6, {
+          disabled,
+          onDeleteReset: () => {
+            ctx?.onCellCommit(6);
+            onChange('_none');
+          },
+        })}
       >
         <SelectValue>
           {exp.linked_account_id ? linkedAccounts.find(la => la.id === exp.linked_account_id)?.name ?? '—' : '—'}
@@ -343,6 +331,7 @@ function EstimateCell({ checked, onToggle, disabled = false }: { checked: boolea
       onChange={onToggle}
       navCol={3}
       disabled={disabled}
+      deleteResetChecked={false}
       className={disabled ? 'ml-1 opacity-60' : 'ml-1 hover:border-[hsl(var(--grid-sticky-line))]'}
     />
   );
@@ -364,6 +353,7 @@ function AveragedAmountCell({
       <button
         type="button"
         disabled={disabled}
+        data-grid-focus-only="true"
         className={`h-7 w-full rounded-md border border-transparent bg-transparent pl-4 pr-2 text-right tabular-nums text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 hover:border-[hsl(var(--grid-sticky-line))] ${GRID_CONTROL_FOCUS_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
         onClick={onEdit}
         {...gridNavProps(ctx, 2)}
@@ -488,12 +478,14 @@ export function ExpensesTab({
   const [savingConvertToSimple, setSavingConvertToSimple] = useState(false);
 
   type PayerFilter = 'all' | 'X' | 'Y' | 'unassigned';
+  const [filterName, setFilterName] = useState(() => localStorage.getItem('expenses_filterName') ?? '');
   const [filterPayer, setFilterPayer] = useState<PayerFilter>(() => {
     const stored = localStorage.getItem('expenses_filterPayer');
     return stored === 'X' || stored === 'Y' || stored === 'unassigned' || stored === 'all' ? stored : 'all';
   });
   const [groupBy, setGroupBy] = useState<GroupByOption>(() => (localStorage.getItem('expenses_groupBy') as GroupByOption) || 'none');
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
+  const [draftFilterName, setDraftFilterName] = useState('');
   const [draftFilterPayer, setDraftFilterPayer] = useState<PayerFilter>('all');
   const [draftGroupBy, setDraftGroupBy] = useState<GroupByOption>('none');
   const [sorting, setSorting] = useState<SortingState>(() => {
@@ -501,6 +493,7 @@ export function ExpensesTab({
     catch { return [{ id: 'name', desc: false }]; }
   });
 
+  useEffect(() => { localStorage.setItem('expenses_filterName', filterName); }, [filterName]);
   useEffect(() => { localStorage.setItem('expenses_filterPayer', filterPayer); }, [filterPayer]);
   useEffect(() => { localStorage.setItem('expenses_groupBy', groupBy); }, [groupBy]);
   useEffect(() => { localStorage.setItem('expenses_sorting', JSON.stringify(sorting)); }, [sorting]);
@@ -556,14 +549,19 @@ export function ExpensesTab({
     if (filterPayer === 'unassigned') return derivedPayer === null;
     return derivedPayer === filterPayer;
   }, [filterPayer, getDerivedPayerByLinkedAccountId]);
+  const hasNameFilter = normalizeNameFilterValue(filterName).length > 0;
+  const isVisibleWithCurrentFilters = useCallback((expense: Pick<Expense, 'name' | 'linked_account_id'>): boolean => (
+    matchesNameFilter(expense.name, filterName) && isVisibleWithCurrentPayerFilter(expense.linked_account_id)
+  ), [filterName, isVisibleWithCurrentPayerFilter]);
 
-  const filteredExpenses = useMemo(() =>
-    filterPayer === 'all'
-      ? expenses
-      : filterPayer === 'unassigned'
-        ? expenses.filter((e) => getDerivedPayer(e) === null)
-        : expenses.filter((e) => getDerivedPayer(e) === filterPayer),
-    [expenses, filterPayer, getDerivedPayer],
+  const filteredExpenses = useMemo(
+    () => expenses.filter((expense) => {
+      if (!matchesNameFilter(expense.name, filterName)) return false;
+      if (filterPayer === 'all') return true;
+      if (filterPayer === 'unassigned') return getDerivedPayer(expense) === null;
+      return getDerivedPayer(expense) === filterPayer;
+    }),
+    [expenses, filterName, filterPayer, getDerivedPayer],
   );
   const computedData: ComputedRow[] = useMemo(() =>
     filteredExpenses.map(exp => ({ exp, ...computeFairShare(exp) })),
@@ -571,7 +569,7 @@ export function ExpensesTab({
   );
   const emptyExpensesMessage = expenses.length === 0
     ? 'No expenses yet. Click "Add" to start.'
-    : 'No expenses match the filter.';
+    : 'No expenses match the filter';
 
   let totalFairX = 0, totalFairY = 0, totalMonthly = 0;
   computedData.forEach(r => { totalFairX += r.fairX; totalFairY += r.fairY; totalMonthly += r.monthly; });
@@ -583,20 +581,23 @@ export function ExpensesTab({
     setAddExpenseOpen(true);
   };
 
-  const hasActiveViewControls = filterPayer !== 'all' || groupBy !== 'none';
+  const hasActiveViewControls = hasNameFilter || filterPayer !== 'all' || groupBy !== 'none';
 
   const clearViewControls = () => {
+    setFilterName('');
     setFilterPayer('all');
     setGroupBy('none');
   };
 
   const openViewControlsModal = () => {
+    setDraftFilterName(filterName);
     setDraftFilterPayer(filterPayer);
     setDraftGroupBy(groupBy);
     setViewControlsOpen(true);
   };
 
   const applyViewControls = () => {
+    setFilterName(draftFilterName);
     setFilterPayer(draftFilterPayer);
     setGroupBy(draftGroupBy);
     setViewControlsOpen(false);
@@ -655,7 +656,7 @@ export function ExpensesTab({
           ...averagedPayload,
         };
       }
-      const isVisibleInGrid = isVisibleWithCurrentPayerFilter(payload.linked_account_id);
+      const isVisibleInGrid = isVisibleWithCurrentFilters(payload);
       await onAdd(payload);
       setAddExpenseOpen(false);
       setNewExpense(createDefaultExpenseDraft());
@@ -830,6 +831,7 @@ export function ExpensesTab({
           placeholder="Expense"
           cellId={row.original.exp.id}
           disabled={!!pendingById[row.original.exp.id]}
+          deleteResetValue=""
         />
       ),
     }),
@@ -864,6 +866,7 @@ export function ExpensesTab({
               onChange={v => handleUpdate(row.original.exp.id, 'amount', v)}
               navCol={2}
               disabled={!!pendingById[row.original.exp.id]}
+              deleteResetValue="0"
             />
           );
         }
@@ -984,6 +987,7 @@ export function ExpensesTab({
           onChange={v => { const c = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); handleUpdate(row.original.exp.id, 'benefit_x', String(c)); }}
           navCol={7}
           disabled={!!pendingById[row.original.exp.id]}
+          deleteResetValue="0"
         />
       ),
     }),
@@ -1001,6 +1005,7 @@ export function ExpensesTab({
           onChange={v => { const c = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); handleUpdate(row.original.exp.id, 'benefit_x', String(100 - c)); }}
           navCol={8}
           disabled={!!pendingById[row.original.exp.id]}
+          deleteResetValue="0"
         />
       ),
     }),
@@ -1253,7 +1258,7 @@ export function ExpensesTab({
   const gridCardContentClassName = fullView ? 'px-0 pb-0 flex-1 min-h-0' : 'px-0 pb-2.5';
 
   return (
-    <Card className={`max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 ${fullView ? 'h-full min-h-0 flex flex-col border-t-0 md:border-t' : ''}`}>
+    <Card className={`max-w-none w-[100vw] relative left-1/2 -translate-x-1/2 rounded-none border-x-0 ${fullView ? 'h-full min-h-0 flex flex-col border-t-0 border-b-0 md:border-t' : ''}`}>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle>Expenses</CardTitle>
@@ -1279,6 +1284,18 @@ export function ExpensesTab({
               </>
             ) : (
               <>
+                <Input
+                  name="expenses-filter-query"
+                  value={filterName}
+                  onChange={(event) => setFilterName(event.target.value)}
+                  placeholder="Expense"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  className="h-8 w-36 text-xs"
+                  aria-label="Filter"
+                />
                 <Select value={filterPayer} onValueChange={v => setFilterPayer(v as PayerFilter)}>
                   <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1298,18 +1315,17 @@ export function ExpensesTab({
                     <SelectItem value="payment_method">Group by Payment Method</SelectItem>
                   </SelectContent>
                 </Select>
-                {hasActiveViewControls && (
-                  <Button
-                    type="button"
-                    variant="outline-warning"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={clearViewControls}
-                    aria-label="Clear filters and groupings"
-                  >
-                    <FilterX className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline-warning"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={clearViewControls}
+                  aria-label="Clear filters and groupings"
+                  disabled={!hasActiveViewControls}
+                >
+                  <FilterX className="h-4 w-4" />
+                </Button>
               </>
             )}
             <Button onClick={openAddExpenseModal} disabled={savingExpense} variant="outline-success" size="sm" className="h-8 w-8 p-0" aria-label="Add expense">
@@ -1658,6 +1674,20 @@ export function ExpensesTab({
             <DialogTitle>Filters & View Settings</DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="expenses-filter-query">Filter</Label>
+              <Input
+                id="expenses-filter-query"
+                name="expenses-filter-query-modal"
+                value={draftFilterName}
+                onChange={(event) => setDraftFilterName(event.target.value)}
+                placeholder="Expense"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+            </div>
             <div className="space-y-1.5">
               <Label>Partner Filter</Label>
               <Select value={draftFilterPayer} onValueChange={v => setDraftFilterPayer(v as PayerFilter)}>

@@ -23,6 +23,7 @@ import { budgetQueryKeys } from '@/hooks/budgetQueryKeys';
 import { withMutationTiming } from '@/lib/mutationTiming';
 import { supabaseRequest, showMutationError } from '@/lib/supabaseRequest';
 import { handleClientSideLinkNavigation } from '@/lib/navigation';
+import { CARD_PAGE_BOTTOM_PADDING_CLASS, FULL_VIEW_PAGE_BOTTOM_PADDING_CLASS } from '@/lib/pageLayout';
 import type { HouseholdMember } from '@/platform/households';
 
 interface AppShellProps {
@@ -249,7 +250,7 @@ export function AppShell({
       />
 
       {isFullViewGridRoute ? (
-        <main className="flex w-full flex-1 min-h-0 flex-col pt-0 pb-[calc(env(safe-area-inset-bottom)+3.75rem)] md:pt-6 md:pb-0">
+        <main className={`flex w-full flex-1 min-h-0 flex-col pt-0 md:pt-6 ${FULL_VIEW_PAGE_BOTTOM_PADDING_CLASS}`}>
           {isExpensesRoute && (
             <div className="flex-1 min-h-0">
               <ExpensesTab
@@ -291,7 +292,7 @@ export function AppShell({
           )}
         </main>
       ) : (
-        <main className="mx-auto max-w-5xl px-4 pt-6 pb-24 md:pb-6 space-y-6">
+        <main className={`mx-auto max-w-5xl space-y-6 px-4 pt-6 ${CARD_PAGE_BOTTOM_PADDING_CLASS}`}>
           {isIncomesRoute && (
             <IncomesTab
               incomes={incomes}

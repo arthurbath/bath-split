@@ -18,14 +18,17 @@ if (typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.scrollInt
 function renderExpensesTab({
   expenses,
   linkedAccounts = [],
+  filterName = '',
   filterPayer = 'all',
   onUpdate = async () => {},
 }: {
   expenses: Expense[];
   linkedAccounts?: LinkedAccount[];
+  filterName?: string;
   filterPayer?: 'all' | 'X' | 'Y' | 'unassigned';
   onUpdate?: (id: string, updates: Partial<Omit<Expense, 'id' | 'household_id'>>) => Promise<void>;
 }) {
+  localStorage.setItem('expenses_filterName', filterName);
   localStorage.setItem('expenses_filterPayer', filterPayer);
 
   const container = document.createElement('div');
@@ -115,6 +118,19 @@ async function dispatchEnter(input: HTMLInputElement) {
   });
 }
 
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+}
+
+function getVisibleExpenseNames(container: HTMLElement) {
+  return Array.from(container.querySelectorAll<HTMLInputElement>('tbody input[data-col="0"]'))
+    .map((input) => input.value);
+}
+
 describe('ExpensesTab empty message', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -162,8 +178,133 @@ describe('ExpensesTab empty message', () => {
     });
 
     try {
-      expect(container.textContent).toContain('No expenses match the filter.');
+      expect(container.textContent).toContain('No expenses match the filter');
       expect(container.textContent).not.toContain('No expenses yet. Click "Add" to start.');
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('filters expenses live by name on desktop', async () => {
+    setViewportWidth(1200);
+
+    const expenses: Expense[] = [
+      {
+        id: 'expense-1',
+        name: 'Rent',
+        amount: 1200,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        benefit_x: 50,
+        category_id: null,
+        household_id: 'household-1',
+        is_estimate: false,
+        budget_id: null,
+        linked_account_id: null,
+        value_type: 'simple',
+        average_records: [],
+      },
+      {
+        id: 'expense-2',
+        name: 'Groceries',
+        amount: 450,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        benefit_x: 50,
+        category_id: null,
+        household_id: 'household-1',
+        is_estimate: false,
+        budget_id: null,
+        linked_account_id: null,
+        value_type: 'simple',
+        average_records: [],
+      },
+    ];
+
+    const { container, root } = renderExpensesTab({ expenses });
+
+    try {
+      const filterInput = container.querySelector<HTMLInputElement>('input[placeholder="Expense"]');
+      expect(filterInput).toBeTruthy();
+
+      await dispatchInputChange(filterInput!, 'groc');
+
+      await waitForCondition(() => {
+        expect(getVisibleExpenseNames(container)).toEqual(['Groceries']);
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('applies the mobile name filter only after saving the filters modal', async () => {
+    setViewportWidth(500);
+
+    const expenses: Expense[] = [
+      {
+        id: 'expense-1',
+        name: 'Rent',
+        amount: 1200,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        benefit_x: 50,
+        category_id: null,
+        household_id: 'household-1',
+        is_estimate: false,
+        budget_id: null,
+        linked_account_id: null,
+        value_type: 'simple',
+        average_records: [],
+      },
+      {
+        id: 'expense-2',
+        name: 'Groceries',
+        amount: 450,
+        frequency_type: 'monthly',
+        frequency_param: null,
+        benefit_x: 50,
+        category_id: null,
+        household_id: 'household-1',
+        is_estimate: false,
+        budget_id: null,
+        linked_account_id: null,
+        value_type: 'simple',
+        average_records: [],
+      },
+    ];
+
+    const { container, root } = renderExpensesTab({ expenses });
+
+    try {
+      await waitForCondition(() => {
+        expect(Array.from(document.body.querySelectorAll('button')).some((button) => button.textContent?.trim() === 'Filters')).toBe(true);
+      });
+
+      const filtersButton = Array.from(document.body.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === 'Filters') as HTMLButtonElement | undefined;
+      expect(filtersButton).toBeTruthy();
+
+      await act(async () => {
+        filtersButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      const modalInput = document.body.querySelector<HTMLInputElement>('#expenses-filter-query');
+      expect(modalInput).toBeTruthy();
+
+      await dispatchInputChange(modalInput!, 'groc');
+
+      expect(getVisibleExpenseNames(container).sort()).toEqual(['Groceries', 'Rent']);
+
+      const saveButton = document.body.querySelector<HTMLButtonElement>('button[data-dialog-confirm="true"]');
+      expect(saveButton).toBeTruthy();
+
+      await act(async () => {
+        saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      await waitForCondition(() => {
+        expect(getVisibleExpenseNames(container)).toEqual(['Groceries']);
+      });
     } finally {
       unmount(root, container);
     }

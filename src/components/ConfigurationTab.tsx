@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useMemo, useState, type ComponentPropsWithoutRef
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from '@tanstack/react-table';
 import { ManagedListSection, ColorPicker } from '@/components/ManagedListSection';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DataGrid, GridEditableCell, gridMenuTriggerProps, useDataGrid } from '@/components/ui/data-grid';
+import { DataGrid, GridEditableCell, gridMenuTriggerProps, gridSelectTriggerProps, useDataGrid } from '@/components/ui/data-grid';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -276,18 +276,7 @@ function PaymentMethodOwnerCell({
       <SelectTrigger
         disabled={disabled}
         className={`h-7 w-full min-w-[92px] border-transparent bg-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${GRID_CONTROL_FOCUS_CLASS}`}
-        data-row={ctx?.rowIndex}
-        data-row-id={ctx?.rowId}
-        data-col={2}
-        onMouseDown={ctx?.onCellMouseDown}
-        onKeyDown={(event) => {
-          if (!ctx) return;
-          const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
-          if (expanded) return;
-          if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Tab') {
-            ctx.onCellKeyDown(event);
-          }
-        }}
+        {...gridSelectTriggerProps(ctx, 2, { disabled })}
       >
         <SelectValue />
       </SelectTrigger>

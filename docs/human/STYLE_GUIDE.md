@@ -82,6 +82,13 @@ Use lowercase for these words when they appear in the middle of a label:
   - Keyboard navigation and save behavior must use the shared `DataGrid` focus-restoration path. On blur/commit, the grid must not introduce extra scroll movement beyond what is required to keep the focused cell fully visible.
   - When moving focus by Tab/Shift+Tab or arrow keys, the target cell must be scrolled fully into view, accounting for sticky headers, sticky grouped rows, sticky footers, and pinned left/right columns. A cell must never remain partially hidden beneath sticky grid chrome.
   - Focus restoration after async saves must wait until the target control is focusable again before scrolling. Do not add module-specific blur/save scroll hacks on top of the shared grid behavior.
+  - Delete/backspace resets are part of the shared grid keyboard contract. A focused grid control should only reset on `Delete`/`Backspace` when that control explicitly opts in with a shared grid reset target.
+  - Required fields must not infer a reset target from control type alone. If empty string, `0`, or null is not valid for that field, the delete/backspace key must do nothing.
+  - Nullable text fields should opt in to reset to `''`.
+  - Nullable numeric fields should opt in to reset to `''`.
+  - Required numeric fields that allow zero should opt in to reset to `'0'`.
+  - Checkbox fields should opt in to reset to unchecked.
+  - Select fields should use the shared select-trigger helper and only opt in when the menu exposes a true null/none option (for example `_none` rendered as `—` or `None`).
   - Color swatch controls are treated as inputs: `h-7`, no extra margin, gray input border (`--grid-sticky-line`), standard input focus ring, keyboard/grid navigation focuses the swatch input without auto-opening the menu, and Space/Enter opens the swatch menu with focus landing on the selected swatch (or first swatch when none is selected).
   - New rows in a data-grid card are created from a `+` button in the card header that opens a modal form; do not use inline add rows above the grid.
   - The standard DataGrid add button style is the compact green outline icon button used by Budget Expenses/Incomes: `variant="outline-success"`, `size="sm"`, `className="h-8 w-8 p-0"`, with a `Plus` icon and an `aria-label`.

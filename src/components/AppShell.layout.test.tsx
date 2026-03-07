@@ -154,13 +154,14 @@ describe("AppShell full-view layout", () => {
     const { container, root } = renderShell("/budget/expenses");
     try {
       const shell = container.firstElementChild as HTMLElement;
-      const main = container.querySelector("main");
+      const main = container.querySelector("main") as HTMLElement | null;
 
       expect(shell).toHaveClass("h-dvh");
       expect(shell).toHaveClass("overflow-x-visible");
       expect(shell).toHaveClass("overflow-y-hidden");
       expect(main).toHaveClass("w-full");
       expect(main).toHaveClass("flex-1");
+      expect(main?.className).toContain("pb-[calc(env(safe-area-inset-bottom)+3.75rem+4px)]");
       expect(main).not.toHaveClass("max-w-5xl");
     } finally {
       unmountShell(root, container);
@@ -187,11 +188,12 @@ describe("AppShell full-view layout", () => {
     const { container, root } = renderShell("/budget/summary");
     try {
       const shell = container.firstElementChild as HTMLElement;
-      const main = container.querySelector("main");
+      const main = container.querySelector("main") as HTMLElement | null;
 
       expect(shell).toHaveClass("min-h-screen");
       expect(shell).not.toHaveClass("overflow-x-visible");
       expect(main).not.toHaveClass("overflow-x-visible");
+      expect(main?.className).toContain("pb-[calc(env(safe-area-inset-bottom)+5.25rem)]");
     } finally {
       unmountShell(root, container);
     }

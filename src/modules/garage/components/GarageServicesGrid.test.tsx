@@ -1,7 +1,7 @@
 import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { GarageServicesGrid } from '@/modules/garage/components/GarageServicesGrid';
 import type { GarageService, GarageServicingWithRelations } from '@/modules/garage/types/garage';
 
@@ -55,6 +55,29 @@ async function waitForCondition(assertion: () => void, timeoutMs = 500) {
   throw lastError instanceof Error ? lastError : new Error('Condition not met before timeout');
 }
 
+async function dispatchInputChange(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(input, 'value')?.set;
+  const prototypeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set;
+  const setValue = prototypeSetter && valueSetter !== prototypeSetter ? prototypeSetter : valueSetter;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+}
+
+function getVisibleServiceNames(container: HTMLElement) {
+  return Array.from(container.querySelectorAll<HTMLInputElement>('tbody input[data-col="0"]'))
+    .map((input) => input.value);
+}
+
 function makeRect({
   top,
   left,
@@ -94,6 +117,11 @@ function mockElementRect(element: Element, rect: DOMRect) {
 }
 
 describe('GarageServicesGrid focus scrolling', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.body.innerHTML = '';
+  });
+
   it('uses decimal keyboard hints for cadence inputs in the add-service dialog', async () => {
     const services: GarageService[] = [];
 
@@ -221,6 +249,153 @@ describe('GarageServicesGrid focus scrolling', () => {
       localStorage.removeItem('garage_services_groupBy');
       localStorage.removeItem('garage_services_cadenceFilter');
       while (restoreRects.length > 0) restoreRects.pop()?.();
+      unmount(root, container);
+    }
+  });
+
+  it('filters services live by name on desktop', async () => {
+    setViewportWidth(1200);
+
+    const services: GarageService[] = [
+      {
+        id: 'service-1',
+        user_id: 'user-1',
+        vehicle_id: 'vehicle-1',
+        name: 'Oil Change',
+        type: 'replacement',
+        monitoring: true,
+        cadence_type: 'recurring',
+        every_miles: 5000,
+        every_months: 6,
+        sort_order: 0,
+        notes: null,
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'service-2',
+        user_id: 'user-1',
+        vehicle_id: 'vehicle-1',
+        name: 'Brake Inspection',
+        type: 'inspection',
+        monitoring: true,
+        cadence_type: 'recurring',
+        every_miles: 12000,
+        every_months: 12,
+        sort_order: 1,
+        notes: null,
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const { container, root } = mount(
+      <GarageServicesGrid
+        userId=""
+        services={services}
+        servicings={[]}
+        loading={false}
+        vehicleName="Test Car"
+        onAddService={async () => services[0]!}
+        onUpdateService={async () => {}}
+        onDeleteService={async () => {}}
+      />,
+    );
+
+    try {
+      const filterInput = container.querySelector<HTMLInputElement>('input[placeholder="Service"]');
+      expect(filterInput).toBeTruthy();
+
+      await dispatchInputChange(filterInput!, 'brake');
+
+      await waitForCondition(() => {
+        expect(getVisibleServiceNames(container)).toEqual(['Brake Inspection']);
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('applies the mobile name filter only after saving the filters modal', async () => {
+    setViewportWidth(500);
+
+    const services: GarageService[] = [
+      {
+        id: 'service-1',
+        user_id: 'user-1',
+        vehicle_id: 'vehicle-1',
+        name: 'Oil Change',
+        type: 'replacement',
+        monitoring: true,
+        cadence_type: 'recurring',
+        every_miles: 5000,
+        every_months: 6,
+        sort_order: 0,
+        notes: null,
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'service-2',
+        user_id: 'user-1',
+        vehicle_id: 'vehicle-1',
+        name: 'Brake Inspection',
+        type: 'inspection',
+        monitoring: true,
+        cadence_type: 'recurring',
+        every_miles: 12000,
+        every_months: 12,
+        sort_order: 1,
+        notes: null,
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const { container, root } = mount(
+      <GarageServicesGrid
+        userId=""
+        services={services}
+        servicings={[]}
+        loading={false}
+        vehicleName="Test Car"
+        onAddService={async () => services[0]!}
+        onUpdateService={async () => {}}
+        onDeleteService={async () => {}}
+      />,
+    );
+
+    try {
+      await waitForCondition(() => {
+        expect(Array.from(document.body.querySelectorAll('button')).some((button) => button.textContent?.trim() === 'Filters')).toBe(true);
+      });
+
+      const filtersButton = Array.from(document.body.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === 'Filters') as HTMLButtonElement | undefined;
+      expect(filtersButton).toBeTruthy();
+
+      await act(async () => {
+        filtersButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      const modalInput = document.body.querySelector<HTMLInputElement>('#garage-services-filter-query');
+      expect(modalInput).toBeTruthy();
+
+      await dispatchInputChange(modalInput!, 'brake');
+
+      expect(getVisibleServiceNames(container).sort()).toEqual(['Brake Inspection', 'Oil Change']);
+
+      const saveButton = document.body.querySelector<HTMLButtonElement>('button[data-dialog-confirm="true"]');
+      expect(saveButton).toBeTruthy();
+
+      await act(async () => {
+        saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      await waitForCondition(() => {
+        expect(getVisibleServiceNames(container)).toEqual(['Brake Inspection']);
+      });
+    } finally {
       unmount(root, container);
     }
   });
