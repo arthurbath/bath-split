@@ -545,7 +545,7 @@ export function ManagedListSection({
             >
               Cancel
             </Button>
-            <Button variant="outline-success" onClick={() => void handleAdd()} disabled={adding || !name.trim()}>
+            <Button data-dialog-confirm="true" variant="outline-success" onClick={() => void handleAdd()} disabled={adding || !name.trim()}>
               {adding ? 'Saving...' : 'Add'}
             </Button>
           </DialogFooter>

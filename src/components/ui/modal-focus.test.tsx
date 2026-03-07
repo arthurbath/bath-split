@@ -23,6 +23,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 function mount(ui: React.ReactElement) {
   const container = document.createElement("div");
@@ -62,6 +70,12 @@ async function dispatchTabOnActiveElement(shiftKey = false) {
   await act(async () => {
     const active = document.activeElement as HTMLElement | null;
     active?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true }));
+  });
+}
+
+async function dispatchCommandEnter(target: HTMLElement) {
+  await act(async () => {
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }));
   });
 }
 
@@ -156,6 +170,132 @@ function DialogBodyRefHarness({ onReady }: { onReady: (node: HTMLDivElement | nu
   );
 }
 
+function DialogSubmitShortcutHarness() {
+  const [open, setOpen] = React.useState(true);
+  const [submissions, setSubmissions] = React.useState(0);
+
+  return (
+    <>
+      <div data-testid="dialog-open-state">{open ? "open" : "closed"}</div>
+      <div data-testid="dialog-submit-count">{String(submissions)}</div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent data-testid="dialog-content">
+          <DialogHeader>
+            <DialogTitle>Shortcut submit</DialogTitle>
+            <DialogDescription>Command enter should submit and close.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            setSubmissions((count) => count + 1);
+          }}>
+            <DialogBody>
+              <Input data-testid="dialog-form-input" placeholder="Name" />
+            </DialogBody>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function DialogCloseShortcutHarness() {
+  const [open, setOpen] = React.useState(true);
+
+  return (
+    <>
+      <div data-testid="dialog-open-state">{open ? "open" : "closed"}</div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent data-testid="dialog-content">
+          <DialogHeader>
+            <DialogTitle>Shortcut close</DialogTitle>
+            <DialogDescription>Command enter should close even without a form.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline">Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function DialogConfirmShortcutHarness() {
+  const [open, setOpen] = React.useState(true);
+  const [confirmCount, setConfirmCount] = React.useState(0);
+
+  return (
+    <>
+      <div data-testid="dialog-open-state">{open ? "open" : "closed"}</div>
+      <div data-testid="dialog-confirm-count">{String(confirmCount)}</div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent data-testid="dialog-content">
+          <DialogHeader>
+            <DialogTitle>Shortcut confirm</DialogTitle>
+            <DialogDescription>Command enter should trigger the modal confirm action.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline">Cancel</Button>
+            <Button type="button" data-dialog-confirm="true" onClick={() => setConfirmCount((count) => count + 1)}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function AlertDialogShortcutHarness() {
+  const [open, setOpen] = React.useState(true);
+
+  return (
+    <>
+      <div data-testid="alert-open-state">{open ? "open" : "closed"}</div>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent data-testid="alert-content">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alert shortcut</AlertDialogTitle>
+            <AlertDialogDescription>Command enter should close this alert.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+function SheetSubmitShortcutHarness() {
+  const [open, setOpen] = React.useState(true);
+  const [submissions, setSubmissions] = React.useState(0);
+
+  return (
+    <>
+      <div data-testid="sheet-open-state">{open ? "open" : "closed"}</div>
+      <div data-testid="sheet-submit-count">{String(submissions)}</div>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent data-testid="sheet-content">
+          <SheetHeader>
+            <SheetTitle>Sheet shortcut</SheetTitle>
+            <SheetDescription>Command enter should submit and close.</SheetDescription>
+          </SheetHeader>
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            setSubmissions((count) => count + 1);
+          }}>
+            <Input data-testid="sheet-form-input" placeholder="Name" />
+          </form>
+          <SheetFooter>
+            <Button type="button">Save</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
 describe("Modal focus conventions", () => {
   it("focuses confirm action when alert dialog has no inputs", async () => {
     const { container, root } = mount(<AlertDialogNoInputHarness />);
@@ -241,6 +381,104 @@ describe("Modal focus conventions", () => {
     try {
       await waitForCondition(() => {
         expect(bodyNode).toBeInstanceOf(HTMLDivElement);
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("submits dialog forms and closes the dialog on command enter", async () => {
+    const { container, root } = mount(<DialogSubmitShortcutHarness />);
+    try {
+      await waitForCondition(() => {
+        expect(document.querySelector('[data-testid="dialog-content"]')).not.toBeNull();
+      });
+
+      const content = document.querySelector<HTMLElement>('[data-testid="dialog-content"]');
+      expect(content).not.toBeNull();
+      await dispatchCommandEnter(content!);
+
+      await waitForCondition(() => {
+        expect(container.querySelector('[data-testid="dialog-submit-count"]')?.textContent).toBe("1");
+        expect(container.querySelector('[data-testid="dialog-open-state"]')?.textContent).toBe("closed");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("closes dialogs without forms on command enter", async () => {
+    const { container, root } = mount(<DialogCloseShortcutHarness />);
+    try {
+      await waitForCondition(() => {
+        expect(document.querySelector('[data-testid="dialog-content"]')).not.toBeNull();
+      });
+
+      const content = document.querySelector<HTMLElement>('[data-testid="dialog-content"]');
+      expect(content).not.toBeNull();
+      await dispatchCommandEnter(content!);
+
+      await waitForCondition(() => {
+        expect(container.querySelector('[data-testid="dialog-open-state"]')?.textContent).toBe("closed");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("triggers dialog confirm actions and closes when no form is present", async () => {
+    const { container, root } = mount(<DialogConfirmShortcutHarness />);
+    try {
+      await waitForCondition(() => {
+        expect(document.querySelector('[data-testid="dialog-content"]')).not.toBeNull();
+      });
+
+      const content = document.querySelector<HTMLElement>('[data-testid="dialog-content"]');
+      expect(content).not.toBeNull();
+      await dispatchCommandEnter(content!);
+
+      await waitForCondition(() => {
+        expect(container.querySelector('[data-testid="dialog-confirm-count"]')?.textContent).toBe("1");
+        expect(container.querySelector('[data-testid="dialog-open-state"]')?.textContent).toBe("closed");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("closes alert dialogs on command enter", async () => {
+    const { container, root } = mount(<AlertDialogShortcutHarness />);
+    try {
+      await waitForCondition(() => {
+        expect(document.querySelector('[data-testid="alert-content"]')).not.toBeNull();
+      });
+
+      const content = document.querySelector<HTMLElement>('[data-testid="alert-content"]');
+      expect(content).not.toBeNull();
+      await dispatchCommandEnter(content!);
+
+      await waitForCondition(() => {
+        expect(container.querySelector('[data-testid="alert-open-state"]')?.textContent).toBe("closed");
+      });
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it("submits sheet forms and closes the sheet on command enter", async () => {
+    const { container, root } = mount(<SheetSubmitShortcutHarness />);
+    try {
+      await waitForCondition(() => {
+        expect(document.querySelector('[data-testid="sheet-content"]')).not.toBeNull();
+      });
+
+      const content = document.querySelector<HTMLElement>('[data-testid="sheet-content"]');
+      expect(content).not.toBeNull();
+      await dispatchCommandEnter(content!);
+
+      await waitForCondition(() => {
+        expect(container.querySelector('[data-testid="sheet-submit-count"]')?.textContent).toBe("1");
+        expect(container.querySelector('[data-testid="sheet-open-state"]')?.textContent).toBe("closed");
       });
     } finally {
       unmount(root, container);

@@ -173,7 +173,7 @@ function PartnersCard({ partnerX, partnerY, wageGapAdjustmentEnabled, partnerXWa
       <CardHeader>
         <CardTitle>Partners</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent data-command-enter-scope="true" className="space-y-4">
         <div className="flex items-end gap-3">
           <div className="flex-1 space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Partner A</label>
@@ -239,7 +239,7 @@ function PartnersCard({ partnerX, partnerY, wageGapAdjustmentEnabled, partnerXWa
         </div>
         <div className="border-t pt-3">
           <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={!dirty || saving || !nameX.trim() || !nameY.trim() || hasInvalidCents || (wageGapEnabled && !hasAtLeastOneWageGapValue)}>
+          <Button data-command-enter-confirm="true" onClick={handleSave} disabled={!dirty || saving || !nameX.trim() || !nameY.trim() || hasInvalidCents || (wageGapEnabled && !hasAtLeastOneWageGapValue)}>
             {saving ? 'Saving…' : 'Save'}
           </Button>
           </div>
@@ -672,7 +672,7 @@ function PaymentMethodsSection({ userId, linkedAccounts, expenses, partnerX, par
             >
               Cancel
             </Button>
-            <Button variant="outline-success" onClick={() => void handleAdd()} disabled={adding || !name.trim()}>
+            <Button data-dialog-confirm="true" variant="outline-success" onClick={() => void handleAdd()} disabled={adding || !name.trim()}>
               {adding ? 'Saving...' : 'Add'}
             </Button>
           </DialogFooter>

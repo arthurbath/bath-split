@@ -877,7 +877,7 @@ export function IncomesTab({
               >
                 Cancel
               </Button>
-              <Button variant="outline-success" onClick={handleSaveIncome} disabled={savingIncome}>{savingIncome ? 'Saving...' : 'Add'}</Button>
+              <Button data-dialog-confirm="true" variant="outline-success" onClick={handleSaveIncome} disabled={savingIncome}>{savingIncome ? 'Saving...' : 'Add'}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -922,7 +922,7 @@ export function IncomesTab({
             >
               Cancel
             </Button>
-            <Button variant="outline-success" onClick={handleSaveAverageEditor} disabled={savingAverageEditor}>{savingAverageEditor ? 'Saving...' : 'Save'}</Button>
+            <Button data-dialog-confirm="true" variant="outline-success" onClick={handleSaveAverageEditor} disabled={savingAverageEditor}>{savingAverageEditor ? 'Saving...' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

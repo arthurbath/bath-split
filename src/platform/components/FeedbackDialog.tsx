@@ -195,7 +195,7 @@ export function FeedbackDialog({ userId, trigger }: FeedbackDialogProps) {
         </DialogBody>
 
         <DialogFooter>
-          <Button onClick={handleSubmit} disabled={!message.trim() || sending}>
+          <Button data-dialog-confirm="true" onClick={handleSubmit} disabled={!message.trim() || sending}>
             {sending ? 'Sending...' : 'Submit'}
           </Button>
         </DialogFooter>

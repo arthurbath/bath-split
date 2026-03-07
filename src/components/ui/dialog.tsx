@@ -3,46 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-
-const MODAL_FOCUSABLE_SELECTOR = [
-  'input:not([type="hidden"]):not([disabled])',
-  'textarea:not([disabled])',
-  'select:not([disabled])',
-  'button:not([disabled])',
-  '[role="combobox"]:not([aria-disabled="true"])',
-  '[role="checkbox"]:not([aria-disabled="true"])',
-  '[tabindex]:not([tabindex="-1"])',
-  '[contenteditable="true"]',
-].join(", ");
-
-const MODAL_FORM_CONTROL_SELECTOR = [
-  '[autofocus]:not([disabled]):not([aria-disabled="true"]):not([hidden])',
-  'input:not([type="hidden"]):not([disabled])',
-  'textarea:not([disabled])',
-  'select:not([disabled])',
-  '[role="combobox"]:not([aria-disabled="true"])',
-  '[role="checkbox"]:not([aria-disabled="true"])',
-  '[contenteditable="true"]',
-].join(", ");
-
-const MODAL_CONFIRM_SELECTOR = [
-  '[data-dialog-confirm="true"]:not([disabled]):not([aria-disabled="true"])',
-  '[data-alert-dialog-action="true"]:not([disabled]):not([aria-disabled="true"])',
-].join(", ");
-
-const isFocusableVisible = (element: HTMLElement) => {
-  if (element.hidden) return false;
-  const style = window.getComputedStyle(element);
-  if (style.display === "none" || style.visibility === "hidden") return false;
-  return true;
-};
-
-const getModalFocusableElements = (container: HTMLElement) =>
-  Array.from(container.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE_SELECTOR)).filter((element) => {
-    if (element.dataset.modalClose === "true") return false;
-    if (element.getAttribute("aria-disabled") === "true") return false;
-    return isFocusableVisible(element);
-  });
+import { getModalKeyDownHandler, getModalOpenAutoFocusHandler } from "@/components/ui/modal-shortcuts";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -71,53 +32,8 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, onOpenAutoFocus, onKeyDown, ...props }, ref) => {
-  const handleOpenAutoFocus: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>["onOpenAutoFocus"] = (event) => {
-    onOpenAutoFocus?.(event);
-    if (event.defaultPrevented) return;
-
-    const content = event.currentTarget as HTMLElement | null;
-    if (!content) return;
-
-    event.preventDefault();
-    const focusTarget =
-      content.querySelector<HTMLElement>(MODAL_FORM_CONTROL_SELECTOR) ??
-      content.querySelector<HTMLElement>(MODAL_CONFIRM_SELECTOR) ??
-      getModalFocusableElements(content)[0] ??
-      content;
-    focusTarget.focus();
-  };
-
-  const handleKeyDown: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>["onKeyDown"] = (event) => {
-    onKeyDown?.(event);
-    if (event.defaultPrevented || event.key !== "Tab") return;
-
-    const content = event.currentTarget as HTMLElement | null;
-    if (!content) return;
-
-    const focusables = getModalFocusableElements(content);
-    if (focusables.length === 0) return;
-
-    const active = document.activeElement;
-    if (!(active instanceof HTMLElement)) return;
-
-    let activeIndex = focusables.indexOf(active);
-    if (activeIndex < 0) {
-      activeIndex = focusables.findIndex((element) => element.contains(active));
-    }
-    if (activeIndex < 0) {
-      event.preventDefault();
-      const fallbackIndex = event.shiftKey ? focusables.length - 1 : 0;
-      focusables[fallbackIndex]?.focus();
-      return;
-    }
-
-    event.preventDefault();
-    const nextIndex = event.shiftKey
-      ? (activeIndex - 1 + focusables.length) % focusables.length
-      : (activeIndex + 1) % focusables.length;
-
-    focusables[nextIndex]?.focus();
-  };
+  const handleOpenAutoFocus = getModalOpenAutoFocusHandler(onOpenAutoFocus);
+  const handleKeyDown = getModalKeyDownHandler(onKeyDown);
 
   return (
     <DialogPortal>
