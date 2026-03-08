@@ -305,10 +305,9 @@ export default function AccountPage() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={handleRequestPasswordChange}
-                disabled={sendingPasswordLink}
+                onClick={() => setShowChangePasswordConfirm(true)}
               >
-                {sendingPasswordLink ? 'Sending...' : 'Change Password'}
+                Change Password
               </Button>
               <Button variant="outline" className="w-full" onClick={() => setShowChangeEmail(true)}>
                 Change Email
