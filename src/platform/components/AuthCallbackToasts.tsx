@@ -17,6 +17,62 @@ function hasEmailChangeSignal(searchParams: URLSearchParams, hashParams: URLSear
   );
 }
 
+/** Map Supabase error_code values to friendly toast content. */
+function getErrorToast(errorCode: string, errorDescription: string): { title: string; description: string } | null {
+  const desc = decodeURIComponent(errorDescription.replace(/\+/g, ' ')).trim();
+
+  switch (errorCode) {
+    case 'otp_expired':
+      return {
+        title: 'Link expired',
+        description: 'This link is no longer valid. It may have already been used or has expired. Please request a new one.',
+      };
+    case 'otp_disabled':
+      return {
+        title: 'Link disabled',
+        description: 'This type of link is not currently enabled. Please contact support.',
+      };
+    case 'validation_failed':
+      return {
+        title: 'Validation failed',
+        description: desc || 'The request could not be validated. Please try again.',
+      };
+    case 'user_not_found':
+      return {
+        title: 'Account not found',
+        description: 'No account was found for this link. It may have been deleted.',
+      };
+    case 'user_banned':
+      return {
+        title: 'Account suspended',
+        description: 'This account has been suspended. Please contact support.',
+      };
+    case 'flow_state_not_found':
+    case 'flow_state_expired':
+      return {
+        title: 'Session expired',
+        description: 'The authentication session for this link has expired. Please start over.',
+      };
+    case 'provider_disabled':
+      return {
+        title: 'Sign-in method unavailable',
+        description: 'This sign-in method is not currently available.',
+      };
+    default:
+      break;
+  }
+
+  // Fallback: match on error (e.g. "access_denied") or use the raw description
+  if (desc) {
+    return {
+      title: 'Authentication error',
+      description: desc,
+    };
+  }
+
+  return null;
+}
+
 export default function AuthCallbackToasts() {
   const location = useLocation();
   const { toast } = useToast();
@@ -29,8 +85,21 @@ export default function AuthCallbackToasts() {
     const searchParams = new URLSearchParams(location.search);
     const hashParams = parseHashParams(location.hash);
 
-    if (searchParams.get('error') || hashParams.get('error')) return;
+    // --- Handle auth errors ---
+    const error = hashParams.get('error') ?? searchParams.get('error');
+    if (error) {
+      const errorCode = hashParams.get('error_code') ?? searchParams.get('error_code') ?? '';
+      const errorDescription = hashParams.get('error_description') ?? searchParams.get('error_description') ?? '';
 
+      const errorToast = getErrorToast(errorCode, errorDescription);
+      if (errorToast) {
+        processedRef.current.add(key);
+        toast({ title: errorToast.title, description: errorToast.description, variant: 'destructive' });
+      }
+      return;
+    }
+
+    // --- Handle success messages ---
     const messageRaw = hashParams.get('message') ?? searchParams.get('message') ?? '';
     const message = messageRaw.toLowerCase();
 
