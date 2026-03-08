@@ -42,7 +42,7 @@ export function TermsUpdateOverlay({ latestVersion, pendingVersions, onAgree }: 
   }, []);
 
   const isCommandEnter = (event: KeyboardEvent<HTMLElement>) =>
-    event.key === 'Enter' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing;
+    event.key === 'Enter' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !(event.nativeEvent as globalThis.KeyboardEvent).isComposing;
 
   const handleAgree = async () => {
     setIsAgreeing(true);
