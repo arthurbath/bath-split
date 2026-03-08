@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { installClientConsoleMirror } from "./platform/dev/clientConsoleMirror";
+import { shouldEnableSentry } from "./platform/sentry";
 import "./index.css";
 
 if (import.meta.env.DEV) {
@@ -9,11 +10,12 @@ if (import.meta.env.DEV) {
 }
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
-const isLocalhost = /^(localhost|127\.0\.0\.1|::1)$/.test(window.location.hostname);
+const shouldInitSentry = shouldEnableSentry(sentryDsn, window.location.hostname);
 
-if (sentryDsn && !isLocalhost) {
+if (shouldInitSentry) {
   Sentry.init({
     dsn: sentryDsn,
+    environment: "production",
     sendDefaultPii: false,
     debug: import.meta.env.DEV,
   });
