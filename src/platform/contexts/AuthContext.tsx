@@ -25,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [displayName, setDisplayNameState] = useState('');
   const [loading, setLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [passwordRecoveryDetected, setPasswordRecoveryDetected] = useState(false);
   const isSigningOutRef = useRef(false);
   const hasSeenAuthenticatedSessionRef = useRef(false);
 
