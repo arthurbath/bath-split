@@ -9,6 +9,8 @@ import type { Expense } from '@/hooks/useExpenses';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
 import { fromMonthly } from '@/lib/frequency';
 
+const CPH = 'include_current_period' as const;
+
 function mount(ui: React.ReactElement) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -49,6 +51,7 @@ describe('SummaryTab DataGrid', () => {
         frequency_param: null,
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
       {
@@ -61,6 +64,7 @@ describe('SummaryTab DataGrid', () => {
         frequency_param: null,
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -87,6 +91,7 @@ describe('SummaryTab DataGrid', () => {
         linked_account_id: 'acct-x',
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -124,6 +129,7 @@ describe('SummaryTab DataGrid', () => {
         frequency_param: null,
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -142,6 +148,7 @@ describe('SummaryTab DataGrid', () => {
         linked_account_id: null,
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
       {
@@ -157,6 +164,7 @@ describe('SummaryTab DataGrid', () => {
         linked_account_id: null,
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -196,6 +204,7 @@ describe('SummaryTab DataGrid', () => {
         frequency_param: null,
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -214,6 +223,7 @@ describe('SummaryTab DataGrid', () => {
         linked_account_id: null,
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
