@@ -54,6 +54,7 @@ export default function AccountPage() {
   const [emailSubmitting, setEmailSubmitting] = useState(false);
 
   // Change password (recovery-based flow)
+  const [showChangePasswordConfirm, setShowChangePasswordConfirm] = useState(false);
   const [sendingPasswordLink, setSendingPasswordLink] = useState(false);
 
   // Forced change password modal (after recovery link click)
@@ -304,10 +305,9 @@ export default function AccountPage() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={handleRequestPasswordChange}
-                disabled={sendingPasswordLink}
+                onClick={() => setShowChangePasswordConfirm(true)}
               >
-                {sendingPasswordLink ? 'Sending...' : 'Change Password'}
+                Change Password
               </Button>
               <Button variant="outline" className="w-full" onClick={() => setShowChangeEmail(true)}>
                 Change Email
@@ -354,6 +354,27 @@ export default function AccountPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Change Password Confirmation Dialog */}
+      <AlertDialog open={showChangePasswordConfirm} onOpenChange={setShowChangePasswordConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              A password change link will be sent to your email address. You will be signed out and must click the link to set a new password.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={sendingPasswordLink}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRequestPasswordChange}
+              disabled={sendingPasswordLink}
+            >
+              {sendingPasswordLink ? 'Sending...' : 'Send Link'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Change Email Dialog */}
       <Dialog open={showChangeEmail} onOpenChange={setShowChangeEmail}>
