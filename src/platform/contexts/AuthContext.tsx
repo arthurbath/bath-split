@@ -8,7 +8,9 @@ interface AuthContextValue {
   displayName: string;
   loading: boolean;
   isSigningOut: boolean;
+  passwordRecoveryDetected: boolean;
   setDisplayName: (nextDisplayName: string) => void;
+  clearPasswordRecovery: () => void;
   signUp: (email: string, password: string, displayName: string, termsVersion?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
