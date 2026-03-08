@@ -13,6 +13,8 @@ if (typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.scrollInt
   });
 }
 
+const CPH = 'include_current_period' as const;
+
 function mount(ui: React.ReactElement) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -110,6 +112,7 @@ describe('IncomesTab averaged rows', () => {
         partner_label: 'X',
         is_estimate: true,
         value_type: 'yearly_averaged',
+        current_period_handling: CPH,
         average_records: [
           { year: 2025, month: null, amount: 11000, date: '2025-04-15' },
           { year: 2026, month: null, amount: 13000, date: '2026-09-01' },
@@ -153,6 +156,7 @@ describe('IncomesTab averaged rows', () => {
       frequency_param: null,
       is_estimate: false,
       value_type: 'simple',
+      current_period_handling: CPH,
       average_records: [],
     }, 'yearly_averaged', new Date('2026-03-02T12:00:00-08:00'));
 
@@ -173,6 +177,7 @@ describe('IncomesTab averaged rows', () => {
         partner_label: 'X',
         is_estimate: true,
         value_type: 'yearly_averaged',
+        current_period_handling: CPH,
         average_records: [
           { year: 2025, month: null, amount: 11000, date: '2025-04-15' },
           { year: 2026, month: null, amount: 13000, date: '2026-09-01' },
@@ -230,6 +235,7 @@ describe('IncomesTab averaged rows', () => {
         partner_label: 'X',
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -281,6 +287,7 @@ describe('IncomesTab averaged rows', () => {
         partner_label: 'X',
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
       {
@@ -293,6 +300,7 @@ describe('IncomesTab averaged rows', () => {
         partner_label: 'Y',
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -338,6 +346,7 @@ describe('IncomesTab averaged rows', () => {
         partner_label: 'X',
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
       {
@@ -350,6 +359,7 @@ describe('IncomesTab averaged rows', () => {
         partner_label: 'Y',
         is_estimate: false,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];

@@ -69,7 +69,7 @@ export const getModalOpenAutoFocusHandler = (
 };
 
 const isSubmitShortcut = (event: React.KeyboardEvent<HTMLElement>) =>
-  event.key === "Enter" && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing;
+  event.key === "Enter" && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !(event.nativeEvent as KeyboardEvent).isComposing;
 
 const closeModalFromContent = (content: HTMLElement) => {
   const closeTrigger = content.querySelector<HTMLElement>(MODAL_SHORTCUT_CLOSE_SELECTOR);

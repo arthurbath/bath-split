@@ -15,6 +15,8 @@ if (typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.scrollInt
   });
 }
 
+const CPH = 'include_current_period' as const;
+
 function renderExpensesTab({
   expenses,
   linkedAccounts = [],
@@ -160,6 +162,7 @@ describe('ExpensesTab empty message', () => {
       budget_id: null,
       linked_account_id: 'account-y',
       value_type: 'simple',
+      current_period_handling: CPH,
       average_records: [],
     };
 
@@ -202,6 +205,7 @@ describe('ExpensesTab empty message', () => {
         budget_id: null,
         linked_account_id: null,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
       {
@@ -217,6 +221,7 @@ describe('ExpensesTab empty message', () => {
         budget_id: null,
         linked_account_id: null,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -254,6 +259,7 @@ describe('ExpensesTab empty message', () => {
         budget_id: null,
         linked_account_id: null,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
       {
@@ -269,6 +275,7 @@ describe('ExpensesTab empty message', () => {
         budget_id: null,
         linked_account_id: null,
         value_type: 'simple',
+        current_period_handling: CPH,
         average_records: [],
       },
     ];
@@ -325,6 +332,7 @@ describe('ExpensesTab empty message', () => {
       budget_id: null,
       linked_account_id: null,
       value_type: 'simple',
+      current_period_handling: CPH,
       average_records: [],
     };
 
@@ -367,6 +375,7 @@ describe('ExpensesTab empty message', () => {
       budget_id: null,
       linked_account_id: null,
       value_type: 'monthly_averaged',
+      current_period_handling: CPH,
       average_records: [
         { year: 2026, month: 2, amount: 1000, date: '2026-02-10' },
         { year: 2025, month: 12, amount: 900, date: '2025-12-28' },
@@ -402,6 +411,7 @@ describe('ExpensesTab empty message', () => {
       budget_id: null,
       linked_account_id: null,
       value_type: 'simple',
+      current_period_handling: CPH,
       average_records: [],
     };
 
@@ -442,6 +452,7 @@ describe('ExpensesTab empty message', () => {
       frequency_param: null,
       is_estimate: false,
       value_type: 'simple',
+      current_period_handling: CPH,
       average_records: [],
     }, 'monthly_averaged', new Date('2026-03-02T12:00:00-08:00'));
 
