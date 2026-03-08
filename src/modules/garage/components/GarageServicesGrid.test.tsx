@@ -303,7 +303,7 @@ describe('GarageServicesGrid focus scrolling', () => {
     );
 
     try {
-      const filterInput = container.querySelector<HTMLInputElement>('input[placeholder="Service"]');
+      const filterInput = container.querySelector<HTMLInputElement>('input[placeholder="Service Name"]');
       expect(filterInput).toBeTruthy();
 
       await dispatchInputChange(filterInput!, 'brake');

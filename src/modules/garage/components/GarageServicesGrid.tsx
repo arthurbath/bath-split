@@ -559,13 +559,13 @@ export function GarageServicesGrid({
                 name="garage-services-filter-query"
                 value={nameFilter}
                 onChange={(event) => setNameFilter(event.target.value)}
-                placeholder="Service"
+                placeholder="Service Name"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
                 className="h-8 w-36 text-xs"
-                aria-label="Filter"
+                aria-label="Name"
               />
               <Select value={cadenceFilter} onValueChange={(value) => setCadenceFilter(value as CadenceFilterOption)}>
                 <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Cadence…" /></SelectTrigger>
@@ -630,13 +630,13 @@ export function GarageServicesGrid({
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="garage-services-filter-query">Filter</Label>
+              <Label htmlFor="garage-services-filter-query">Name</Label>
               <Input
                 id="garage-services-filter-query"
                 name="garage-services-filter-query-modal"
                 value={draftNameFilter}
                 onChange={(event) => setDraftNameFilter(event.target.value)}
-                placeholder="Service"
+                placeholder="Service Name"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"

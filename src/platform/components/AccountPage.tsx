@@ -276,26 +276,31 @@ export default function AccountPage() {
               ) : (
                 <div className="flex items-center gap-1 text-sm leading-none">
                   <span>{displayName}</span>
-                  <Pencil
-                    className="h-3.5 w-3.5 cursor-pointer text-muted-foreground hover:text-foreground"
-                    role="button"
-                    tabIndex={0}
+                  <button
+                    type="button"
                     aria-label="Edit display name"
                     onClick={() => setEditingName(true)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        setEditingName(true);
-                      }
-                    }}
-                  />
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               )}
             </section>
 
             <section className="space-y-2 border-t pt-4">
               <p className="text-sm font-medium text-muted-foreground">Email</p>
-              <span className="text-sm">{userEmail}</span>
+              <div className="flex items-center gap-1 text-sm leading-none">
+                <span>{userEmail}</span>
+                <button
+                  type="button"
+                  aria-label="Change email"
+                  onClick={() => setShowChangeEmail(true)}
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </section>
 
             <section className="space-y-2 border-t pt-4">
@@ -308,9 +313,6 @@ export default function AccountPage() {
                 onClick={() => setShowChangePasswordConfirm(true)}
               >
                 Change Password
-              </Button>
-              <Button variant="outline" className="w-full" onClick={() => setShowChangeEmail(true)}>
-                Change Email
               </Button>
 
               <AlertDialog>
@@ -378,7 +380,7 @@ export default function AccountPage() {
 
       {/* Change Email Dialog */}
       <Dialog open={showChangeEmail} onOpenChange={setShowChangeEmail}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Change Email</DialogTitle>
           </DialogHeader>

@@ -273,7 +273,7 @@ describe('IncomesTab averaged rows', () => {
     }
   });
 
-  it('filters incomes live by name on desktop', async () => {
+  it('does not render a name filter on desktop', async () => {
     setViewportWidth(1200);
 
     const incomes: Income[] = [
@@ -319,20 +319,14 @@ describe('IncomesTab averaged rows', () => {
     );
 
     try {
-      const filterInput = container.querySelector<HTMLInputElement>('input[placeholder="Income"]');
-      expect(filterInput).toBeTruthy();
-
-      await dispatchInputChange(filterInput!, 'free');
-
-      await waitForCondition(() => {
-        expect(getVisibleIncomeNames(container)).toEqual(['Freelance']);
-      });
+      expect(container.querySelector('input[placeholder="Income"]')).toBeNull();
+      expect(getVisibleIncomeNames(container).sort()).toEqual(['Freelance', 'Salary']);
     } finally {
       unmount(root, container);
     }
   });
 
-  it('applies the mobile name filter only after saving the filters modal', async () => {
+  it('does not render a filters button on mobile', async () => {
     setViewportWidth(500);
 
     const incomes: Income[] = [
@@ -378,35 +372,8 @@ describe('IncomesTab averaged rows', () => {
     );
 
     try {
-      await waitForCondition(() => {
-        expect(Array.from(document.body.querySelectorAll('button')).some((button) => button.textContent?.trim() === 'Filters')).toBe(true);
-      });
-
-      const filtersButton = Array.from(document.body.querySelectorAll('button'))
-        .find((button) => button.textContent?.trim() === 'Filters') as HTMLButtonElement | undefined;
-      expect(filtersButton).toBeTruthy();
-
-      await act(async () => {
-        filtersButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      });
-
-      const modalInput = document.body.querySelector<HTMLInputElement>('#incomes-filter-query');
-      expect(modalInput).toBeTruthy();
-
-      await dispatchInputChange(modalInput!, 'free');
-
+      expect(Array.from(document.body.querySelectorAll('button')).some((button) => button.textContent?.trim() === 'Filters')).toBe(false);
       expect(getVisibleIncomeNames(container).sort()).toEqual(['Freelance', 'Salary']);
-
-      const saveButton = document.body.querySelector<HTMLButtonElement>('button[data-dialog-confirm="true"]');
-      expect(saveButton).toBeTruthy();
-
-      await act(async () => {
-        saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      });
-
-      await waitForCondition(() => {
-        expect(getVisibleIncomeNames(container)).toEqual(['Freelance']);
-      });
     } finally {
       unmount(root, container);
     }
