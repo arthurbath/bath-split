@@ -229,7 +229,7 @@ describe('ExpensesTab empty message', () => {
     const { container, root } = renderExpensesTab({ expenses });
 
     try {
-      const filterInput = container.querySelector<HTMLInputElement>('input[placeholder="Expense"]');
+      const filterInput = container.querySelector<HTMLInputElement>('input[placeholder="Expense Name"]');
       expect(filterInput).toBeTruthy();
 
       await dispatchInputChange(filterInput!, 'groc');

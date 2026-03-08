@@ -1289,13 +1289,13 @@ export function ExpensesTab({
                   name="expenses-filter-query"
                   value={filterName}
                   onChange={(event) => setFilterName(event.target.value)}
-                  placeholder="Expense"
+                  placeholder="Expense Name"
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="none"
                   spellCheck={false}
                   className="h-8 w-36 text-xs"
-                  aria-label="Filter"
+                  aria-label="Name"
                 />
                 <Select value={filterPayer} onValueChange={v => setFilterPayer(v as PayerFilter)}>
                   <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
@@ -1676,13 +1676,13 @@ export function ExpensesTab({
           </DialogHeader>
           <DialogBody className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="expenses-filter-query">Filter</Label>
+              <Label htmlFor="expenses-filter-query">Name</Label>
               <Input
                 id="expenses-filter-query"
                 name="expenses-filter-query-modal"
                 value={draftFilterName}
                 onChange={(event) => setDraftFilterName(event.target.value)}
-                placeholder="Expense"
+                placeholder="Expense Name"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"
@@ -1690,7 +1690,7 @@ export function ExpensesTab({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Partner Filter</Label>
+              <Label>Partner</Label>
               <Select value={draftFilterPayer} onValueChange={v => setDraftFilterPayer(v as PayerFilter)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>

@@ -11,13 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DataGridAddFormLabel } from '@/components/ui/data-grid-add-form-label';
 import { DataGridAddFormAffixInput } from '@/components/ui/data-grid-add-form-affix-input';
-import { Plus, Trash2, MoreHorizontal, Filter, FilterX } from 'lucide-react';
+import { Plus, Trash2, MoreHorizontal } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { FREQUENCY_OPTIONS, toMonthly, frequencyLabels, needsParam } from '@/lib/frequency';
 import {
@@ -50,7 +49,6 @@ import {
   type BudgetValueType,
 } from '@/lib/budgetAveraging';
 import { AverageRecordsEditor } from '@/components/AverageRecordsEditor';
-import { useIsMobile } from '@/hooks/use-mobile';
 
 type NewIncomeDraft = Omit<Income, 'id' | 'household_id'>;
 type AveragedValueType = Extract<BudgetValueType, 'monthly_averaged' | 'yearly_averaged'>;
@@ -135,15 +133,6 @@ const INCOME_ACTIONS_NAV_COL = 6;
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unexpected error';
-}
-
-function normalizeNameFilterValue(value: string) {
-  return value.trim().toLocaleLowerCase();
-}
-
-function matchesNameFilter(name: string, filterValue: string) {
-  const normalizedFilter = normalizeNameFilterValue(filterValue);
-  return normalizedFilter.length === 0 || name.toLocaleLowerCase().includes(normalizedFilter);
 }
 
 function PartnerCell({
@@ -349,13 +338,9 @@ export function IncomesTab({
   onRemove,
   fullView = false,
 }: IncomesTabProps) {
-  const isMobile = useIsMobile();
   const [addIncomeOpen, setAddIncomeOpen] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [newIncome, setNewIncome] = useState<NewIncomeDraft>(createDefaultIncomeDraft);
-  const [filterName, setFilterName] = useState(() => localStorage.getItem('incomes_filterName') ?? '');
-  const [viewControlsOpen, setViewControlsOpen] = useState(false);
-  const [draftFilterName, setDraftFilterName] = useState('');
 
   const [averageEditorState, setAverageEditorState] = useState<{
     income: Income;
@@ -377,7 +362,6 @@ export function IncomesTab({
     try { const s = localStorage.getItem('incomes_sorting'); return s ? JSON.parse(s) : [{ id: 'name', desc: false }]; }
     catch { return [{ id: 'name', desc: false }]; }
   });
-  useEffect(() => { localStorage.setItem('incomes_filterName', filterName); }, [filterName]);
   useEffect(() => { localStorage.setItem('incomes_sorting', JSON.stringify(sorting)); }, [sorting]);
 
   const {
@@ -396,25 +380,6 @@ export function IncomesTab({
   const openAddIncomeModal = () => {
     setNewIncome(createDefaultIncomeDraft());
     setAddIncomeOpen(true);
-  };
-  const hasNameFilter = normalizeNameFilterValue(filterName).length > 0;
-  const filteredIncomes = useMemo(
-    () => incomes.filter((income) => matchesNameFilter(income.name, filterName)),
-    [filterName, incomes],
-  );
-
-  const openViewControlsModal = () => {
-    setDraftFilterName(filterName);
-    setViewControlsOpen(true);
-  };
-
-  const applyViewControls = () => {
-    setFilterName(draftFilterName);
-    setViewControlsOpen(false);
-  };
-
-  const clearViewControls = () => {
-    setFilterName('');
   };
 
   const openAverageEditor = (
@@ -462,17 +427,10 @@ export function IncomesTab({
           ...averagedPayload,
         };
       }
-      const isVisibleInGrid = matchesNameFilter(payload.name, filterName);
       await onAdd(payload);
 
       setAddIncomeOpen(false);
       setNewIncome(createDefaultIncomeDraft());
-      if (!isVisibleInGrid) {
-        toast({
-          title: 'Income added but hidden by filters',
-          description: 'The income was added, but it is not visible because of the current filters.',
-        });
-      }
     } catch (error: unknown) {
       toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
@@ -680,7 +638,7 @@ export function IncomesTab({
   ], [partnerX, partnerY, pendingById]);
 
   const table = useReactTable({
-    data: filteredIncomes,
+    data: incomes,
     columns,
     defaultColumn: { minSize: GRID_MIN_COLUMN_WIDTH },
     state: { sorting, columnSizing, columnSizingInfo },
@@ -702,7 +660,7 @@ export function IncomesTab({
   const gridCardContentClassName = fullView ? 'px-0 pb-0 flex-1 min-h-0' : 'px-0 pb-2.5';
   const emptyIncomeMessage = incomes.length === 0
     ? 'No income yet. Click "Add" to start.'
-    : 'No incomes match the filter';
+    : 'No incomes yet.';
 
   return (
     <>
@@ -711,52 +669,6 @@ export function IncomesTab({
           <div className="flex items-center justify-between gap-2">
             <CardTitle>Incomes</CardTitle>
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-              {isMobile ? (
-                <>
-                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={openViewControlsModal}>
-                    <Filter className="h-4 w-4" />
-                    Filters
-                  </Button>
-                  {hasNameFilter && (
-                    <Button
-                      type="button"
-                      variant="outline-warning"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={clearViewControls}
-                      aria-label="Clear filters"
-                    >
-                      <FilterX className="h-4 w-4" />
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Input
-                    name="incomes-filter-query"
-                    value={filterName}
-                    onChange={(event) => setFilterName(event.target.value)}
-                    placeholder="Income"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    className="h-8 w-36 text-xs"
-                    aria-label="Filter"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline-warning"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={clearViewControls}
-                    aria-label="Clear filters"
-                    disabled={!hasNameFilter}
-                  >
-                    <FilterX className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
               <Button
                 onClick={openAddIncomeModal}
                 disabled={savingIncome}
@@ -959,38 +871,6 @@ export function IncomesTab({
           </DialogContent>
         </Dialog>
       </Card>
-
-      <Dialog open={viewControlsOpen} onOpenChange={setViewControlsOpen}>
-        <DialogContent className="w-screen max-w-none rounded-none sm:w-full sm:max-w-sm sm:rounded-lg">
-          <DialogHeader>
-            <DialogTitle>Filters</DialogTitle>
-          </DialogHeader>
-          <DialogBody className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="incomes-filter-query">Filter</Label>
-              <Input
-                id="incomes-filter-query"
-                name="incomes-filter-query-modal"
-                value={draftFilterName}
-                onChange={(event) => setDraftFilterName(event.target.value)}
-                placeholder="Income"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-              />
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setViewControlsOpen(false)}>
-              Cancel
-            </Button>
-            <Button data-dialog-confirm="true" type="button" onClick={applyViewControls}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={averageEditorState !== null}
