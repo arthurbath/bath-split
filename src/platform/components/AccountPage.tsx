@@ -355,6 +355,27 @@ export default function AccountPage() {
         </Card>
       </main>
 
+      {/* Change Password Confirmation Dialog */}
+      <AlertDialog open={showChangePasswordConfirm} onOpenChange={setShowChangePasswordConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              A password change link will be sent to your email address. You will be signed out and must click the link to set a new password.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={sendingPasswordLink}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRequestPasswordChange}
+              disabled={sendingPasswordLink}
+            >
+              {sendingPasswordLink ? 'Sending...' : 'Send Link'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Change Email Dialog */}
       <Dialog open={showChangeEmail} onOpenChange={setShowChangeEmail}>
         <DialogContent className="sm:max-w-md">
