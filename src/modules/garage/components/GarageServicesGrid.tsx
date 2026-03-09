@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Ban, CheckCheck, Filter, FilterX, MoreHorizontal, Plus, SkipForward, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 import { GARAGE_SERVICES_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS } from '@/lib/gridColumnWidths';
 import type { GarageService, GarageServiceStatus, GarageServiceType, GarageServicingWithRelations } from '@/modules/garage/types/garage';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -21,6 +22,7 @@ import { GARAGE_SERVICE_TYPE_OPTIONS, getGarageServiceTypeLabel } from '@/module
 const columnHelper = createColumnHelper<GarageService>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 const SERVICE_ACTIONS_NAV_COL = 7;
+const GARAGE_SERVICES_HISTORY_KEY = 'garage_services';
 type GroupByOption = 'none' | 'type';
 type CadenceFilterOption = 'all' | 'recurring' | 'one_off';
 
@@ -56,8 +58,18 @@ function ServiceTypeCell({
 
   return (
     <Select value={value} onValueChange={(next) => {
+      const historyEntryId = ctx?.registerCellHistoryEntry({
+        col: 1,
+        undo: () => onChange(value),
+        redo: () => onChange(next as GarageServiceType),
+      });
       ctx?.onCellCommit(1);
-      onChange(next as GarageServiceType);
+      const maybePendingChange = onChange(next as GarageServiceType);
+      if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+        void maybePendingChange.catch(() => {
+          ctx?.invalidateCellHistoryEntry(historyEntryId);
+        });
+      }
     }}>
       <SelectTrigger
         className={`h-7 border-transparent bg-transparent px-1 hover:border-[hsl(var(--grid-sticky-line))] text-xs font-normal underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 ${GRID_CONTROL_FOCUS_CLASS}`}
@@ -155,12 +167,14 @@ interface GarageServicesGridProps {
   vehicleName: string;
   fullView?: boolean;
   onAddService: (input: {
+    id?: string;
     name: string;
     type: GarageServiceType;
     every_miles?: number | null;
     every_months?: number | null;
     monitoring?: boolean;
     notes?: string | null;
+    sort_order?: number;
   }) => Promise<GarageService>;
   onUpdateService: (id: string, updates: Partial<Omit<GarageService, 'id' | 'user_id' | 'vehicle_id' | 'created_at'>>) => Promise<void>;
   onDeleteService: (id: string) => Promise<void>;
@@ -177,6 +191,7 @@ export function GarageServicesGrid({
   onUpdateService,
   onDeleteService,
 }: GarageServicesGridProps) {
+  const dataGridHistory = useDataGridHistory();
   const isMobile = useIsMobile();
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -444,14 +459,34 @@ export function GarageServicesGrid({
           <ServiceActionsCell
             service={row.original}
             onDelete={(serviceId) => {
+              const service = row.original;
               setDeleteBusy(true);
+              dataGridHistory?.recordHistoryEntry({
+                undo: () => onAddService({
+                  id: service.id,
+                  name: service.name,
+                  type: service.type,
+                  every_miles: service.every_miles,
+                  every_months: service.every_months,
+                  monitoring: service.monitoring,
+                  notes: service.notes,
+                  sort_order: service.sort_order,
+                }),
+                redo: () => onDeleteService(serviceId),
+                undoFocusTarget: {
+                  gridId: GARAGE_SERVICES_HISTORY_KEY,
+                  rowId: service.id,
+                  col: 0,
+                },
+                redoFocusTarget: null,
+              });
               void onDeleteService(serviceId).finally(() => setDeleteBusy(false));
             }}
           />
         ),
       }),
     ],
-    [latestOutcomeByServiceId, onDeleteService, onUpdateService],
+    [dataGridHistory, latestOutcomeByServiceId, onAddService, onDeleteService, onUpdateService],
   );
 
   const table = useReactTable({
@@ -477,13 +512,26 @@ export function GarageServicesGrid({
 
     setSaving(true);
     try {
-      await onAddService({
+      const serviceId = crypto.randomUUID();
+      const payload = {
+        id: serviceId,
         name,
         type: addType,
         every_miles: normalizePositiveInt(addMiles),
         every_months: normalizePositiveInt(addMonths),
         notes: addNotes.trim() || null,
+      };
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onDeleteService(serviceId),
+        redo: () => onAddService(payload),
+        undoFocusTarget: null,
+        redoFocusTarget: {
+          gridId: GARAGE_SERVICES_HISTORY_KEY,
+          rowId: serviceId,
+          col: 0,
+        },
       });
+      await onAddService(payload);
       setAddOpen(false);
       if (!matchesNameFilter(name, nameFilter)) {
         toast({
@@ -613,6 +661,7 @@ export function GarageServicesGrid({
       <CardContent className={gridCardContentClassName}>
         <DataGrid
           table={table}
+          historyKey={GARAGE_SERVICES_HISTORY_KEY}
           fullView={fullView}
           maxHeight={fullView ? 'none' : undefined}
           className={fullView ? 'h-full min-h-0' : undefined}

@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AuthProvider } from "@/platform/contexts/AuthContext";
 import LauncherPage from "@/platform/components/LauncherPage";
 import AccountPage from "@/platform/components/AccountPage";
@@ -19,6 +19,7 @@ import { useDocumentHead } from "@/platform/hooks/useDocumentHead";
 import { useCommandEnterSubmit } from "@/platform/hooks/useCommandEnterSubmit";
 import { isLikelyNetworkError } from "@/lib/networkErrors";
 import { PullToRefresh } from "@/components/PullToRefresh";
+import { DataGridHistoryProvider } from "@/components/ui/data-grid-history";
 import Index from "./pages/Index";
 import DrawersIndex from "@/modules/drawers/DrawersIndex";
 import GarageIndex from "@/modules/garage/GarageIndex";
@@ -127,6 +128,16 @@ function AppRoutes() {
   );
 }
 
+function RouteScopedDataGridHistory({ children }: { children: ReactNode }) {
+  const location = useLocation();
+
+  return (
+    <DataGridHistoryProvider key={location.pathname}>
+      {children}
+    </DataGridHistoryProvider>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -137,7 +148,9 @@ const App = () => (
           <AuthCallbackToasts />
           <DocumentHead />
           <TermsGate />
-          <AppRoutes />
+          <RouteScopedDataGridHistory>
+            <AppRoutes />
+          </RouteScopedDataGridHistory>
         </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>

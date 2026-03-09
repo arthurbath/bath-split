@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 import type { Category } from '@/hooks/useCategories';
 import { RestoreTab } from '@/components/RestoreTab';
 import type { LinkedAccount } from '@/hooks/useLinkedAccounts';
@@ -56,19 +57,20 @@ interface ConfigurationTabProps {
   onRemoveHouseholdMember: (memberUserId: string) => Promise<void>;
   onLeaveHousehold: () => Promise<void>;
   onDeleteHousehold: () => Promise<void>;
-  onAddCategory: (name: string) => Promise<void>;
+  onAddCategory: (name: string, color?: string | null, id?: string) => Promise<void>;
   onUpdateCategory: (id: string, name: string) => Promise<void>;
   onRemoveCategory: (id: string) => Promise<void>;
   onReassignCategory: (oldId: string, newId: string | null) => Promise<void>;
   onUpdateCategoryColor: (id: string, color: string | null) => Promise<void>;
-  onAddLinkedAccount: (name: string, ownerPartner?: string) => Promise<void>;
+  onAddLinkedAccount: (name: string, ownerPartner?: string, color?: string | null, id?: string) => Promise<void>;
   onUpdateLinkedAccount: (id: string, updates: Partial<Pick<LinkedAccount, 'name' | 'owner_partner'>>) => Promise<void>;
   onRemoveLinkedAccount: (id: string) => Promise<void>;
   onReassignLinkedAccount: (oldId: string, newId: string | null) => Promise<void>;
   onUpdateLinkedAccountColor: (id: string, color: string | null) => Promise<void>;
   points: RestorePoint[];
+  restorePointPendingById?: Record<string, boolean>;
   incomes: Income[];
-  onSaveRestorePoint: (notes: string, snapshot: Json) => Promise<void>;
+  onSaveRestorePoint: (notes: string, snapshot: Json, id?: string) => Promise<void>;
   onRemoveRestorePoint: (id: string) => Promise<void>;
   onUpdateRestorePointNotes: (id: string, notes: string) => Promise<void>;
   onRestore: (data: Json) => Promise<void>;
@@ -77,6 +79,7 @@ interface ConfigurationTabProps {
 const paymentMethodColumnHelper = createColumnHelper<LinkedAccount>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 const PAYMENT_METHOD_ACTIONS_NAV_COL = 3;
+const PAYMENT_METHODS_HISTORY_KEY = 'config_payment_methods';
 
 function parseOptionalCents(raw: string): number | null {
   const trimmed = raw.trim();
@@ -268,8 +271,18 @@ function PaymentMethodOwnerCell({
     <Select
       value={account.owner_partner}
       onValueChange={(value) => {
+        const historyEntryId = ctx?.registerCellHistoryEntry({
+          col: 2,
+          undo: () => onChange(account.owner_partner),
+          redo: () => onChange(value),
+        });
         ctx?.onCellCommit(2);
-        onChange(value);
+        const maybePendingChange = onChange(value);
+        if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+          void maybePendingChange.catch(() => {
+            ctx?.invalidateCellHistoryEntry(historyEntryId);
+          });
+        }
       }}
       disabled={disabled}
     >
@@ -348,13 +361,14 @@ function PaymentMethodsSection({ userId, linkedAccounts, expenses, partnerX, par
   expenses: Expense[];
   partnerX: string;
   partnerY: string;
-  onAdd: (name: string, ownerPartner?: string) => Promise<void>;
+  onAdd: (name: string, ownerPartner?: string, color?: string | null, id?: string) => Promise<void>;
   onUpdate: (id: string, updates: Partial<Pick<LinkedAccount, 'name' | 'owner_partner'>>) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   onReassign: (oldId: string, newId: string | null) => Promise<void>;
   onUpdateColor: (id: string, color: string | null) => Promise<void>;
   pendingById?: Record<string, boolean>;
 }) {
+  const dataGridHistory = useDataGridHistory();
   const [name, setName] = useState('');
   const [ownerPartner, setOwnerPartner] = useState('X');
   const [adding, setAdding] = useState(false);
@@ -396,7 +410,18 @@ function PaymentMethodsSection({ userId, linkedAccounts, expenses, partnerX, par
     if (!nextName) return;
     setAdding(true);
     try {
-      await onAdd(nextName, ownerPartner);
+      const linkedAccountId = crypto.randomUUID();
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onRemove(linkedAccountId),
+        redo: () => onAdd(nextName, ownerPartner, null, linkedAccountId),
+        undoFocusTarget: null,
+        redoFocusTarget: {
+          gridId: PAYMENT_METHODS_HISTORY_KEY,
+          rowId: linkedAccountId,
+          col: 0,
+        },
+      });
+      await onAdd(nextName, ownerPartner, null, linkedAccountId);
       setName('');
       setOwnerPartner('X');
       setAddDialogOpen(false);
@@ -433,12 +458,34 @@ function PaymentMethodsSection({ userId, linkedAccounts, expenses, partnerX, par
       setReassignTo('_none');
       return;
     }
+    dataGridHistory?.recordHistoryEntry({
+      undo: () => onAdd(item.name, item.owner_partner, item.color, item.id),
+      redo: () => onRemove(item.id),
+      undoFocusTarget: {
+        gridId: PAYMENT_METHODS_HISTORY_KEY,
+        rowId: item.id,
+        col: 0,
+      },
+      redoFocusTarget: null,
+    });
     void onRemove(item.id).catch((e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }));
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onAdd(deleteTarget.name, deleteTarget.owner_partner, deleteTarget.color, deleteTarget.id),
+        redo: async () => {
+          await onReassign(deleteTarget.id, reassignTo === '_none' ? null : reassignTo);
+        },
+        undoFocusTarget: {
+          gridId: PAYMENT_METHODS_HISTORY_KEY,
+          rowId: deleteTarget.id,
+          col: 0,
+        },
+        redoFocusTarget: null,
+      });
       await onReassign(deleteTarget.id, reassignTo === '_none' ? null : reassignTo);
       setDeleteTarget(null);
     } catch (e: any) {
@@ -597,7 +644,7 @@ function PaymentMethodsSection({ userId, linkedAccounts, expenses, partnerX, par
           {linkedAccounts.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">No payment methods yet.</p>
           ) : (
-            <DataGrid table={table} maxHeight="none" stickyFirstColumn={false} />
+            <DataGrid table={table} historyKey={PAYMENT_METHODS_HISTORY_KEY} maxHeight="none" stickyFirstColumn={false} />
           )}
         </CardContent>
       </Card>
@@ -711,7 +758,7 @@ export function ConfigurationTab({
   onRotateHouseholdInviteCode, onRemoveHouseholdMember, onLeaveHousehold, onDeleteHousehold,
   onAddCategory, onUpdateCategory, onRemoveCategory, onReassignCategory, onUpdateCategoryColor,
   onAddLinkedAccount, onUpdateLinkedAccount, onRemoveLinkedAccount, onReassignLinkedAccount, onUpdateLinkedAccountColor,
-  points, incomes, onSaveRestorePoint, onRemoveRestorePoint, onUpdateRestorePointNotes, onRestore,
+  points, restorePointPendingById = {}, incomes, onSaveRestorePoint, onRemoveRestorePoint, onUpdateRestorePointNotes, onRestore,
 }: ConfigurationTabProps) {
   return (
     <div className="space-y-6">
@@ -726,12 +773,14 @@ export function ConfigurationTab({
       <ManagedListSection
         title="Categories"
         description="Organize expenses into categories."
+        historyKey="config_categories"
         userId={userId}
         items={categories}
         pendingById={categoryPendingById}
         reassignDeletesTarget
         getUsageCount={(id) => expenses.filter(e => e.category_id === id).length}
         onAdd={onAddCategory}
+        onRestoreItem={(item) => onAddCategory(item.name, item.color ?? null, item.id)}
         onUpdate={onUpdateCategory}
         onRemove={onRemoveCategory}
         onReassign={onReassignCategory}
@@ -753,6 +802,7 @@ export function ConfigurationTab({
       <RestoreTab
         userId={userId}
         points={points}
+        pendingById={restorePointPendingById}
         incomes={incomes}
         expenses={expenses}
         categories={categories}

@@ -176,6 +176,7 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
   }, [userId, vehicleId]);
 
   const addServicing = useCallback(async (input: {
+    id?: string;
     service_date: string;
     odometer_miles: number;
     shop_name?: string | null;
@@ -186,7 +187,7 @@ export function useGarageServicings(userId: string | undefined, vehicleId: strin
     if (!userId || !vehicleId) throw new Error('No active vehicle selected.');
 
     try {
-      const servicingId = crypto.randomUUID();
+      const servicingId = input.id ?? crypto.randomUUID();
 
       await supabaseRequest(async () =>
         await supabase.from('garage_servicings').insert({

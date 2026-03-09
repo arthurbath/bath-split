@@ -3,8 +3,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from "@tanstack/react-table";
 import { describe, expect, it, vi } from "vitest";
+import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ColorPicker } from "@/components/ManagedListSection";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DataGridHistoryProvider, useDataGridHistory } from "@/components/ui/data-grid-history";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { DataGrid, GridCheckboxCell, GridCurrencyCell, GridEditableCell, GridPercentCell, GridSelectValue, gridMenuTriggerProps, gridNavProps, gridSelectTriggerProps, useDataGrid } from "@/components/ui/data-grid";
 
@@ -1072,6 +1074,193 @@ function AsyncTextCommitWithTransientStaleHarness() {
   return <DataGrid table={table} />;
 }
 
+type SimpleUndoRowData = {
+  id: string;
+  value: string;
+};
+
+const undoColumnHelper = createColumnHelper<SimpleUndoRowData>();
+const rowLifecycleColumnHelper = createColumnHelper<SimpleUndoRowData>();
+
+function SimpleUndoGrid({
+  rows,
+  setRows,
+  gridLabel,
+}: {
+  rows: SimpleUndoRowData[];
+  setRows: React.Dispatch<React.SetStateAction<SimpleUndoRowData[]>>;
+  gridLabel: string;
+}) {
+  const columns = React.useMemo(
+    () => [
+      undoColumnHelper.accessor("value", {
+        id: "value",
+        header: gridLabel,
+        cell: ({ row, getValue }) => (
+          <GridEditableCell
+            value={getValue()}
+            navCol={0}
+            onChange={(next) => {
+              setRows((prev) => prev.map((entry) => (
+                entry.id === row.original.id
+                  ? { ...entry, value: next }
+                  : entry
+              )));
+            }}
+          />
+        ),
+      }),
+    ],
+    [gridLabel, setRows],
+  );
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  return <DataGrid table={table} />;
+}
+
+function MultiGridUndoHarness() {
+  const [primaryRows, setPrimaryRows] = React.useState<SimpleUndoRowData[]>([
+    { id: "row-a", value: "Alpha" },
+  ]);
+  const [secondaryRows, setSecondaryRows] = React.useState<SimpleUndoRowData[]>([
+    { id: "row-b", value: "Bravo" },
+  ]);
+
+  return (
+    <DataGridHistoryProvider>
+      <div>
+        <SimpleUndoGrid rows={primaryRows} setRows={setPrimaryRows} gridLabel="Primary" />
+        <SimpleUndoGrid rows={secondaryRows} setRows={setSecondaryRows} gridLabel="Secondary" />
+      </div>
+    </DataGridHistoryProvider>
+  );
+}
+
+function RouteScopedHistoryHarness() {
+  const location = useLocation();
+
+  return (
+    <DataGridHistoryProvider key={location.pathname}>
+      <Routes>
+        <Route path="/view-a" element={<RouteView value="Alpha" nextHref="/view-b" />} />
+        <Route path="/view-b" element={<RouteView value="Bravo" nextHref="/view-a" />} />
+      </Routes>
+    </DataGridHistoryProvider>
+  );
+}
+
+function RouteView({ value, nextHref }: { value: string; nextHref: string }) {
+  const [rows, setRows] = React.useState<SimpleUndoRowData[]>([
+    { id: "route-row", value },
+  ]);
+
+  return (
+    <div>
+      <Link to={nextHref}>Navigate</Link>
+      <SimpleUndoGrid rows={rows} setRows={setRows} gridLabel="Route Grid" />
+    </div>
+  );
+}
+
+function RowLifecycleGrid({ rows }: { rows: SimpleUndoRowData[] }) {
+  const columns = React.useMemo(
+    () => [
+      rowLifecycleColumnHelper.accessor("value", {
+        id: "value",
+        header: "Lifecycle",
+        cell: ({ getValue }) => (
+          <GridEditableCell
+            value={getValue()}
+            navCol={0}
+            onChange={() => {}}
+          />
+        ),
+      }),
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  return <DataGrid table={table} historyKey="row-lifecycle-grid" />;
+}
+
+function RowLifecycleInnerHarness() {
+  const dataGridHistory = useDataGridHistory();
+  const [rows, setRows] = React.useState<SimpleUndoRowData[]>([
+    { id: "row-a", value: "Alpha" },
+  ]);
+
+  const addRow = React.useCallback((row: SimpleUndoRowData) => {
+    setRows((prev) => {
+      if (prev.some((entry) => entry.id === row.id)) return prev;
+      return [...prev, row];
+    });
+  }, []);
+
+  const removeRow = React.useCallback((rowId: string) => {
+    setRows((prev) => prev.filter((entry) => entry.id !== rowId));
+  }, []);
+
+  const handleAddRow = React.useCallback(() => {
+    const row = { id: "row-b", value: "Bravo" };
+    dataGridHistory?.recordHistoryEntry({
+      undo: () => removeRow(row.id),
+      redo: () => addRow(row),
+      undoFocusTarget: null,
+      redoFocusTarget: {
+        gridId: "row-lifecycle-grid",
+        rowId: row.id,
+        col: 0,
+      },
+    });
+    addRow(row);
+  }, [addRow, dataGridHistory, removeRow]);
+
+  const handleDeleteRow = React.useCallback(() => {
+    const row = rows.find((entry) => entry.id === "row-a");
+    if (!row) return;
+    dataGridHistory?.recordHistoryEntry({
+      undo: () => addRow(row),
+      redo: () => removeRow(row.id),
+      undoFocusTarget: {
+        gridId: "row-lifecycle-grid",
+        rowId: row.id,
+        col: 0,
+      },
+      redoFocusTarget: null,
+    });
+    removeRow(row.id);
+  }, [addRow, dataGridHistory, removeRow, rows]);
+
+  return (
+    <div>
+      <button type="button" onClick={handleAddRow}>Add row</button>
+      <button type="button" onClick={handleDeleteRow}>Delete Alpha</button>
+      <RowLifecycleGrid rows={rows} />
+    </div>
+  );
+}
+
+function RowLifecycleHistoryHarness() {
+  return (
+    <DataGridHistoryProvider>
+      <RowLifecycleInnerHarness />
+    </DataGridHistoryProvider>
+  );
+}
+
 
 function findInputByValue(container: HTMLElement, value: string) {
   return Array.from(container.querySelectorAll<HTMLInputElement>("input")).find((input) => input.value === value) ?? null;
@@ -1145,6 +1334,29 @@ async function dispatchDeleteOnElement(element: HTMLElement, key: "Backspace" | 
 async function dispatchEscapeOnElement(element: HTMLElement) {
   await act(async () => {
     element.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+}
+
+async function dispatchHistoryShortcut({
+  key,
+  metaKey = false,
+  ctrlKey = false,
+  shiftKey = false,
+}: {
+  key: string;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+}) {
+  await act(async () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", {
+      key,
+      metaKey,
+      ctrlKey,
+      shiftKey,
+      bubbles: true,
+      cancelable: true,
+    }));
   });
 }
 
@@ -1498,6 +1710,235 @@ describe("DataGrid focus restore after async commit", () => {
       unmount(root, container);
     }
   }, 10000);
+});
+
+describe("DataGrid undo and redo", () => {
+  it("undoes and redoes committed changes across multiple grids on the same view and restores focus", async () => {
+    const { container, root } = mount(<MultiGridUndoHarness />);
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+
+    try {
+      const [primaryContainer, secondaryContainer] = Array.from(container.querySelectorAll<HTMLDivElement>('div[data-grid-root="true"]'));
+      expect(primaryContainer).not.toBeUndefined();
+      expect(secondaryContainer).not.toBeUndefined();
+
+      HTMLElement.prototype.getBoundingClientRect = function patchedGetBoundingClientRect(this: HTMLElement) {
+        if (this === primaryContainer) {
+          return makeRect({ top: 0, left: 0, width: 120, height: 80 });
+        }
+        if (this === secondaryContainer) {
+          return makeRect({ top: 120, left: 0, width: 120, height: 80 });
+        }
+        if (this.matches('input[data-row-id="row-a"][data-col="0"]')) {
+          return makeRect({ top: 100, left: 100, width: 50, height: 24 });
+        }
+        if (this.matches('input[data-row-id="row-b"][data-col="0"]')) {
+          return makeRect({ top: 220, left: 100, width: 50, height: 24 });
+        }
+        return originalGetBoundingClientRect.call(this);
+      };
+
+      const getPrimaryInput = () => container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]');
+      const getSecondaryInput = () => container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]');
+      const primaryInput = getPrimaryInput();
+      const secondaryInput = getSecondaryInput();
+      expect(primaryInput).not.toBeNull();
+      expect(secondaryInput).not.toBeNull();
+
+      primaryContainer!.scrollTop = 0;
+      primaryContainer!.scrollLeft = 0;
+      secondaryContainer!.scrollTop = 0;
+      secondaryContainer!.scrollLeft = 0;
+
+      await startEditing(primaryInput!);
+      await dispatchInputChange(primaryInput!, "Alpha edited");
+      await dispatchEnter(primaryInput!);
+
+      await waitForCondition(() => {
+        expect(getSecondaryInput()).not.toBeNull();
+      });
+      await startEditing(getSecondaryInput()!);
+      await dispatchInputChange(getSecondaryInput()!, "Bravo edited");
+      await dispatchEnter(getSecondaryInput()!);
+
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]')?.value).toBe("Alpha edited");
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]')?.value).toBe("Bravo edited");
+      });
+
+      await dispatchHistoryShortcut({ key: "z", metaKey: true });
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]')?.value).toBe("Bravo");
+        const active = document.activeElement as HTMLElement | null;
+        expect(active?.getAttribute("data-row-id")).toBe("row-b");
+        expect(secondaryContainer!.scrollTop).toBeGreaterThan(0);
+        expect(secondaryContainer!.scrollLeft).toBeGreaterThan(0);
+      });
+
+      await dispatchHistoryShortcut({ key: "z", metaKey: true });
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]')?.value).toBe("Alpha");
+        const active = document.activeElement as HTMLElement | null;
+        expect(active?.getAttribute("data-row-id")).toBe("row-a");
+        expect(primaryContainer!.scrollTop).toBeGreaterThan(0);
+        expect(primaryContainer!.scrollLeft).toBeGreaterThan(0);
+      });
+
+      await dispatchHistoryShortcut({ key: "z", metaKey: true, shiftKey: true });
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]')?.value).toBe("Alpha edited");
+        const active = document.activeElement as HTMLElement | null;
+        expect(active?.getAttribute("data-row-id")).toBe("row-a");
+      });
+
+      await dispatchHistoryShortcut({ key: "y", ctrlKey: true });
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]')?.value).toBe("Bravo edited");
+        const active = document.activeElement as HTMLElement | null;
+        expect(active?.getAttribute("data-row-id")).toBe("row-b");
+      });
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      unmount(root, container);
+    }
+  });
+
+  it("scrolls the page viewport so an undone cell is visible", async () => {
+    const scrollByMock = vi.fn();
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    const originalScrollBy = window.scrollBy;
+    const originalInnerHeight = window.innerHeight;
+    const originalInnerWidth = window.innerWidth;
+    const stickyHeader = document.createElement("div");
+    stickyHeader.className = "sticky";
+    document.body.appendChild(stickyHeader);
+
+    const { container, root } = mount(<MultiGridUndoHarness />);
+
+    try {
+      Object.defineProperty(window, "scrollBy", {
+        configurable: true,
+        writable: true,
+        value: scrollByMock,
+      });
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        writable: true,
+        value: 600,
+      });
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        writable: true,
+        value: 800,
+      });
+
+      const [primaryContainer, secondaryContainer] = Array.from(container.querySelectorAll<HTMLDivElement>('div[data-grid-root="true"]'));
+      expect(primaryContainer).not.toBeUndefined();
+      expect(secondaryContainer).not.toBeUndefined();
+
+      HTMLElement.prototype.getBoundingClientRect = function patchedGetBoundingClientRect(this: HTMLElement) {
+        if (this === stickyHeader) {
+          return makeRect({ top: 0, left: 0, width: 800, height: 64 });
+        }
+        if (this === primaryContainer) {
+          return makeRect({ top: 120, left: 0, width: 120, height: 80 });
+        }
+        if (this === secondaryContainer) {
+          return makeRect({ top: 760, left: 0, width: 120, height: 80 });
+        }
+        if (this.matches('input[data-row-id="row-a"][data-col="0"]')) {
+          return makeRect({ top: 150, left: 100, width: 50, height: 24 });
+        }
+        if (this.matches('input[data-row-id="row-b"][data-col="0"]')) {
+          return makeRect({ top: 790, left: 100, width: 50, height: 24 });
+        }
+        return originalGetBoundingClientRect.call(this);
+      };
+
+      const secondaryInput = container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]');
+      expect(secondaryInput).not.toBeNull();
+
+      await startEditing(secondaryInput!);
+      await dispatchInputChange(secondaryInput!, "Bravo edited");
+      await dispatchEnter(secondaryInput!);
+
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]')?.value).toBe("Bravo edited");
+      });
+
+      await dispatchHistoryShortcut({ key: "z", metaKey: true });
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]')?.value).toBe("Bravo");
+        const active = document.activeElement as HTMLElement | null;
+        expect(active?.getAttribute("data-row-id")).toBe("row-b");
+        expect(scrollByMock).toHaveBeenCalled();
+      });
+
+      const lastCall = scrollByMock.mock.calls.at(-1)?.[0] as { top?: number; left?: number } | undefined;
+      expect(lastCall).toBeDefined();
+      expect(lastCall?.top ?? 0).toBeGreaterThan(0);
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      Object.defineProperty(window, "scrollBy", {
+        configurable: true,
+        writable: true,
+        value: originalScrollBy,
+      });
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        writable: true,
+        value: originalInnerHeight,
+      });
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        writable: true,
+        value: originalInnerWidth,
+      });
+      stickyHeader.remove();
+      unmount(root, container);
+    }
+  });
+
+  it("clears undo history when the route pathname changes", async () => {
+    const { container, root } = mount(
+      <MemoryRouter initialEntries={["/view-a"]}>
+        <RouteScopedHistoryHarness />
+      </MemoryRouter>,
+    );
+
+    try {
+      const input = container.querySelector<HTMLInputElement>('input[data-row-id="route-row"][data-col="0"]');
+      expect(input).not.toBeNull();
+
+      await startEditing(input!);
+      await dispatchInputChange(input!, "Alpha edited");
+      await dispatchEnter(input!);
+
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="route-row"][data-col="0"]')?.value).toBe("Alpha edited");
+      });
+
+      const link = container.querySelector<HTMLAnchorElement>('a[href="/view-b"]');
+      expect(link).not.toBeNull();
+      await act(async () => {
+        link!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+      });
+
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="route-row"][data-col="0"]')?.value).toBe("Bravo");
+      });
+
+      await dispatchHistoryShortcut({ key: "z", ctrlKey: true });
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 50));
+      });
+
+      expect(container.querySelector<HTMLInputElement>('input[data-row-id="route-row"][data-col="0"]')?.value).toBe("Bravo");
+    } finally {
+      unmount(root, container);
+    }
+  });
+
 });
 
 describe("DataGrid menu trigger keyboard navigation", () => {
@@ -2070,6 +2511,105 @@ describe("DataGrid edit caret placement", () => {
         expect(input!.selectionEnd).toBe(end);
       });
     } finally {
+      unmount(root, container);
+    }
+  });
+});
+
+describe("DataGrid row lifecycle undo and redo", () => {
+  it("undoes a row delete by resurrecting the row and restoring focus", async () => {
+    const { container, root } = mount(<RowLifecycleHistoryHarness />);
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+
+    try {
+      const gridContainer = container.querySelector<HTMLDivElement>('div[data-grid-root="true"]');
+      expect(gridContainer).not.toBeNull();
+
+      HTMLElement.prototype.getBoundingClientRect = function patchedGetBoundingClientRect(this: HTMLElement) {
+        if (this === gridContainer) {
+          return makeRect({ top: 0, left: 0, width: 120, height: 80 });
+        }
+        if (this.matches('input[data-row-id="row-a"][data-col="0"]')) {
+          return makeRect({ top: 110, left: 100, width: 50, height: 24 });
+        }
+        return originalGetBoundingClientRect.call(this);
+      };
+
+      await act(async () => {
+        const deleteButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+          .find((button) => button.textContent === "Delete Alpha");
+        deleteButton?.click();
+      });
+
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]')).toBeNull();
+      });
+
+      gridContainer!.scrollTop = 0;
+      gridContainer!.scrollLeft = 0;
+
+      await dispatchHistoryShortcut({ key: "z", metaKey: true });
+      await waitForCondition(() => {
+        const restoredInput = container.querySelector<HTMLInputElement>('input[data-row-id="row-a"][data-col="0"]');
+        expect(restoredInput).not.toBeNull();
+        const active = document.activeElement as HTMLElement | null;
+        expect(active).toBe(restoredInput);
+        expect(gridContainer!.scrollTop).toBeGreaterThan(0);
+        expect(gridContainer!.scrollLeft).toBeGreaterThan(0);
+      });
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      unmount(root, container);
+    }
+  });
+
+  it("treats row adds as undoable and redoable actions", async () => {
+    const { container, root } = mount(<RowLifecycleHistoryHarness />);
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+
+    try {
+      const gridContainer = container.querySelector<HTMLDivElement>('div[data-grid-root="true"]');
+      expect(gridContainer).not.toBeNull();
+
+      HTMLElement.prototype.getBoundingClientRect = function patchedGetBoundingClientRect(this: HTMLElement) {
+        if (this === gridContainer) {
+          return makeRect({ top: 0, left: 0, width: 120, height: 80 });
+        }
+        if (this.matches('input[data-row-id="row-b"][data-col="0"]')) {
+          return makeRect({ top: 110, left: 100, width: 50, height: 24 });
+        }
+        return originalGetBoundingClientRect.call(this);
+      };
+
+      await act(async () => {
+        const addButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+          .find((button) => button.textContent === "Add row");
+        addButton?.click();
+      });
+
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]')).not.toBeNull();
+      });
+
+      await dispatchHistoryShortcut({ key: "z", metaKey: true });
+      await waitForCondition(() => {
+        expect(container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]')).toBeNull();
+      });
+
+      gridContainer!.scrollTop = 0;
+      gridContainer!.scrollLeft = 0;
+
+      await dispatchHistoryShortcut({ key: "z", metaKey: true, shiftKey: true });
+      await waitForCondition(() => {
+        const restoredInput = container.querySelector<HTMLInputElement>('input[data-row-id="row-b"][data-col="0"]');
+        expect(restoredInput).not.toBeNull();
+        const active = document.activeElement as HTMLElement | null;
+        expect(active).toBe(restoredInput);
+        expect(gridContainer!.scrollTop).toBeGreaterThan(0);
+        expect(gridContainer!.scrollLeft).toBeGreaterThan(0);
+      });
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
       unmount(root, container);
     }
   });

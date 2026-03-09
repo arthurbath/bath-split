@@ -15,6 +15,7 @@ import { MoreHorizontal, Plus, FileText, Trash2, Pencil, CalendarIcon, CircleMin
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 import { GARAGE_SERVICINGS_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS } from '@/lib/gridColumnWidths';
 import { cn } from '@/lib/utils';
 import { GARAGE_SERVICE_TYPE_OPTIONS, getGarageServiceTypeLabel } from '@/modules/garage/lib/serviceTypes';
@@ -28,6 +29,7 @@ import type {
 const columnHelper = createColumnHelper<GarageServicingWithRelations>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 const SERVICING_ACTIONS_NAV_COL = 6;
+const GARAGE_SERVICINGS_HISTORY_KEY = 'garage_servicings';
 const OUTCOME_BADGE_BASE_CLASS = 'inline-flex min-w-[1.75rem] items-center justify-center rounded-full py-0.5 text-xs font-semibold tabular-nums tracking-tight leading-none';
 const SERVICE_OUTCOME_OPTIONS: Array<{ value: GarageServiceStatus; label: string }> = [
   { value: 'performed', label: 'Performed' },
@@ -175,8 +177,18 @@ function ServicingDateCell({
             if (!date) return;
             const nextValue = toDateInputValue(date);
             if (nextValue !== value) {
+              const historyEntryId = ctx?.registerCellHistoryEntry({
+                col: navCol,
+                undo: () => onChange(value),
+                redo: () => onChange(nextValue),
+              });
               ctx?.onCellCommit(navCol);
-              void onChange(nextValue);
+              const maybePendingChange = onChange(nextValue);
+              if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+                void maybePendingChange.catch(() => {
+                  ctx?.invalidateCellHistoryEntry(historyEntryId);
+                });
+              }
             }
             setOpen(false);
           }}
@@ -256,6 +268,7 @@ interface GarageServicingsGridProps {
   vehicleName: string;
   fullView?: boolean;
   onAddServicing: (input: {
+    id?: string;
     service_date: string;
     odometer_miles: number;
     shop_name?: string | null;
@@ -299,6 +312,7 @@ export function GarageServicingsGrid({
   onOpenReceipt,
   onAddService,
 }: GarageServicingsGridProps) {
+  const dataGridHistory = useDataGridHistory();
   const [sorting, setSorting] = useState<SortingState>([{ id: 'service_date', desc: true }]);
   const {
     columnSizing,
@@ -673,7 +687,18 @@ export function GarageServicingsGrid({
       if (formState.id) {
         await onUpdateServicing(formState.id, payload);
       } else {
-        await onAddServicing(payload);
+        const servicingId = crypto.randomUUID();
+        dataGridHistory?.recordHistoryEntry({
+          undo: () => onDeleteServicing(servicingId),
+          redo: () => onAddServicing({ ...payload, id: servicingId }),
+          undoFocusTarget: null,
+          redoFocusTarget: {
+            gridId: GARAGE_SERVICINGS_HISTORY_KEY,
+            rowId: servicingId,
+            col: 0,
+          },
+        });
+        await onAddServicing({ ...payload, id: servicingId });
       }
 
       setDialogOpen(false);
@@ -837,13 +862,31 @@ export function GarageServicingsGrid({
             servicing={row.original}
             onEdit={openEditDialog}
             onDelete={(servicingId) => {
+              const servicing = row.original;
+              dataGridHistory?.recordHistoryEntry({
+                undo: () => onAddServicing({
+                  id: servicing.id,
+                  service_date: servicing.service_date,
+                  odometer_miles: servicing.odometer_miles,
+                  shop_name: servicing.shop_name,
+                  notes: servicing.notes,
+                  outcomes: servicing.outcomes.map((outcome) => ({ service_id: outcome.service_id, status: outcome.status })),
+                }),
+                redo: () => onDeleteServicing(servicingId),
+                undoFocusTarget: {
+                  gridId: GARAGE_SERVICINGS_HISTORY_KEY,
+                  rowId: servicing.id,
+                  col: 0,
+                },
+                redoFocusTarget: null,
+              });
               void onDeleteServicing(servicingId);
             }}
           />
         ),
       }),
     ],
-    [onDeleteServicing, onUpdateServicing, openEditDialog],
+    [dataGridHistory, onAddServicing, onDeleteServicing, onUpdateServicing, openEditDialog],
   );
 
   const table = useReactTable({
@@ -880,6 +923,7 @@ export function GarageServicingsGrid({
       <CardContent className={gridCardContentClassName}>
         <DataGrid
           table={table}
+          historyKey={GARAGE_SERVICINGS_HISTORY_KEY}
           fullView={fullView}
           maxHeight={fullView ? 'none' : undefined}
           className={fullView ? 'h-full min-h-0' : undefined}

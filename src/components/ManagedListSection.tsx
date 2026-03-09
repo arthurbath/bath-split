@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 import { COLOR_SWATCHES, normalizePaletteColor } from '@/lib/colors';
 import { CONFIG_CATEGORIES_GRID_DEFAULT_WIDTHS, GRID_ACTIONS_COLUMN_ID, GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH } from '@/lib/gridColumnWidths';
 
@@ -24,12 +25,14 @@ interface ManagedItem {
 interface ManagedListSectionProps {
   title: string;
   description: string;
+  historyKey?: string;
   userId?: string;
   items: ManagedItem[];
   getUsageCount: (id: string) => number;
   onAdd: (name: string) => Promise<void>;
   onUpdate: (id: string, name: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  onRestoreItem?: (item: ManagedItem) => Promise<void>;
   onReassign?: (oldId: string, newId: string | null) => Promise<void>;
   onUpdateColor?: (id: string, color: string | null) => Promise<void>;
   pendingById?: Record<string, boolean>;
@@ -110,8 +113,18 @@ function ColorPicker({
 
   const handleChange = (nextColor: string | null) => {
     if (disabled) return;
+    const historyEntryId = ctx?.registerCellHistoryEntry({
+      col: navCol ?? 0,
+      undo: () => onChange(color ?? null),
+      redo: () => onChange(nextColor),
+    });
     ctx?.onCellCommit(navCol ?? 0);
-    onChange(nextColor);
+    const maybePendingChange = onChange(nextColor);
+    if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+      void maybePendingChange.catch(() => {
+        ctx?.invalidateCellHistoryEntry(historyEntryId);
+      });
+    }
     restoreTriggerFocusRef.current = true;
     setOpen(false);
   };
@@ -254,17 +267,20 @@ const ManagedListActionsTrigger = forwardRef<HTMLButtonElement, ManagedListActio
 export function ManagedListSection({
   title,
   description,
+  historyKey = 'config_categories',
   userId,
   items,
   getUsageCount,
   onAdd,
   onUpdate,
   onRemove,
+  onRestoreItem,
   onReassign,
   onUpdateColor,
   pendingById = {},
   reassignDeletesTarget = false,
 }: ManagedListSectionProps) {
+  const dataGridHistory = useDataGridHistory();
   const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -312,7 +328,23 @@ export function ManagedListSection({
     if (!nextName) return;
     setAdding(true);
     try {
-      await onAdd(nextName);
+      if (onRestoreItem) {
+        const itemId = crypto.randomUUID();
+        const item = { id: itemId, name: nextName, color: null };
+        dataGridHistory?.recordHistoryEntry({
+          undo: () => onRemove(itemId),
+          redo: () => onRestoreItem(item),
+          undoFocusTarget: null,
+          redoFocusTarget: {
+            gridId: historyKey,
+            rowId: itemId,
+            col: 0,
+          },
+        });
+        await onRestoreItem(item);
+      } else {
+        await onAdd(nextName);
+      }
       setName('');
       setAddDialogOpen(false);
     } catch (e: any) {
@@ -344,6 +376,19 @@ export function ManagedListSection({
 
   const doDelete = async (id: string) => {
     try {
+      const item = items.find((entry) => entry.id === id);
+      if (item && onRestoreItem) {
+        dataGridHistory?.recordHistoryEntry({
+          undo: () => onRestoreItem(item),
+          redo: () => onRemove(id),
+          undoFocusTarget: {
+            gridId: historyKey,
+            rowId: id,
+            col: 0,
+          },
+          redoFocusTarget: null,
+        });
+      }
       await onRemove(id);
     } catch (e: any) {
       toast({ title: 'Error removing', description: e.message, variant: 'destructive' });
@@ -353,6 +398,23 @@ export function ManagedListSection({
   const handleConfirmDelete = async () => {
     if (!deleteTarget || !onReassign) return;
     try {
+      if (onRestoreItem) {
+        dataGridHistory?.recordHistoryEntry({
+          undo: () => onRestoreItem(deleteTarget),
+          redo: async () => {
+            await onReassign(deleteTarget.id, reassignTo === '_none' ? null : reassignTo);
+            if (!reassignDeletesTarget) {
+              await onRemove(deleteTarget.id);
+            }
+          },
+          undoFocusTarget: {
+            gridId: historyKey,
+            rowId: deleteTarget.id,
+            col: 0,
+          },
+          redoFocusTarget: null,
+        });
+      }
       await onReassign(deleteTarget.id, reassignTo === '_none' ? null : reassignTo);
       if (!reassignDeletesTarget) {
         await onRemove(deleteTarget.id);
@@ -497,7 +559,7 @@ export function ManagedListSection({
           {items.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">No {title.toLowerCase()} yet.</p>
           ) : (
-            <DataGrid table={table} maxHeight="none" stickyFirstColumn={false} />
+            <DataGrid table={table} historyKey={historyKey} maxHeight="none" stickyFirstColumn={false} />
           )}
         </CardContent>
       </Card>

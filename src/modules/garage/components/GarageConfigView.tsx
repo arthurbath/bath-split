@@ -14,6 +14,7 @@ import { CalendarIcon, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 import { GARAGE_VEHICLES_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS } from '@/lib/gridColumnWidths';
 import { cn } from '@/lib/utils';
 import type { GarageUserSettings, GarageVehicle } from '@/modules/garage/types/garage';
@@ -21,6 +22,7 @@ import type { GarageUserSettings, GarageVehicle } from '@/modules/garage/types/g
 const columnHelper = createColumnHelper<GarageVehicle>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 const VEHICLE_ACTIONS_NAV_COL = 6;
+const GARAGE_VEHICLES_HISTORY_KEY = 'garage_vehicles';
 const VEHICLE_MODEL_YEAR_MIN = 1900;
 const VEHICLE_MODEL_YEAR_MAX = 2200;
 
@@ -29,6 +31,7 @@ interface GarageConfigViewProps {
   settings: GarageUserSettings | null;
   autoOpenAddVehicle?: boolean;
   onAddVehicle: (input: {
+    id?: string;
     name: string;
     make?: string | null;
     model?: string | null;
@@ -188,8 +191,18 @@ function VehicleDateCell({
             if (ctx?.onCellKeyDown(event)) return;
             if (value && isDeleteResetKey(event)) {
               event.preventDefault();
+              const historyEntryId = ctx?.registerCellHistoryEntry({
+                col: navCol,
+                undo: () => onChange(value),
+                redo: () => onChange(null),
+              });
               ctx?.onCellCommit(navCol);
-              void onChange(null);
+              const maybePendingChange = onChange(null);
+              if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+                void maybePendingChange.catch(() => {
+                  ctx?.invalidateCellHistoryEntry(historyEntryId);
+                });
+              }
               return;
             }
             if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -215,8 +228,18 @@ function VehicleDateCell({
           onSelect={(date) => {
             const nextValue = date ? toDateInputValue(date) : null;
             if (nextValue !== value) {
+              const historyEntryId = ctx?.registerCellHistoryEntry({
+                col: navCol,
+                undo: () => onChange(value),
+                redo: () => onChange(nextValue),
+              });
               ctx?.onCellCommit(navCol);
-              void onChange(nextValue);
+              const maybePendingChange = onChange(nextValue);
+              if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+                void maybePendingChange.catch(() => {
+                  ctx?.invalidateCellHistoryEntry(historyEntryId);
+                });
+              }
             }
             setOpen(false);
           }}
@@ -269,6 +292,7 @@ export function GarageConfigView({
   onRemoveVehicle,
   onUpdateSettings,
 }: GarageConfigViewProps) {
+  const dataGridHistory = useDataGridHistory();
   const initialMiles = Math.max(0, settings?.upcoming_miles_default ?? 1000);
   const initialDays = Math.max(0, settings?.upcoming_days_default ?? 60);
 
@@ -347,7 +371,18 @@ export function GarageConfigView({
       if (vehicleForm.id) {
         await onUpdateVehicle(vehicleForm.id, payload);
       } else {
-        await onAddVehicle(payload);
+        const vehicleId = crypto.randomUUID();
+        dataGridHistory?.recordHistoryEntry({
+          undo: () => onRemoveVehicle(vehicleId),
+          redo: () => onAddVehicle({ ...payload, id: vehicleId }),
+          undoFocusTarget: null,
+          redoFocusTarget: {
+            gridId: GARAGE_VEHICLES_HISTORY_KEY,
+            rowId: vehicleId,
+            col: 0,
+          },
+        });
+        await onAddVehicle({ ...payload, id: vehicleId });
       }
 
       setFormOpen(false);
@@ -591,6 +626,7 @@ export function GarageConfigView({
           <div className="min-w-0 overflow-hidden">
             <DataGrid
               table={table}
+              historyKey={GARAGE_VEHICLES_HISTORY_KEY}
               maxHeight="none"
               emptyMessage={vehicles.length === 0 ? 'No vehicles yet.' : 'No vehicles'}
             />
@@ -700,6 +736,26 @@ export function GarageConfigView({
               onClick={() => {
                 if (!deleteTarget) return;
                 setDeleteBusy(true);
+                const restorePayload = {
+                  id: deleteTarget.id,
+                  name: deleteTarget.name,
+                  make: deleteTarget.make,
+                  model: deleteTarget.model,
+                  model_year: deleteTarget.model_year,
+                  in_service_date: deleteTarget.in_service_date,
+                  current_odometer_miles: deleteTarget.current_odometer_miles,
+                  is_active: deleteTarget.is_active,
+                };
+                dataGridHistory?.recordHistoryEntry({
+                  undo: () => onAddVehicle(restorePayload),
+                  redo: () => onRemoveVehicle(deleteTarget.id),
+                  undoFocusTarget: {
+                    gridId: GARAGE_VEHICLES_HISTORY_KEY,
+                    rowId: deleteTarget.id,
+                    col: 0,
+                  },
+                  redoFocusTarget: null,
+                });
                 void onRemoveVehicle(deleteTarget.id)
                   .then(() => {
                     toast({ title: 'Vehicle deleted' });

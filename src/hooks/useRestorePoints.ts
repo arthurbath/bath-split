@@ -61,11 +61,14 @@ export function useRestorePoints(householdId: string) {
     });
   }, []);
 
-  const save = useCallback(async (notes: string, snapshot: Json) => {
+  const save = useCallback(async (
+    notes: string,
+    snapshot: Json,
+    id: string = crypto.randomUUID(),
+  ) => {
     if (!householdId) throw new Error('No household selected.');
 
     const normalized = notes.trim();
-    const id = crypto.randomUUID();
     setPending(id, true);
     try {
       const row = await withMutationTiming({ module: 'budget', action: 'restorePoints.save' }, async () => {
@@ -118,7 +121,18 @@ export function useRestorePoints(householdId: string) {
     if (!householdId) throw new Error('No household selected.');
 
     const normalized = notes.trim();
+    let previousPoint: RestorePoint | null = null;
     setPending(id, true);
+    queryClient.setQueryData<RestorePoint[]>(queryKey, (current) =>
+      (current ?? []).map((point) => {
+        if (point.id !== id) return point;
+        previousPoint = point;
+        return {
+          ...point,
+          notes: normalized || null,
+        };
+      }),
+    );
     try {
       const updatedRow = await withMutationTiming({ module: 'budget', action: 'restorePoints.updateNotes' }, async () => {
         const row = await supabaseRequest(async () =>
@@ -137,6 +151,11 @@ export function useRestorePoints(householdId: string) {
         (current ?? []).map((point) => (point.id === id ? mapRow(updatedRow) : point)),
       );
     } catch (error: unknown) {
+      if (previousPoint) {
+        queryClient.setQueryData<RestorePoint[]>(queryKey, (current) =>
+          (current ?? []).map((point) => (point.id === id ? previousPoint : point)),
+        );
+      }
       showMutationError(error);
       throw error;
     } finally {

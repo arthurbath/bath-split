@@ -12,5 +12,5 @@ command = "npm run dev"
 
 [[actions]]
 name = "Push Supabase"
-icon = "run"
+icon = "test"
 command = "/bin/zsh -lc \"source ~/.zshrc >/dev/null 2>&1; export SUPABASE_DB_PASSWORD=\\\"$SUPABASE_BATHOS_DB_PW\\\"; supabase db push --yes\""

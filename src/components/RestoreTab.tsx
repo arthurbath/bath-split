@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useState, type ComponentPr
 import { createColumnHelper, getCoreRowModel, getSortedRowModel, type SortingState, useReactTable } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DataGrid, gridMenuTriggerProps, useDataGrid } from '@/components/ui/data-grid';
+import { DataGrid, GridEditableCell, gridMenuTriggerProps, useDataGrid } from '@/components/ui/data-grid';
 import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Trash2, RotateCcw, MoreHorizontal, Plus } from 'lucide-react';
@@ -11,6 +11,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 import type { RestorePoint } from '@/hooks/useRestorePoints';
 import type { Income } from '@/hooks/useIncomes';
 import type { Expense } from '@/hooks/useExpenses';
@@ -22,11 +23,12 @@ import { CONFIG_BACKUPS_GRID_DEFAULT_WIDTHS, GRID_ACTIONS_COLUMN_ID, GRID_FIXED_
 interface RestoreTabProps {
   userId?: string;
   points: RestorePoint[];
+  pendingById?: Record<string, boolean>;
   incomes: Income[];
   expenses: Expense[];
   categories: Category[];
   linkedAccounts: LinkedAccount[];
-  onSave: (notes: string, snapshot: Json) => Promise<void>;
+  onSave: (notes: string, snapshot: Json, id?: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   onUpdateNotes: (id: string, notes: string) => Promise<void>;
   onRestore: (data: Json) => Promise<void>;
@@ -34,6 +36,7 @@ interface RestoreTabProps {
 
 const restorePointColumnHelper = createColumnHelper<RestorePoint>();
 const BACKUP_ACTIONS_NAV_COL = 2;
+const RESTORE_POINTS_HISTORY_KEY = 'config_backups';
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 
 const BackupActionsTrigger = forwardRef<HTMLButtonElement, ComponentPropsWithoutRef<typeof Button>>(function BackupActionsTrigger({
@@ -89,14 +92,25 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unexpected error';
 }
 
-export function RestoreTab({ userId, points, incomes, expenses, categories, linkedAccounts, onSave, onRemove, onUpdateNotes, onRestore }: RestoreTabProps) {
+export function RestoreTab({
+  userId,
+  points,
+  pendingById = {},
+  incomes,
+  expenses,
+  categories,
+  linkedAccounts,
+  onSave,
+  onRemove,
+  onUpdateNotes,
+  onRestore,
+}: RestoreTabProps) {
+  const dataGridHistory = useDataGridHistory();
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<RestorePoint | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RestorePoint | null>(null);
-  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
-  const [editingNotesValue, setEditingNotesValue] = useState('');
 
   const [sorting, setSorting] = useState<SortingState>(() => {
     if (typeof window === 'undefined') return [{ id: 'timestamp', desc: true }];
@@ -172,7 +186,19 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
         categories: categories.map(({ id, name, color }) => ({ id, name, color })) as unknown as Json,
         linkedAccounts: linkedAccounts.map(({ id, name, color, owner_partner }) => ({ id, name, color, owner_partner })) as unknown as Json,
       };
-      await onSave(notes.trim(), snapshot);
+      const restorePointId = crypto.randomUUID();
+      const normalizedNotes = notes.trim();
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onRemove(restorePointId),
+        redo: () => onSave(normalizedNotes, snapshot, restorePointId),
+        undoFocusTarget: null,
+        redoFocusTarget: {
+          gridId: RESTORE_POINTS_HISTORY_KEY,
+          rowId: restorePointId,
+          col: 1,
+        },
+      });
+      await onSave(normalizedNotes, snapshot, restorePointId);
       setNotes('');
       setAddDialogOpen(false);
       toast({ title: 'Snapshot saved' });
@@ -196,40 +222,22 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onSave(deleteTarget.notes ?? '', deleteTarget.data, deleteTarget.id),
+        redo: () => onRemove(deleteTarget.id),
+        undoFocusTarget: {
+          gridId: RESTORE_POINTS_HISTORY_KEY,
+          rowId: deleteTarget.id,
+          col: 1,
+        },
+        redoFocusTarget: null,
+      });
       await onRemove(deleteTarget.id);
     } catch (error: unknown) {
       toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
     setDeleteTarget(null);
   };
-
-  const startEditingNotes = (point: RestorePoint) => {
-    setEditingNotesId(point.id);
-    setEditingNotesValue(point.notes ?? '');
-  };
-
-  const cancelEditingNotes = () => {
-    setEditingNotesId(null);
-    setEditingNotesValue('');
-  };
-
-  const commitNotesEdit = useCallback(async () => {
-    if (!editingNotesId) return;
-    const point = points.find((p) => p.id === editingNotesId);
-    const next = editingNotesValue.trim();
-    const current = point?.notes?.trim() ?? '';
-    if (next === current) {
-      cancelEditingNotes();
-      return;
-    }
-    try {
-      await onUpdateNotes(editingNotesId, next);
-      toast({ title: 'Notes updated' });
-    } catch (error: unknown) {
-      toast({ title: 'Error updating notes', description: getErrorMessage(error), variant: 'destructive' });
-    }
-    cancelEditingNotes();
-  }, [editingNotesId, editingNotesValue, onUpdateNotes, points]);
 
   const columns = useMemo(
     () => [
@@ -248,31 +256,23 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
         meta: { containsEditableInput: true },
         cell: ({ row }) => {
           const point = row.original;
-          return editingNotesId === point.id ? (
-            <Input
-              value={editingNotesValue}
-              onChange={(event) => setEditingNotesValue(event.target.value)}
-              onBlur={() => { void commitNotesEdit(); }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  void commitNotesEdit();
-                }
-                if (event.key === 'Escape') {
-                  cancelEditingNotes();
+          const isPending = !!pendingById[point.id];
+          return (
+            <GridEditableCell
+              value={point.notes ?? ''}
+              navCol={1}
+              disabled={isPending}
+              deleteResetValue=""
+              normalizeOnCommit={(value) => value.trim()}
+              onChange={async (nextValue) => {
+                try {
+                  await onUpdateNotes(point.id, nextValue);
+                } catch (error: unknown) {
+                  toast({ title: 'Error updating notes', description: getErrorMessage(error), variant: 'destructive' });
+                  throw error;
                 }
               }}
-              autoFocus
-              className="h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 cursor-pointer hover:border-border focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0"
             />
-          ) : (
-            <button
-              type="button"
-              onClick={() => startEditingNotes(point)}
-              className="h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-left text-xs underline decoration-dashed decoration-muted-foreground/40 underline-offset-2 cursor-pointer hover:border-border"
-            >
-              {point.notes?.trim() || '—'}
-            </button>
           );
         },
       }),
@@ -287,10 +287,11 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
         meta: { headerClassName: 'px-0', cellClassName: 'px-0', containsButton: true },
         cell: ({ row }) => {
           const point = row.original;
+          const isPending = !!pendingById[point.id];
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <BackupActionsTrigger />
+                <BackupActionsTrigger disabled={isPending} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-popover">
                 <DropdownMenuItem onClick={() => setRestoreTarget(point)}>
@@ -307,7 +308,7 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
         },
       }),
     ],
-    [commitNotesEdit, editingNotesId, editingNotesValue],
+    [onUpdateNotes, pendingById],
   );
 
   const table = useReactTable({
@@ -351,7 +352,7 @@ export function RestoreTab({ userId, points, incomes, expenses, categories, link
           {points.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No backups yet.</p>
           ) : (
-            <DataGrid table={table} maxHeight="none" stickyFirstColumn={false} />
+            <DataGrid table={table} historyKey={RESTORE_POINTS_HISTORY_KEY} maxHeight="none" stickyFirstColumn={false} />
           )}
         </CardContent>
       </Card>

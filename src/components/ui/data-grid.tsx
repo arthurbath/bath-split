@@ -11,6 +11,7 @@ import { SelectValue } from '@/components/ui/select';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GRID_ACTIONS_COLUMN_ID } from '@/lib/gridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 
 // ─── Column Meta Augmentation ───
 declare module '@tanstack/react-table' {
@@ -31,6 +32,12 @@ interface DataGridContextValue {
   onCellMouseDown: () => void;
   onCellPointerDown: () => void;
   onCellCommit: (col: number) => void;
+  registerCellHistoryEntry: (options: {
+    col: number;
+    undo: () => void | Promise<unknown>;
+    redo: () => void | Promise<unknown>;
+  }) => string | null;
+  invalidateCellHistoryEntry: (entryId: string | null | undefined) => void;
 }
 
 const DataGridCtx = createContext<DataGridContextValue | null>(null);
@@ -254,6 +261,139 @@ function getStickyViewportInsets(container: HTMLElement, cell: HTMLElement, cell
   return { top, right, bottom, left };
 }
 
+function getWindowViewportInsets(cell: HTMLElement, cellRect: DOMRect): StickyViewportInsets {
+  if (typeof window === 'undefined') return { top: 0, right: 0, bottom: 0, left: 0 };
+
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  let top = 0;
+  let right = 0;
+  let bottom = 0;
+  let left = 0;
+  const chromeRects: DOMRect[] = [];
+
+  for (const chromeElement of document.querySelectorAll<HTMLElement>('.sticky, .fixed')) {
+    if (chromeElement === cell || chromeElement.contains(cell)) continue;
+
+    const chromeRect = chromeElement.getBoundingClientRect();
+    if (chromeRect.width <= 0 || chromeRect.height <= 0) continue;
+    if (!rectsOverlap(chromeRect.left, chromeRect.right, 0, viewportWidth)) continue;
+    if (!rectsOverlap(chromeRect.top, chromeRect.bottom, 0, viewportHeight)) continue;
+    chromeRects.push(chromeRect);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const chromeRect of chromeRects) {
+      const overlapsCellHorizontally = rectsOverlap(chromeRect.left, chromeRect.right, cellRect.left, cellRect.right);
+      const overlapsCellVertically = rectsOverlap(chromeRect.top, chromeRect.bottom, cellRect.top, cellRect.bottom);
+      const spansCellHorizontally = chromeRect.left <= cellRect.left + 1 && chromeRect.right >= cellRect.right - 1;
+      const spansCellVertically = chromeRect.top <= cellRect.top + 1 && chromeRect.bottom >= cellRect.bottom - 1;
+
+      if (
+        overlapsCellHorizontally &&
+        spansCellHorizontally &&
+        chromeRect.top <= top + 1 &&
+        chromeRect.bottom > top
+      ) {
+        const nextTop = chromeRect.bottom;
+        if (nextTop > top) {
+          top = nextTop;
+          changed = true;
+        }
+      }
+
+      if (
+        overlapsCellHorizontally &&
+        spansCellHorizontally &&
+        chromeRect.bottom >= viewportHeight - bottom - 1 &&
+        chromeRect.top < viewportHeight - bottom
+      ) {
+        const nextBottom = viewportHeight - chromeRect.top;
+        if (nextBottom > bottom) {
+          bottom = nextBottom;
+          changed = true;
+        }
+      }
+
+      if (
+        overlapsCellVertically &&
+        spansCellVertically &&
+        chromeRect.left <= left + 1 &&
+        chromeRect.right > left
+      ) {
+        const nextLeft = chromeRect.right;
+        if (nextLeft > left) {
+          left = nextLeft;
+          changed = true;
+        }
+      }
+
+      if (
+        overlapsCellVertically &&
+        spansCellVertically &&
+        chromeRect.right >= viewportWidth - right - 1 &&
+        chromeRect.left < viewportWidth - right
+      ) {
+        const nextRight = viewportWidth - chromeRect.left;
+        if (nextRight > right) {
+          right = nextRight;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return { top, right, bottom, left };
+}
+
+function scrollElementIntoWindowViewport(cell: HTMLElement) {
+  if (typeof window === 'undefined') return;
+
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const cellRect = cell.getBoundingClientRect();
+  const { top, right, bottom, left } = getWindowViewportInsets(cell, cellRect);
+  const viewTop = top;
+  const viewRight = viewportWidth - right;
+  const viewBottom = viewportHeight - bottom;
+  const viewLeft = left;
+
+  let deltaTop = 0;
+  let deltaLeft = 0;
+
+  if (cellRect.top < viewTop) {
+    deltaTop = cellRect.top - viewTop;
+  } else if (cellRect.bottom > viewBottom) {
+    deltaTop = cellRect.bottom - viewBottom;
+  }
+
+  if (cellRect.left < viewLeft) {
+    deltaLeft = cellRect.left - viewLeft;
+  } else if (cellRect.right > viewRight) {
+    deltaLeft = cellRect.right - viewRight;
+  }
+
+  if (deltaTop === 0 && deltaLeft === 0) return;
+  if (typeof window.scrollBy !== 'function') return;
+
+  const scrollByImpl = window.scrollBy as typeof window.scrollBy & { mock?: unknown };
+  const isJsdom = /\bjsdom\b/i.test(window.navigator.userAgent);
+  if (isJsdom && scrollByImpl.mock == null) return;
+
+  try {
+    scrollByImpl.call(window, {
+      top: deltaTop,
+      left: deltaLeft,
+      behavior: 'auto',
+    });
+  } catch {
+    // jsdom does not implement scrollBy; browsers do.
+  }
+}
+
 function focusElementWithoutScroll(target: HTMLElement) {
   try {
     target.focus({ preventScroll: true });
@@ -296,6 +436,8 @@ function useGridNav(
     } else if (cellRect.right > viewRight) {
       container.scrollLeft += cellRect.right - viewRight;
     }
+
+    scrollElementIntoWindowViewport(cell);
   }, [containerRef]);
 
   const isCellTemporarilyUnfocusable = useCallback((cell: HTMLElement) => {
@@ -496,12 +638,25 @@ function useGridNav(
     return wasPointerInitiated;
   }, []);
 
-  return { onCellKeyDown, onCellMouseDown, onCellPointerDown, scrollCellIntoView, focusCellByRowId, consumePointerInitiatedFocus };
+  const restoreFocus = useCallback((target: { rowId: string; col: number }) => {
+    focusWithRetry({ row: -1, col: target.col, rowId: target.rowId }, PENDING_COMMIT_FOCUS_MAX_ATTEMPTS);
+  }, [focusWithRetry]);
+
+  return {
+    onCellKeyDown,
+    onCellMouseDown,
+    onCellPointerDown,
+    scrollCellIntoView,
+    focusCellByRowId,
+    consumePointerInitiatedFocus,
+    restoreFocus,
+  };
 }
 
 // ─── DataGrid ───
 interface DataGridProps<TData> {
   table: TanStackTable<TData>;
+  historyKey?: string;
   footer?: React.ReactNode;
   emptyMessage?: string;
   maxHeight?: string;
@@ -515,6 +670,7 @@ interface DataGridProps<TData> {
 
 export function DataGrid<TData>({
   table,
+  historyKey,
   footer,
   emptyMessage = 'No data',
   maxHeight = 'calc(100dvh - 15.5rem)',
@@ -525,6 +681,9 @@ export function DataGrid<TData>({
   renderGroupHeader,
   groupOrder,
 }: DataGridProps<TData>) {
+  const generatedGridId = React.useId();
+  const gridId = historyKey ?? generatedGridId;
+  const dataGridHistory = useDataGridHistory();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
@@ -535,7 +694,15 @@ export function DataGrid<TData>({
   const clearHighlightTimerRef = useRef<number | null>(null);
   const wasResizingRef = useRef(false);
   const suppressSortClickUntilRef = useRef(0);
-  const { onCellKeyDown, onCellMouseDown, onCellPointerDown, scrollCellIntoView, focusCellByRowId, consumePointerInitiatedFocus } = useGridNav(
+  const {
+    onCellKeyDown,
+    onCellMouseDown,
+    onCellPointerDown,
+    scrollCellIntoView,
+    focusCellByRowId,
+    consumePointerInitiatedFocus,
+    restoreFocus,
+  } = useGridNav(
     containerRef,
     useCallback((target) => {
       if (!target.rowId) return;
@@ -682,6 +849,15 @@ export function DataGrid<TData>({
   }, [currentGroupKeys, renderedRowIds]);
 
   useEffect(() => {
+    if (!dataGridHistory) return;
+    return dataGridHistory.registerGrid(gridId, {
+      restoreFocus: ({ rowId, col }) => {
+        restoreFocus({ rowId, col });
+      },
+    });
+  }, [dataGridHistory, gridId, restoreFocus]);
+
+  useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
@@ -811,7 +987,34 @@ export function DataGrid<TData>({
                 maxWidth: `${appliedColumnWidth}px`,
               }}
             >
-              <DataGridCtx.Provider value={{ rowIndex: currentRow, rowId: row.id, onCellKeyDown, onCellMouseDown, onCellPointerDown, onCellCommit: (col) => markRowCommitted(row.id, col) }}>
+              <DataGridCtx.Provider value={{
+                rowIndex: currentRow,
+                rowId: row.id,
+                onCellKeyDown,
+                onCellMouseDown,
+                onCellPointerDown,
+                onCellCommit: (col) => markRowCommitted(row.id, col),
+                registerCellHistoryEntry: ({ col, undo, redo }) => {
+                  if (!dataGridHistory) return null;
+                  return dataGridHistory.recordHistoryEntry({
+                    undoFocusTarget: {
+                      gridId,
+                      rowId: row.id,
+                      col,
+                    },
+                    redoFocusTarget: {
+                      gridId,
+                      rowId: row.id,
+                      col,
+                    },
+                    undo,
+                    redo,
+                  });
+                },
+                invalidateCellHistoryEntry: (entryId) => {
+                  dataGridHistory?.invalidateHistoryEntry(entryId);
+                },
+              }}>
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
               </DataGridCtx.Provider>
             </td>
@@ -834,6 +1037,7 @@ export function DataGrid<TData>({
   return (
     <div
       ref={containerRef}
+      data-grid-root="true"
       className={cn('w-full min-w-0 overflow-auto data-grid-scroll-hidden', fullView && 'h-full min-h-0', className)}
       style={{ maxHeight: fullView ? 'none' : maxHeight }}
     >
@@ -1160,6 +1364,11 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', input
       setLocal(committedValue);
       pendingCommittedValueRef.current = committedValue;
       commitBaseValueRef.current = currentValue;
+      const historyEntryId = ctx?.registerCellHistoryEntry({
+        col: navCol,
+        undo: () => onChange(currentValue),
+        redo: () => onChange(committedValue),
+      });
       ctx?.onCellCommit(navCol);
       const maybePendingChange = onChange(committedValue);
       if (isPromiseLike(maybePendingChange)) {
@@ -1183,6 +1392,7 @@ export function GridEditableCell({ value, onChange, navCol, type = 'text', input
           }
         }).catch(() => {
           awaitingAsyncCommitRef.current = false;
+          ctx?.invalidateCellHistoryEntry(historyEntryId);
           const rollbackValue = commitBaseValueRef.current ?? valueRef.current;
           pendingCommittedValueRef.current = null;
           commitBaseValueRef.current = null;
@@ -1409,6 +1619,11 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
       setLocal(nextValue);
       pendingCommittedValueRef.current = nextValue;
       commitBaseValueRef.current = currentValue;
+      const historyEntryId = ctx?.registerCellHistoryEntry({
+        col: navCol,
+        undo: () => onChange(currentValue),
+        redo: () => onChange(nextValue),
+      });
       ctx?.onCellCommit(navCol);
       const maybePendingChange = onChange(nextValue);
       if (isPromiseLike(maybePendingChange)) {
@@ -1432,6 +1647,7 @@ export function GridCurrencyCell({ value, onChange, navCol, className, disabled 
           }
         }).catch(() => {
           awaitingAsyncCommitRef.current = false;
+          ctx?.invalidateCellHistoryEntry(historyEntryId);
           const rollbackValue = commitBaseValueRef.current ?? valueRef.current;
           pendingCommittedValueRef.current = null;
           commitBaseValueRef.current = null;
@@ -1672,6 +1888,11 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
       setLocal(nextValue);
       pendingCommittedValueRef.current = nextValue;
       commitBaseValueRef.current = currentValue;
+      const historyEntryId = ctx?.registerCellHistoryEntry({
+        col: navCol,
+        undo: () => onChange(currentValue),
+        redo: () => onChange(nextValue),
+      });
       ctx?.onCellCommit(navCol);
       const maybePendingChange = onChange(nextValue);
       if (isPromiseLike(maybePendingChange)) {
@@ -1695,6 +1916,7 @@ export function GridPercentCell({ value, onChange, navCol, className, disabled =
           }
         }).catch(() => {
           awaitingAsyncCommitRef.current = false;
+          ctx?.invalidateCellHistoryEntry(historyEntryId);
           const rollbackValue = commitBaseValueRef.current ?? valueRef.current;
           pendingCommittedValueRef.current = null;
           commitBaseValueRef.current = null;
@@ -1918,6 +2140,11 @@ export function GridCheckboxCell({ checked, onChange, navCol, className, disable
     pendingCommittedCheckedRef.current = next;
     commitBaseCheckedRef.current = currentChecked;
     setLocalChecked(next);
+    const historyEntryId = ctx?.registerCellHistoryEntry({
+      col: navCol,
+      undo: () => onChange(currentChecked),
+      redo: () => onChange(next),
+    });
     ctx?.onCellCommit(navCol);
 
     const maybePendingChange = onChange(next);
@@ -1941,6 +2168,7 @@ export function GridCheckboxCell({ checked, onChange, navCol, className, disable
         }
       }).catch(() => {
         awaitingAsyncCommitRef.current = false;
+        ctx?.invalidateCellHistoryEntry(historyEntryId);
         const rollbackChecked = commitBaseCheckedRef.current ?? checkedRef.current;
         pendingCommittedCheckedRef.current = null;
         commitBaseCheckedRef.current = null;

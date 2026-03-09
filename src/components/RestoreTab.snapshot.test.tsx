@@ -1,7 +1,16 @@
 import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { toastSpy } = vi.hoisted(() => ({
+  toastSpy: vi.fn(),
+}));
+
+vi.mock('@/hooks/use-toast', () => ({
+  toast: toastSpy,
+}));
+
 import { RestoreTab } from '@/components/RestoreTab';
 import type { Income } from '@/hooks/useIncomes';
 import type { Expense } from '@/hooks/useExpenses';
@@ -23,7 +32,84 @@ function unmount(root: Root, container: HTMLElement) {
   container.remove();
 }
 
+async function startEditing(input: HTMLInputElement) {
+  await act(async () => {
+    input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    input.focus();
+  });
+}
+
+async function dispatchInputChange(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(input, 'value')?.set;
+  const prototypeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set;
+  const setValue = prototypeSetter && valueSetter !== prototypeSetter ? prototypeSetter : valueSetter;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function dispatchEnter(input: HTMLInputElement) {
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await Promise.resolve();
+  });
+}
+
+function RestoreTabPendingHarness({
+  onUpdateStarted,
+}: {
+  onUpdateStarted: (resolve: () => void) => void;
+}) {
+  const [pendingById, setPendingById] = React.useState<Record<string, boolean>>({});
+  const [points, setPoints] = React.useState([
+    {
+      id: 'restore-1',
+      notes: 'First backup',
+      data: {},
+      household_id: 'h-1',
+      created_at: '2026-03-01T12:00:00.000Z',
+    },
+  ]);
+
+  return (
+    <RestoreTab
+      points={points}
+      pendingById={pendingById}
+      incomes={[]}
+      expenses={[]}
+      categories={[]}
+      linkedAccounts={[]}
+      onSave={async () => {}}
+      onRemove={async () => {}}
+      onUpdateNotes={async (id, notes) => {
+        setPendingById((current) => ({ ...current, [id]: true }));
+        setPoints((current) => current.map((point) => (
+          point.id === id
+            ? { ...point, notes }
+            : point
+        )));
+        await new Promise<void>((resolve) => {
+          onUpdateStarted(() => {
+            setPendingById((current) => {
+              const next = { ...current };
+              delete next[id];
+              return next;
+            });
+            resolve();
+          });
+        });
+      }}
+      onRestore={async () => {}}
+    />
+  );
+}
+
 describe('RestoreTab snapshot payload', () => {
+  beforeEach(() => {
+    toastSpy.mockReset();
+  });
+
   it('includes averaged fields and income estimate fields when saving a backup', async () => {
     let captured: { notes: string; snapshot: unknown } | null = null;
 
@@ -153,6 +239,83 @@ describe('RestoreTab snapshot payload', () => {
       const menuItems = Array.from(document.body.querySelectorAll('[role="menuitem"]'));
       const restoreItem = menuItems.find((item) => item.textContent?.includes('Restore'));
       expect(restoreItem).toBeTruthy();
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('uses shared grid note editing without a success toast', async () => {
+    const onUpdateNotes = vi.fn(async () => {});
+    const { container, root } = mount(
+      <RestoreTab
+        points={[
+          {
+            id: 'restore-1',
+            notes: 'First backup',
+            data: {},
+            household_id: 'h-1',
+            created_at: '2026-03-01T12:00:00.000Z',
+          },
+        ]}
+        incomes={[]}
+        expenses={[]}
+        categories={[]}
+        linkedAccounts={[]}
+        onSave={async () => {}}
+        onRemove={async () => {}}
+        onUpdateNotes={onUpdateNotes}
+        onRestore={async () => {}}
+      />,
+    );
+
+    try {
+      const input = container.querySelector<HTMLInputElement>('input[data-row-id="restore-1"][data-col="1"]');
+      expect(input).toBeTruthy();
+
+      await startEditing(input!);
+      await dispatchInputChange(input!, 'Updated note');
+      await dispatchEnter(input!);
+
+      expect(onUpdateNotes).toHaveBeenCalledWith('restore-1', 'Updated note');
+      expect(toastSpy).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Notes updated' }));
+    } finally {
+      unmount(root, container);
+    }
+  });
+
+  it('disables the notes cell and row actions while a backup row is saving', async () => {
+    let finishUpdate: (() => void) | null = null;
+    const { container, root } = mount(
+      <RestoreTabPendingHarness
+        onUpdateStarted={(resolve) => {
+          finishUpdate = resolve;
+        }}
+      />,
+    );
+
+    try {
+      const input = container.querySelector<HTMLInputElement>('input[data-row-id="restore-1"][data-col="1"]');
+      expect(input).toBeTruthy();
+
+      await startEditing(input!);
+      await dispatchInputChange(input!, 'Updated note');
+      await dispatchEnter(input!);
+
+      expect(finishUpdate).toBeTypeOf('function');
+
+      const liveInput = container.querySelector<HTMLInputElement>('input[data-row-id="restore-1"][data-col="1"]');
+      const actionsTrigger = container.querySelector<HTMLButtonElement>('button[aria-label="Backup actions"]');
+      expect(liveInput?.value).toBe('Updated note');
+      expect(liveInput?.disabled).toBe(true);
+      expect(actionsTrigger?.disabled).toBe(true);
+
+      await act(async () => {
+        finishUpdate?.();
+        await Promise.resolve();
+      });
+
+      expect(container.querySelector<HTMLInputElement>('input[data-row-id="restore-1"][data-col="1"]')?.disabled).toBe(false);
+      expect(container.querySelector<HTMLButtonElement>('button[aria-label="Backup actions"]')?.disabled).toBe(false);
     } finally {
       unmount(root, container);
     }

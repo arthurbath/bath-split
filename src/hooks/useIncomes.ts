@@ -100,10 +100,11 @@ export function useIncomes(householdId: string) {
     });
   }, []);
 
-  const add = useCallback(async (income: Omit<Income, 'id' | 'household_id'>) => {
+  const add = useCallback(async (
+    income: Omit<Income, 'id' | 'household_id'>,
+    id: string = crypto.randomUUID(),
+  ) => {
     if (!householdId) throw new Error('No household selected.');
-
-    const id = crypto.randomUUID();
     setPending(id, true);
     try {
       const saved = await withMutationTiming({ module: 'budget', action: 'incomes.add' }, async () => {
