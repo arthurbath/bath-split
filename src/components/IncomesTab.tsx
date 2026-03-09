@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/data-grid';
 import { PersistentTooltipText } from '@/components/ui/tooltip';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 import { GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH, INCOMES_GRID_DEFAULT_WIDTHS } from '@/lib/gridColumnWidths';
 import type { FrequencyType } from '@/types/fairshare';
 import type { Income } from '@/hooks/useIncomes';
@@ -121,7 +122,7 @@ interface IncomesTabProps {
   userId?: string;
   pendingById?: Record<string, boolean>;
   wageGapAdjustmentEnabled?: boolean;
-  onAdd: (income: Omit<Income, 'id' | 'household_id'>) => Promise<void>;
+  onAdd: (income: Omit<Income, 'id' | 'household_id'>, id?: string) => Promise<void>;
   onUpdate: (id: string, updates: Partial<Omit<Income, 'id' | 'household_id'>>) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   fullView?: boolean;
@@ -130,6 +131,7 @@ interface IncomesTabProps {
 const columnHelper = createColumnHelper<Income>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 const INCOME_ACTIONS_NAV_COL = 6;
+const INCOMES_HISTORY_KEY = 'incomes';
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unexpected error';
@@ -151,8 +153,18 @@ function PartnerCell({
   const ctx = useDataGrid();
   return (
     <Select value={value} onValueChange={v => {
+      const historyEntryId = ctx?.registerCellHistoryEntry({
+        col: 1,
+        undo: () => onChange(value),
+        redo: () => onChange(v),
+      });
       ctx?.onCellCommit(1);
-      onChange(v);
+      const maybePendingChange = onChange(v);
+      if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+        void maybePendingChange.catch(() => {
+          ctx?.invalidateCellHistoryEntry(historyEntryId);
+        });
+      }
     }} disabled={disabled}>
       <SelectTrigger
         disabled={disabled}
@@ -186,8 +198,18 @@ function FrequencyCell({
   return (
     <div className="flex items-center gap-1">
       <Select value={income.frequency_type} onValueChange={v => {
+        const historyEntryId = ctx?.registerCellHistoryEntry({
+          col: 4,
+          undo: () => onChange('frequency_type', income.frequency_type),
+          redo: () => onChange('frequency_type', v),
+        });
         ctx?.onCellCommit(4);
-        onChange('frequency_type', v);
+        const maybePendingChange = onChange('frequency_type', v);
+        if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+          void maybePendingChange.catch(() => {
+            ctx?.invalidateCellHistoryEntry(historyEntryId);
+          });
+        }
       }} disabled={disabled}>
         <SelectTrigger
           disabled={disabled}
@@ -267,7 +289,7 @@ function IncomeActionsCell({
   disabled = false,
 }: {
   income: Income;
-  onRemove: (id: string) => void;
+  onRemove: (income: Income) => void;
   onConvert: (income: Income, targetType: BudgetValueType) => void;
   disabled?: boolean;
 }) {
@@ -319,7 +341,7 @@ function IncomeActionsCell({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => onRemove(income.id)}>Delete</AlertDialogAction>
+          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => onRemove(income)}>Delete</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -338,6 +360,7 @@ export function IncomesTab({
   onRemove,
   fullView = false,
 }: IncomesTabProps) {
+  const dataGridHistory = useDataGridHistory();
   const [addIncomeOpen, setAddIncomeOpen] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [newIncome, setNewIncome] = useState<NewIncomeDraft>(createDefaultIncomeDraft);
@@ -427,7 +450,18 @@ export function IncomesTab({
           ...averagedPayload,
         };
       }
-      await onAdd(payload);
+      const incomeId = crypto.randomUUID();
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onRemove(incomeId),
+        redo: () => onAdd(payload, incomeId),
+        undoFocusTarget: null,
+        redoFocusTarget: {
+          gridId: INCOMES_HISTORY_KEY,
+          rowId: incomeId,
+          col: 0,
+        },
+      });
+      await onAdd(payload, incomeId);
 
       setAddIncomeOpen(false);
       setNewIncome(createDefaultIncomeDraft());
@@ -456,8 +490,32 @@ export function IncomesTab({
     });
   };
 
-  const handleRemove = async (id: string) => {
-    try { await onRemove(id); } catch (error: unknown) {
+  const handleRemove = async (income: Income) => {
+    const payload: Omit<Income, 'id' | 'household_id'> = {
+      name: income.name,
+      amount: income.amount,
+      frequency_type: income.frequency_type,
+      frequency_param: income.frequency_param,
+      partner_label: income.partner_label,
+      is_estimate: income.is_estimate,
+      value_type: income.value_type,
+      current_period_handling: income.current_period_handling,
+      average_records: income.average_records,
+    };
+
+    try {
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onAdd(payload, income.id),
+        redo: () => onRemove(income.id),
+        undoFocusTarget: {
+          gridId: INCOMES_HISTORY_KEY,
+          rowId: income.id,
+          col: 0,
+        },
+        redoFocusTarget: null,
+      });
+      await onRemove(income.id);
+    } catch (error: unknown) {
       toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
@@ -685,6 +743,7 @@ export function IncomesTab({
         <CardContent className={gridCardContentClassName}>
           <DataGrid
             table={table}
+            historyKey={INCOMES_HISTORY_KEY}
             fullView={fullView}
             maxHeight={fullView ? 'none' : undefined}
             className={fullView ? 'h-full min-h-0' : undefined}

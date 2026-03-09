@@ -113,7 +113,13 @@ export function AppShell({
     remove: removeLinkedAccount,
     pendingById: linkedAccountPendingById = {},
   } = useLinkedAccounts(household.householdId);
-  const { points, save: savePoint, remove: removePoint, updateNotes: updateRestorePointNotes } = useRestorePoints(household.householdId);
+  const {
+    points,
+    save: savePoint,
+    remove: removePoint,
+    updateNotes: updateRestorePointNotes,
+    pendingById: restorePointPendingById = {},
+  } = useRestorePoints(household.householdId);
   const showAppSwitcher = getAvailableModules().length > 1;
   const budgetNavItems = [
     { path: '/summary', icon: PieChart, label: 'Summary' },
@@ -357,6 +363,7 @@ export function AppShell({
               onUpdateLinkedAccountColor={updateLinkedAccountColor}
               linkedAccountPendingById={linkedAccountPendingById}
               points={points}
+              restorePointPendingById={restorePointPendingById}
               incomes={incomes}
               onSaveRestorePoint={savePoint}
               onRemoveRestorePoint={removePoint}

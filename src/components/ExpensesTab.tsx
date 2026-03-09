@@ -25,6 +25,7 @@ import { toast } from '@/hooks/use-toast';
 import { FREQUENCY_OPTIONS, toMonthly, frequencyLabels, needsParam, fromMonthly } from '@/lib/frequency';
 import { DataGrid, GridCheckboxCell, GridEditableCell, GridCurrencyCell, GridPercentCell, GridSelectValue, gridMenuTriggerProps, gridNavProps, gridSelectTriggerProps, useDataGrid, GRID_HEADER_TONE_CLASS, GRID_READONLY_TEXT_CLASS } from '@/components/ui/data-grid';
 import { useGridColumnWidths } from '@/hooks/useGridColumnWidths';
+import { useDataGridHistory } from '@/components/ui/data-grid-history';
 import { EXPENSES_GRID_DEFAULT_WIDTHS, GRID_FIXED_COLUMNS, GRID_MIN_COLUMN_WIDTH } from '@/lib/gridColumnWidths';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { COLOR_LABELS, normalizePaletteColor } from '@/lib/colors';
@@ -104,6 +105,7 @@ const VALUE_TYPE_OPTIONS: { value: BudgetValueType; label: string; description: 
 const columnHelper = createColumnHelper<ComputedRow>();
 const GRID_CONTROL_FOCUS_CLASS = 'focus:border-ring focus:ring-2 focus:ring-ring/65 focus:ring-offset-0 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/65 focus-visible:ring-offset-0';
 const EXPENSE_ACTIONS_NAV_COL = 12;
+const EXPENSES_HISTORY_KEY = 'expenses';
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unexpected error';
@@ -218,8 +220,18 @@ function CategoryCell({ exp, categories, onChange, onAddNew, disabled = false }:
         onAddNew();
         return;
       }
+      const historyEntryId = ctx?.registerCellHistoryEntry({
+        col: 1,
+        undo: () => onChange(exp.category_id ?? '_none'),
+        redo: () => onChange(v),
+      });
       ctx?.onCellCommit(1);
-      onChange(v);
+      const maybePendingChange = onChange(v);
+      if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+        void maybePendingChange.catch(() => {
+          ctx?.invalidateCellHistoryEntry(historyEntryId);
+        });
+      }
     }} disabled={disabled}>
       <SelectTrigger
         disabled={disabled}
@@ -228,8 +240,18 @@ function CategoryCell({ exp, categories, onChange, onAddNew, disabled = false }:
         {...gridSelectTriggerProps(ctx, 1, {
           disabled,
           onDeleteReset: () => {
+            const historyEntryId = ctx?.registerCellHistoryEntry({
+              col: 1,
+              undo: () => onChange(exp.category_id ?? '_none'),
+              redo: () => onChange('_none'),
+            });
             ctx?.onCellCommit(1);
-            onChange('_none');
+            const maybePendingChange = onChange('_none');
+            if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+              void maybePendingChange.catch(() => {
+                ctx?.invalidateCellHistoryEntry(historyEntryId);
+              });
+            }
           },
         })}
       >
@@ -257,8 +279,18 @@ function ExpenseFrequencyCell({ exp, onChange, disabled = false }: { exp: Expens
   return (
     <div className="flex items-center gap-1">
       <Select value={exp.frequency_type} onValueChange={v => {
+        const historyEntryId = ctx?.registerCellHistoryEntry({
+          col: 4,
+          undo: () => onChange('frequency_type', exp.frequency_type),
+          redo: () => onChange('frequency_type', v),
+        });
         ctx?.onCellCommit(4);
-        onChange('frequency_type', v);
+        const maybePendingChange = onChange('frequency_type', v);
+        if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+          void maybePendingChange.catch(() => {
+            ctx?.invalidateCellHistoryEntry(historyEntryId);
+          });
+        }
       }} disabled={disabled}>
         <SelectTrigger
           disabled={disabled}
@@ -288,8 +320,18 @@ function PaymentMethodCell({ exp, linkedAccounts, partnerX, partnerY, onChange, 
         onAddNew();
         return;
       }
+      const historyEntryId = ctx?.registerCellHistoryEntry({
+        col: 6,
+        undo: () => onChange(exp.linked_account_id ?? '_none'),
+        redo: () => onChange(v),
+      });
       ctx?.onCellCommit(6);
-      onChange(v);
+      const maybePendingChange = onChange(v);
+      if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+        void maybePendingChange.catch(() => {
+          ctx?.invalidateCellHistoryEntry(historyEntryId);
+        });
+      }
     }} disabled={disabled}>
       <SelectTrigger
         disabled={disabled}
@@ -298,8 +340,18 @@ function PaymentMethodCell({ exp, linkedAccounts, partnerX, partnerY, onChange, 
         {...gridSelectTriggerProps(ctx, 6, {
           disabled,
           onDeleteReset: () => {
+            const historyEntryId = ctx?.registerCellHistoryEntry({
+              col: 6,
+              undo: () => onChange(exp.linked_account_id ?? '_none'),
+              redo: () => onChange('_none'),
+            });
             ctx?.onCellCommit(6);
-            onChange('_none');
+            const maybePendingChange = onChange('_none');
+            if (maybePendingChange && typeof maybePendingChange === 'object' && 'catch' in maybePendingChange && typeof maybePendingChange.catch === 'function') {
+              void maybePendingChange.catch(() => {
+                ctx?.invalidateCellHistoryEntry(historyEntryId);
+              });
+            }
           },
         })}
       >
@@ -452,6 +504,7 @@ export function ExpensesTab({
   onAddLinkedAccount,
   fullView = false,
 }: ExpensesTabProps) {
+  const dataGridHistory = useDataGridHistory();
   const isMobile = useIsMobile();
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [newExpense, setNewExpense] = useState<NewExpenseDraft>(createDefaultExpenseDraft);
@@ -658,7 +711,18 @@ export function ExpensesTab({
         };
       }
       const isVisibleInGrid = isVisibleWithCurrentFilters(payload);
-      await onAdd(payload);
+      const expenseId = crypto.randomUUID();
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onRemove(expenseId),
+        redo: () => onAdd(payload, expenseId),
+        undoFocusTarget: null,
+        redoFocusTarget: {
+          gridId: EXPENSES_HISTORY_KEY,
+          rowId: expenseId,
+          col: 0,
+        },
+      });
+      await onAdd(payload, expenseId);
       setAddExpenseOpen(false);
       setNewExpense(createDefaultExpenseDraft());
       if (!isVisibleInGrid) {
@@ -696,8 +760,35 @@ export function ExpensesTab({
     });
   };
 
-  const handleRemove = async (id: string) => {
-    try { await onRemove(id); } catch (error: unknown) {
+  const handleRemove = async (expense: Expense) => {
+    const payload: Omit<Expense, 'id' | 'household_id'> = {
+      name: expense.name,
+      amount: expense.amount,
+      frequency_type: expense.frequency_type,
+      frequency_param: expense.frequency_param,
+      benefit_x: expense.benefit_x,
+      category_id: expense.category_id,
+      is_estimate: expense.is_estimate,
+      budget_id: expense.budget_id,
+      linked_account_id: expense.linked_account_id,
+      value_type: expense.value_type,
+      current_period_handling: expense.current_period_handling,
+      average_records: expense.average_records,
+    };
+
+    try {
+      dataGridHistory?.recordHistoryEntry({
+        undo: () => onAdd(payload, expense.id),
+        redo: () => onRemove(expense.id),
+        undoFocusTarget: {
+          gridId: EXPENSES_HISTORY_KEY,
+          rowId: expense.id,
+          col: 0,
+        },
+        redoFocusTarget: null,
+      });
+      await onRemove(expense.id);
+    } catch (error: unknown) {
       toast({ title: 'Error', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
@@ -1164,7 +1255,7 @@ export function ExpensesTab({
       cell: ({ row }) => (
         <ExpenseActionsCell
           expense={row.original.exp}
-          onRemove={() => handleRemove(row.original.exp.id)}
+          onRemove={() => handleRemove(row.original.exp)}
           onConvert={handleConvert}
           disabled={!!pendingById[row.original.exp.id]}
         />
@@ -1338,6 +1429,7 @@ export function ExpensesTab({
       <CardContent className={gridCardContentClassName}>
         <DataGrid
           table={table}
+          historyKey={EXPENSES_HISTORY_KEY}
           fullView={fullView}
           maxHeight={fullView ? 'none' : undefined}
           className={fullView ? 'h-full min-h-0' : undefined}

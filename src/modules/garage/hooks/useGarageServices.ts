@@ -36,12 +36,14 @@ export function useGarageServices(userId: string | undefined, vehicleId: string 
   });
 
   const addService = useCallback(async (input: {
+    id?: string;
     name: string;
     type: GarageServiceType;
     every_miles?: number | null;
     every_months?: number | null;
     monitoring?: boolean;
     notes?: string | null;
+    sort_order?: number;
   }) => {
     if (!userId || !vehicleId) throw new Error('No active vehicle selected.');
 
@@ -51,6 +53,7 @@ export function useGarageServices(userId: string | undefined, vehicleId: string 
         await supabase
           .from('garage_services')
           .insert({
+            id: input.id,
             user_id: userId,
             vehicle_id: vehicleId,
             name: input.name,
@@ -60,7 +63,7 @@ export function useGarageServices(userId: string | undefined, vehicleId: string 
             every_months: input.every_months ?? null,
             monitoring: input.monitoring ?? false,
             notes: input.notes ?? null,
-            sort_order: nextOrder,
+            sort_order: input.sort_order ?? nextOrder,
           })
           .select('*')
           .single(),

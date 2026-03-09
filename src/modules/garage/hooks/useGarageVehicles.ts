@@ -46,6 +46,7 @@ export function useGarageVehicles(userId: string | undefined) {
   });
 
   const addVehicle = useCallback(async (input: {
+    id?: string;
     name: string;
     make?: string | null;
     model?: string | null;
@@ -61,6 +62,7 @@ export function useGarageVehicles(userId: string | undefined) {
         await supabase
           .from('garage_vehicles')
           .insert({
+            id: input.id,
             user_id: userId,
             name: input.name,
             make: input.make ?? null,
