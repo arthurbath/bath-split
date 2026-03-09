@@ -116,7 +116,13 @@ export default function AccountPage() {
 
   const handleChangeEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (emailSubmitting || !newEmail || !emailPassword) return;
+    const normalizedNew = newEmail.toLowerCase().trim();
+    if (emailSubmitting || !normalizedNew || !emailPassword) return;
+    if (normalizedNew === userEmail.toLowerCase()) {
+      toast({ title: 'New email must be different from your current email', variant: 'destructive' });
+      return;
+    }
+    setEmailSubmitting(true);
     setEmailSubmitting(true);
 
     // Verify password
@@ -396,7 +402,7 @@ export default function AccountPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">New Email</label>
-                <Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} autoComplete="email" autoFocus />
+                <Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} autoComplete="new-email" autoFocus />
               </div>
             </DialogBody>
             <DialogFooter className="mb-0 pt-6">
